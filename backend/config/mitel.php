@@ -18,7 +18,24 @@ return [
 
     'base_url' => env('MITEL_BASE_URL', ''),
 
-    'token' => env('MITEL_TOKEN', ''),
+    /*
+    |--------------------------------------------------------------------------
+    | OAuth2 client credentials
+    |--------------------------------------------------------------------------
+    |
+    | Tokens come from the MiCC Authorization Server via the client
+    | credentials grant. The client_id must be registered as a trusted
+    | server in the Authorization Server's clients.config. When auth_url
+    | is empty it is derived from base_url as
+    | {scheme}://{host}/AuthorizationServer/Token.
+    |
+    */
+
+    'auth_url' => env('MITEL_AUTH_URL'),
+
+    'client_id' => env('MITEL_CLIENT_ID', ''),
+
+    'client_secret' => env('MITEL_CLIENT_SECRET', ''),
 
     'tenant' => env('MITEL_TENANT'),
 

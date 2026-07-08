@@ -10,6 +10,7 @@ use App\Models\RoutingRule;
 use App\Models\Team;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -188,7 +189,8 @@ class PublicChatTest extends TestCase
 
     public function test_mitel_inbox_start_creates_a_micc_work_item(): void
     {
-        config(['mitel.base_url' => 'https://micc.test/miccsdk', 'mitel.token' => 'secret-token']);
+        config(['mitel.base_url' => 'https://micc.test/miccsdk']);
+        Cache::put('mitel.access_token', 'secret-token');
         Http::fake([
             'micc.test/*' => Http::response(['Id' => 'wi-500', 'ConversationState' => 9, 'QueueName' => 'OpenMediaQ'], 201),
         ]);
@@ -218,7 +220,8 @@ class PublicChatTest extends TestCase
 
     public function test_bot_miss_on_mitel_inbox_escalates_into_micc(): void
     {
-        config(['mitel.base_url' => 'https://micc.test/miccsdk', 'mitel.token' => 'secret-token']);
+        config(['mitel.base_url' => 'https://micc.test/miccsdk']);
+        Cache::put('mitel.access_token', 'secret-token');
         Http::fake([
             'micc.test/*' => Http::response(['Id' => 'wi-501', 'ConversationState' => 1]),
         ]);

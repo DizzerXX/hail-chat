@@ -13,6 +13,7 @@ use App\Models\Inbox;
 use App\Models\Webhook;
 use App\Models\WebhookDelivery;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -27,8 +28,11 @@ class PollOpenMediaTest extends TestCase
 
         config([
             'mitel.base_url' => 'https://micc.test/miccsdk',
-            'mitel.token' => 'secret-token',
+            'mitel.client_id' => 'tdechat',
+            'mitel.client_secret' => 'someservicesecret',
         ]);
+
+        Cache::put('mitel.access_token', 'secret-token');
     }
 
     private function makeAwaiting(string $workItemId, string $state = 'Queued'): Conversation

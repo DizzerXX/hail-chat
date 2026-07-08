@@ -4,6 +4,7 @@ namespace App\Services\WorkItems\Mitel;
 
 use App\Exceptions\MitelApiException;
 use Closure;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
@@ -16,6 +17,10 @@ use Throwable;
  */
 class MitelClient
 {
+    public function __construct(private MitelTokenProvider $tokens)
+    {
+    }
+
     /**
      * POST /api/v1/openmedia — deliberately no auto-retry: a duplicate POST
      * would create a duplicate work item in MiCC routing.
@@ -31,7 +36,9 @@ class MitelClient
     public function getWorkItem(string $id): array
     {
         return $this->send(
-            fn (PendingRequest $http) => $http->retry(2, 200, throw: false)->get('/api/v1/openmedia/'.$id),
+            fn (PendingRequest $http) => $http
+                ->retry(2, 200, $this->onlyConnectionErrors(), throw: false)
+                ->get('/api/v1/openmedia/'.$id),
             'fetch work item',
         );
     }
@@ -47,9 +54,20 @@ class MitelClient
     public function listQueues(): array
     {
         return $this->send(
-            fn (PendingRequest $http) => $http->retry(2, 200, throw: false)->get('/api/v1/openmedia/queues'),
+            fn (PendingRequest $http) => $http
+                ->retry(2, 200, $this->onlyConnectionErrors(), throw: false)
+                ->get('/api/v1/openmedia/queues'),
             'list queues',
         );
+    }
+
+    /**
+     * Transport-level retries are for flaky networks only; HTTP error
+     * statuses (incl. 401) must reach send() so token refresh can act.
+     */
+    private function onlyConnectionErrors(): Closure
+    {
+        return fn (Throwable $exception) => $exception instanceof ConnectionException;
     }
 
     /**
@@ -57,14 +75,30 @@ class MitelClient
      */
     private function send(Closure $call, string $operation): array
     {
-        try {
-            $response = $call($this->request());
-        } catch (Throwable $exception) {
-            throw new MitelApiException(
-                "Mitel API: {$operation} failed: {$exception->getMessage()}",
-                previous: $exception,
-            );
-        }
+        $attempts = 0;
+
+        do {
+            $attempts++;
+
+            try {
+                $response = $call($this->request());
+            } catch (Throwable $exception) {
+                throw new MitelApiException(
+                    "Mitel API: {$operation} failed: {$exception->getMessage()}",
+                    previous: $exception,
+                );
+            }
+
+            // A 401 means the cached token died early (revocation, MiCC
+            // restart): drop it and retry once with a fresh one.
+            if ($response->status() === 401 && $attempts === 1) {
+                $this->tokens->forget();
+
+                continue;
+            }
+
+            break;
+        } while ($attempts < 2);
 
         if (! $response->successful()) {
             throw new MitelApiException(
@@ -79,7 +113,7 @@ class MitelClient
     private function request(): PendingRequest
     {
         $http = Http::baseUrl(rtrim(config('mitel.base_url'), '/'))
-            ->withToken(config('mitel.token'))
+            ->withToken($this->tokens->getToken())
             ->acceptJson()
             ->timeout(config('mitel.timeout', 10));
 

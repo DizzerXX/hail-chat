@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Services\WorkItems\MitelOpenMediaProvider;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -17,8 +18,11 @@ class MitelQueueDirectoryTest extends TestCase
 
         config([
             'mitel.base_url' => 'https://micc.test/miccsdk',
-            'mitel.token' => 'secret-token',
+            'mitel.client_id' => 'tdechat',
+            'mitel.client_secret' => 'someservicesecret',
         ]);
+
+        Cache::put('mitel.access_token', 'secret-token');
     }
 
     public function test_list_queues_normalizes_and_caches(): void

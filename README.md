@@ -204,7 +204,9 @@ Configuration (`backend/config/mitel.php`, all via env — never hardcoded):
 |---------|---------|---------|
 | `MITEL_ENABLED` | Master switch for the polling scheduler | `false` |
 | `MITEL_BASE_URL` | MiCC SDK base URL **including** `/miccsdk` | — |
-| `MITEL_TOKEN` | Bearer token for the MiCC SDK API | — |
+| `MITEL_CLIENT_ID` | OAuth2 client-credentials id (must be registered as a trusted server in the Authorization Server's `clients.config`) | — |
+| `MITEL_CLIENT_SECRET` | OAuth2 client-credentials secret | — |
+| `MITEL_AUTH_URL` | Token endpoint override | derived: `{scheme}://{host}/AuthorizationServer/Token` |
 | `MITEL_TENANT` | Optional tenant sent on work-item creation | — |
 | `MITEL_VERIFY_SSL` | Disable for on-prem self-signed certs | `true` |
 | `MITEL_POLL_INTERVAL` | Poll cadence in seconds (1/2/5/10/15/20/30/60) | `15` |
@@ -216,10 +218,15 @@ Per-inbox queue mapping lives in the inbox's `channel_config`:
 {"mitel": {"queue": "OpenMediaQueue1", "team_queues": {"2": "BillingQueue"}}}
 ```
 
+Authentication is OAuth2 **client credentials** against the MiCC Authorization Server
+(`POST /AuthorizationServer/Token`, form-encoded). Tokens are cached until shortly before
+`expires_in` and transparently re-requested; a 401 from the SDK API invalidates the cached
+token and the call retries once with a fresh one.
+
 Polling requires the scheduler: run `php artisan schedule:work` alongside the queue worker.
 Before first use against a real MiCC server, run **`php artisan mitel:check`** — it validates
-the config and performs a live queue listing; `php artisan mitel:poll` runs one poll pass
-manually.
+the config, acquires a token, and performs a live queue listing; `php artisan mitel:poll`
+runs one poll pass manually.
 
 ## API documentation
 

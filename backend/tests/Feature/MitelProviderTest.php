@@ -10,6 +10,7 @@ use App\Models\Team;
 use App\Services\WorkItems\MitelOpenMediaProvider;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -23,8 +24,13 @@ class MitelProviderTest extends TestCase
 
         config([
             'mitel.base_url' => 'https://micc.test/miccsdk',
-            'mitel.token' => 'secret-token',
+            'mitel.client_id' => 'tdechat',
+            'mitel.client_secret' => 'someservicesecret',
         ]);
+
+        // Pre-seed the OAuth token so these tests exercise the SDK API
+        // contract only; the token flow itself is covered by MitelAuthTest.
+        Cache::put('mitel.access_token', 'secret-token');
     }
 
     private function makeMitelConversation(array $conversationAttributes = [], array $mitelConfig = ['queue' => 'OpenMediaQ']): Conversation
