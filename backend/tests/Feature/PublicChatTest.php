@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Enums\ChannelType;
 use App\Enums\ConversationStatus;
 use App\Models\Conversation;
 use App\Models\Faq;
@@ -10,6 +9,8 @@ use App\Models\Inbox;
 use App\Models\RoutingRule;
 use App\Models\Team;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class PublicChatTest extends TestCase
@@ -185,11 +186,52 @@ class PublicChatTest extends TestCase
         $this->postJson($this->startEndpoint($inbox), ['message' => 'Hi'])->assertNotFound();
     }
 
-    public function test_mitel_inbox_is_not_available_in_phase_2(): void
+    public function test_mitel_inbox_start_creates_a_micc_work_item(): void
     {
-        $inbox = Inbox::factory()->mitelOpenMedia()->create();
+        config(['mitel.base_url' => 'https://micc.test/miccsdk', 'mitel.token' => 'secret-token']);
+        Http::fake([
+            'micc.test/*' => Http::response(['Id' => 'wi-500', 'ConversationState' => 9, 'QueueName' => 'OpenMediaQ'], 201),
+        ]);
 
-        $this->assertSame(ChannelType::MitelOpenMedia, $inbox->channel_type);
-        $this->postJson($this->startEndpoint($inbox), ['message' => 'Hi'])->assertStatus(501);
+        $inbox = Inbox::factory()->mitelOpenMedia()->create([
+            'bot_enabled' => false,
+            'channel_config' => ['mitel' => ['queue' => 'OpenMediaQ']],
+        ]);
+
+        $response = $this->postJson($this->startEndpoint($inbox), [
+            'message' => 'Tolong sambungkan saya kepada ejen.',
+            'visitor_name' => 'Ahmad',
+        ]);
+
+        $response->assertCreated()->assertJsonPath('data.status', 'awaiting_acceptance');
+
+        $conversation = Conversation::sole();
+        $this->assertSame('wi-500', $conversation->external_work_item_id);
+        $this->assertSame('Queued', $conversation->external_state);
+
+        Http::assertSent(fn (Request $request) => $request->url() === 'https://micc.test/miccsdk/api/v1/openmedia'
+            && $request->data()['Queue'] === 'OpenMediaQ'
+            && $request->data()['TargetUriEmbedded'] === true
+            && str_contains($request->data()['TargetUri'], $conversation->uuid)
+            && $request->header('Authorization')[0] === 'Bearer secret-token');
+    }
+
+    public function test_bot_miss_on_mitel_inbox_escalates_into_micc(): void
+    {
+        config(['mitel.base_url' => 'https://micc.test/miccsdk', 'mitel.token' => 'secret-token']);
+        Http::fake([
+            'micc.test/*' => Http::response(['Id' => 'wi-501', 'ConversationState' => 1]),
+        ]);
+
+        $inbox = Inbox::factory()->mitelOpenMedia()->create([
+            'channel_config' => ['mitel' => ['queue' => 'OpenMediaQ']],
+        ]);
+
+        $this->postJson($this->startEndpoint($inbox), ['message' => 'Soalan tanpa jawapan bot.'])
+            ->assertCreated()
+            ->assertJsonPath('data.status', 'awaiting_acceptance');
+
+        $this->assertSame('wi-501', Conversation::sole()->external_work_item_id);
+        $this->assertSame('Offered', Conversation::sole()->external_state);
     }
 }

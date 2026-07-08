@@ -6,7 +6,6 @@ use App\Contracts\WorkItemProviderInterface;
 use App\Enums\ChannelType;
 use App\Models\Inbox;
 use Illuminate\Contracts\Container\Container;
-use RuntimeException;
 
 class WorkItemProviderResolver
 {
@@ -18,9 +17,7 @@ class WorkItemProviderResolver
     {
         return match ($inbox->channel_type) {
             ChannelType::Standalone => $this->container->make(StandaloneProvider::class),
-            ChannelType::MitelOpenMedia => throw new RuntimeException(
-                'The Mitel Open Media provider is not available yet (Phase 3).'
-            ),
+            ChannelType::MitelOpenMedia => $this->container->make(MitelOpenMediaProvider::class),
         };
     }
 }

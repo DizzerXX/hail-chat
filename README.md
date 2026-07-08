@@ -28,7 +28,7 @@ in Phase 4), [docker-compose.yml](docker-compose.yml) (Postgres + Redis for loca
 |-------|-------|--------|
 | 1 | Domain schema, models, factories, Sanctum auth, custom RBAC | ✅ Done |
 | 2 | Standalone chat engine: work-item providers, Reverb events, agent inbox API, FAQ chatbot, webhook dispatcher | ✅ Done |
-| 3 | Mitel MiCC Open Media adapter (create/complete/reroute work items, state polling, queue directory) | ⏳ Planned |
+| 3 | Mitel MiCC Open Media adapter (create/complete/reroute work items, state polling, queue directory) | ✅ Done |
 | 4 | Angular agent + admin dashboards, FAQ CMS, analytics | ⏳ Planned |
 
 ## Installation
@@ -64,6 +64,7 @@ php artisan db:seed --class=DevSeeder
 php artisan serve            # API on http://localhost:8000
 php artisan queue:work       # broadcasts + webhook deliveries
 php artisan reverb:start     # websockets on ws://localhost:8080
+php artisan schedule:work    # only when MITEL_ENABLED=true (work-item state polling)
 ```
 
 > **Non-default ports.** The compose file binds Postgres to **5433** and Redis to **6380**
@@ -180,19 +181,45 @@ abort_unless(hash_equals($expected, $request->header('X-TDEChat-Signature')), 40
 
 Payload schemas for all four events are in the OpenAPI spec's `webhooks:` section.
 
-### Mitel MiCC (Open Media) — Phase 3
+### Mitel MiCC (Open Media)
 
 The engine talks to an abstraction, not to Mitel directly:
 
 - `WorkItemProviderInterface` — `createWorkItem` / `completeWorkItem` / `rerouteWorkItem`
 - `PollableProviderInterface` — work-item state polling (Offered, Acd, Abandoned, …)
-- `QueueDirectoryProviderInterface` — queue listing for admin configuration
+- `QueueDirectoryProviderInterface` — MiCC queue listing (cached, for admin configuration)
 
-Standalone deployments use `StandaloneProvider` (pure database state). Mitel deployments will
-use `MitelOpenMediaProvider`, which POSTs conversations to `/api/v1/openmedia` with
-`TargetUriEmbedded=true` so the MiCC agent desktop embeds TDEChat's agent chat view, keyed by
-the conversation UUID. Credentials and polling cadence will live in `backend/config/mitel.php`
-(environment variables, never hardcoded).
+Standalone inboxes use `StandaloneProvider` (pure database state). Inboxes with
+`channel_type = mitel_openmedia` use `MitelOpenMediaProvider`: escalated conversations are
+POSTed to `/api/v1/openmedia` with `TargetUriEmbedded=true` so the MiCC agent desktop embeds
+TDEChat's agent chat view (keyed by the conversation UUID), and `VariableData` carries the
+visitor's Name/Email/Phone for MiCC contact matching. A scheduler job then polls pending
+work items and syncs `ConversationState` transitions: `Acd` → active (`WorkItemAccepted`),
+`Abandoned`/`ExitedQueue`/`InboxFailed` → abandoned (`WorkItemAbandoned`), `Ended` → closed
+(+ `conversation.closed` webhook). Every transition also broadcasts `conversation.updated`.
+
+Configuration (`backend/config/mitel.php`, all via env — never hardcoded):
+
+| Env var | Meaning | Default |
+|---------|---------|---------|
+| `MITEL_ENABLED` | Master switch for the polling scheduler | `false` |
+| `MITEL_BASE_URL` | MiCC SDK base URL **including** `/miccsdk` | — |
+| `MITEL_TOKEN` | Bearer token for the MiCC SDK API | — |
+| `MITEL_TENANT` | Optional tenant sent on work-item creation | — |
+| `MITEL_VERIFY_SSL` | Disable for on-prem self-signed certs | `true` |
+| `MITEL_POLL_INTERVAL` | Poll cadence in seconds (1/2/5/10/15/20/30/60) | `15` |
+| `MITEL_AGENT_CHAT_URL` | TargetUri template, `{uuid}` placeholder | `APP_URL/agent/chat/{uuid}` |
+
+Per-inbox queue mapping lives in the inbox's `channel_config`:
+
+```json
+{"mitel": {"queue": "OpenMediaQueue1", "team_queues": {"2": "BillingQueue"}}}
+```
+
+Polling requires the scheduler: run `php artisan schedule:work` alongside the queue worker.
+Before first use against a real MiCC server, run **`php artisan mitel:check`** — it validates
+the config and performs a live queue listing; `php artisan mitel:poll` runs one poll pass
+manually.
 
 ## API documentation
 

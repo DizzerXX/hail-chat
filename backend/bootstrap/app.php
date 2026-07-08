@@ -21,5 +21,9 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        //
+        // Upstream MiCC failures surface as 502 without leaking internals;
+        // the original exception still reaches the log via the reporter.
+        $exceptions->render(function (\App\Exceptions\MitelApiException $exception) {
+            return response()->json(['message' => 'Upstream contact-center service error.'], 502);
+        });
     })->create();

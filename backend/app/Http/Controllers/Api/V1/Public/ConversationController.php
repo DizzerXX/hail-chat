@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Api\V1\Public;
 
-use App\Enums\ChannelType;
 use App\Enums\SenderType;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\SendMessageRequest;
@@ -23,11 +22,6 @@ class ConversationController extends Controller
     public function store(StartConversationRequest $request, Inbox $inbox): JsonResponse
     {
         abort_unless($inbox->is_active, 404);
-        abort_unless(
-            $inbox->channel_type === ChannelType::Standalone,
-            501,
-            'This inbox channel is not available yet.',
-        );
 
         $conversation = $this->conversations->start(
             $inbox,

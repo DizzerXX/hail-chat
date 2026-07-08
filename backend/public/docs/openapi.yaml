@@ -79,8 +79,8 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '422': { $ref: '#/components/responses/ValidationError' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
-        '501':
-          description: Inbox channel not available yet (mitel_openmedia before Phase 3)
+        '502':
+          description: Upstream contact-center (MiCC) error while creating the work item — retry the escalation
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
