@@ -1,0 +1,754 @@
+openapi: 3.1.0
+
+info:
+  title: TDEChat API
+  version: 1.0.0
+  description: |
+    REST API for TDEChat — Telediant's standalone-first livechat & chatbot platform.
+
+    ## Areas
+    - **Public** — unauthenticated widget API. The conversation `uuid` is an unguessable
+      capability: whoever holds it may read/write that conversation.
+    - **Auth** — Sanctum bearer-token authentication for agents/supervisors/admins.
+    - **Agent** — the agent inbox (list, accept, reply, close, reroute). Requires a bearer
+      token plus the RBAC permission listed per endpoint.
+
+    ## Realtime (websockets)
+    Events are broadcast over Laravel Reverb (Pusher protocol, `ws://HOST:8080` in dev).
+
+    | Channel | Type | Events |
+    |---------|------|--------|
+    | `conversation.{uuid}` | public | `conversation.updated`, `message.sent`, `agent.typing` |
+    | `private-inbox.{inboxId}` | private | `conversation.created`, `conversation.updated`, `message.sent` |
+    | `private-agents.{agentId}` | private | `conversation.updated` (when assigned) |
+
+    Private channels authenticate via `POST /api/broadcasting/auth` (bearer token).
+
+    ## Outbound webhooks
+    See the **Webhooks** section at the bottom of this document. Every delivery is signed:
+    `X-TDEChat-Signature: sha256=HMAC_SHA256(raw_body, webhook_secret)`.
+
+servers:
+  - url: http://localhost:8000
+    description: Local development
+
+tags:
+  - name: Public
+    description: Unauthenticated widget endpoints
+  - name: Auth
+    description: Token authentication
+  - name: Agent
+    description: Agent inbox (bearer token + permission)
+
+paths:
+  /api/v1/public/inboxes/{inboxSlug}/conversations:
+    post:
+      tags: [Public]
+      summary: Start a conversation
+      description: |
+        Creates a conversation with the first visitor message. When the inbox has the
+        FAQ bot enabled the reply (if any) is included in `data.messages`; on a bot miss
+        the conversation escalates to the agent queue (configurable per inbox via
+        `channel_config.bot.escalate_on_miss`). Rate limit: 10/min per IP.
+      operationId: startConversation
+      parameters:
+        - $ref: '#/components/parameters/InboxSlug'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                message: { type: string, maxLength: 4000 }
+                visitor_name: { type: [string, 'null'], maxLength: 255 }
+                visitor_email: { type: [string, 'null'], format: email, maxLength: 255 }
+                visitor_phone: { type: [string, 'null'], maxLength: 50 }
+                language: { type: [string, 'null'], enum: [ms, en, null], description: Defaults to ms }
+                meta: { type: [object, 'null'], description: 'Free-form context (page URL, referrer, …)' }
+      responses:
+        '201':
+          description: Conversation created (messages included)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Conversation' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '501':
+          description: Inbox channel not available yet (mitel_openmedia before Phase 3)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/v1/public/inboxes/{inboxSlug}/faqs:
+    get:
+      tags: [Public]
+      summary: Browse public FAQs
+      description: Active FAQ entries in the requested language (default `ms`, unknown values fall back to the default).
+      operationId: listPublicFaqs
+      parameters:
+        - $ref: '#/components/parameters/InboxSlug'
+        - name: language
+          in: query
+          required: false
+          schema: { type: string, enum: [ms, en] }
+      responses:
+        '200':
+          description: FAQ list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Faq' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/v1/public/conversations/{conversationUuid}:
+    get:
+      tags: [Public]
+      summary: Fetch a conversation with its messages
+      description: Polling fallback for clients without a websocket connection.
+      operationId: showPublicConversation
+      parameters:
+        - $ref: '#/components/parameters/ConversationUuid'
+      responses:
+        '200':
+          description: Conversation with messages
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Conversation' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/v1/public/conversations/{conversationUuid}/messages:
+    post:
+      tags: [Public]
+      summary: Send a visitor message
+      description: While the conversation is in `bot` status the FAQ bot may answer; the reply is returned as `bot_reply` and also broadcast.
+      operationId: sendVisitorMessage
+      parameters:
+        - $ref: '#/components/parameters/ConversationUuid'
+      requestBody:
+        $ref: '#/components/requestBodies/MessageBody'
+      responses:
+        '201':
+          description: Message stored
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { $ref: '#/components/schemas/Message' }
+                  bot_reply:
+                    oneOf:
+                      - $ref: '#/components/schemas/Message'
+                      - type: 'null'
+                  status: { $ref: '#/components/schemas/ConversationStatus' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /api/v1/public/conversations/{conversationUuid}/escalate:
+    post:
+      tags: [Public]
+      summary: Ask for a human agent
+      description: Moves a `pending`/`bot` conversation into the agent queue and fires the `conversation.escalated` webhook.
+      operationId: escalateConversation
+      parameters:
+        - $ref: '#/components/parameters/ConversationUuid'
+      responses:
+        '200':
+          description: Escalated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Conversation' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /api/v1/public/conversations/{conversationUuid}/close:
+    post:
+      tags: [Public]
+      summary: Close the conversation (visitor side)
+      operationId: closeConversationAsVisitor
+      parameters:
+        - $ref: '#/components/parameters/ConversationUuid'
+      responses:
+        '200':
+          description: Closed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Conversation' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /api/v1/auth/login:
+    post:
+      tags: [Auth]
+      summary: Log in and obtain a bearer token
+      description: Re-issuing for the same `device_name` revokes the previous token. Rate limit 10/min per IP.
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, device_name]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+                device_name: { type: string, maxLength: 120 }
+      responses:
+        '200':
+          description: Token issued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string, examples: ['1|X9y…'] }
+                  user: { $ref: '#/components/schemas/User' }
+        '403':
+          description: Account deactivated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /api/v1/auth/me:
+    get:
+      tags: [Auth]
+      summary: Current user profile, role and permissions
+      operationId: me
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Authenticated user
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /api/v1/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Revoke the current token
+      operationId: logout
+      security: [{ bearerAuth: [] }]
+      responses:
+        '204': { description: Token revoked }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /api/v1/agent/conversations:
+    get:
+      tags: [Agent]
+      summary: List conversations
+      description: |
+        Permission `conversations.view_own`. Scopes —
+        `mine`: assigned to my agent profile; `queue`: awaiting acceptance and visible to me
+        (offered to me, my teams, or the general queue); `all`: everything (additionally
+        requires `conversations.view_all`). Paginated, 25 per page, newest activity first.
+      operationId: listAgentConversations
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: scope
+          in: query
+          schema: { type: string, enum: [mine, queue, all], default: mine }
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/ConversationStatus' }
+        - name: inbox_id
+          in: query
+          schema: { type: integer }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+      responses:
+        '200':
+          description: Paginated conversations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Conversation' }
+                  links: { type: object }
+                  meta: { type: object }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/v1/agent/conversations/{conversationUuid}:
+    get:
+      tags: [Agent]
+      summary: Conversation detail with messages
+      description: Permission `conversations.view_own`; visibility limited to own/queue conversations unless `conversations.view_all`.
+      operationId: showAgentConversation
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ConversationUuid'
+      responses:
+        '200':
+          description: Conversation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Conversation' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/v1/agent/conversations/{conversationUuid}/accept:
+    post:
+      tags: [Agent]
+      summary: Accept a queued conversation
+      description: Permission `conversations.accept`. Team-targeted conversations require membership; agent-targeted ones must match, unless the caller holds `conversations.assign`.
+      operationId: acceptConversation
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ConversationUuid'
+      responses:
+        '200':
+          description: Accepted — status becomes `active`
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Conversation' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /api/v1/agent/conversations/{conversationUuid}/close:
+    post:
+      tags: [Agent]
+      summary: Close a conversation
+      description: Permission `conversations.close`; assignee only unless `conversations.assign`. Fires the `conversation.closed` webhook.
+      operationId: closeConversationAsAgent
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ConversationUuid'
+      responses:
+        '200':
+          description: Closed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Conversation' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /api/v1/agent/conversations/{conversationUuid}/messages:
+    post:
+      tags: [Agent]
+      summary: Send an agent message
+      description: Permission `messages.send`; conversation must be `active` and assigned to the caller (or caller holds `conversations.assign`).
+      operationId: sendAgentMessage
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ConversationUuid'
+      requestBody:
+        $ref: '#/components/requestBodies/MessageBody'
+      responses:
+        '201':
+          description: Message stored and broadcast
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Message' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /api/v1/agent/conversations/{conversationUuid}/reroute:
+    post:
+      tags: [Agent]
+      summary: Reroute to a team or an agent
+      description: Permission `conversations.assign`. Exactly one of `team_id` / `agent_id`. Conversation returns to `awaiting_acceptance`.
+      operationId: rerouteConversation
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ConversationUuid'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                team_id: { type: integer }
+                agent_id: { type: integer }
+      responses:
+        '200':
+          description: Rerouted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Conversation' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /api/v1/agent/conversations/{conversationUuid}/typing:
+    post:
+      tags: [Agent]
+      summary: Broadcast a typing indicator
+      description: Permission `messages.send`. Ephemeral — broadcast as `agent.typing`, never persisted.
+      operationId: agentTyping
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ConversationUuid'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                typing: { type: boolean, default: true }
+      responses:
+        '204': { description: Broadcast sent }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/v1/agent/status:
+    put:
+      tags: [Agent]
+      summary: Update my availability
+      operationId: updateAgentStatus
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { $ref: '#/components/schemas/AgentStatus' }
+      responses:
+        '200':
+          description: Updated agent profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Agent' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /api/broadcasting/auth:
+    post:
+      tags: [Auth]
+      summary: Authorize a private websocket channel
+      description: Standard Pusher-protocol channel authorization for `private-inbox.{id}` and `private-agents.{id}`.
+      operationId: broadcastingAuth
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [channel_name, socket_id]
+              properties:
+                channel_name: { type: string, examples: ['private-inbox.1'] }
+                socket_id: { type: string, examples: ['123.456'] }
+      responses:
+        '200':
+          description: Channel signature
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  auth: { type: string }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+webhooks:
+  conversation.started:
+    post:
+      summary: A visitor started a conversation
+      description: |
+        All webhook deliveries are `POST` JSON with headers `X-TDEChat-Event`,
+        `X-TDEChat-Delivery` (delivery id) and `X-TDEChat-Signature`
+        (`sha256=` + HMAC-SHA256 of the raw request body using the webhook secret).
+        Non-2xx responses are retried 3 times (30s / 2m / 10m backoff); every attempt is
+        logged in `webhook_deliveries`.
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ConversationWebhookPayload' }
+      responses:
+        '200': { description: Acknowledge with any 2xx }
+  conversation.escalated:
+    post:
+      summary: A conversation was handed from the bot to human agents
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ConversationWebhookPayload' }
+      responses:
+        '200': { description: Acknowledge with any 2xx }
+  conversation.closed:
+    post:
+      summary: A conversation was closed
+      requestBody:
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/ConversationWebhookPayload'
+                - type: object
+                  properties:
+                    data:
+                      type: object
+                      properties:
+                        closed_by: { type: string, enum: [agent, visitor] }
+      responses:
+        '200': { description: Acknowledge with any 2xx }
+  faq.missed:
+    post:
+      summary: The chatbot had no answer for a visitor query
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                event: { type: string, const: faq.missed }
+                timestamp: { type: string, format: date-time }
+                data:
+                  type: object
+                  properties:
+                    query: { type: string }
+                    language: { type: string }
+                    conversation: { type: [string, 'null'], format: uuid }
+                    inbox: { type: [string, 'null'] }
+      responses:
+        '200': { description: Acknowledge with any 2xx }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Sanctum personal access token from POST /api/v1/auth/login
+
+  parameters:
+    InboxSlug:
+      name: inboxSlug
+      in: path
+      required: true
+      description: Inbox slug (widget embed key)
+      schema: { type: string }
+    ConversationUuid:
+      name: conversationUuid
+      in: path
+      required: true
+      description: Public conversation identifier
+      schema: { type: string, format: uuid }
+
+  requestBodies:
+    MessageBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [body]
+            properties:
+              body: { type: string, maxLength: 4000 }
+
+  responses:
+    NotFound:
+      description: Resource not found (or inactive inbox)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Conflict:
+      description: Conversation is not in a state that allows this action
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: Missing permission, no agent profile, or not the assignee
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unauthenticated:
+      description: Missing or invalid bearer token
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    ValidationError:
+      description: Validation failed
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ValidationError' }
+    TooManyRequests:
+      description: Rate limit exceeded
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    ConversationStatus:
+      type: string
+      enum: [pending, bot, awaiting_acceptance, active, closed, abandoned]
+
+    AgentStatus:
+      type: string
+      enum: [available, busy, away, offline]
+
+    Conversation:
+      type: object
+      properties:
+        uuid: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/ConversationStatus' }
+        language: { type: string, enum: [ms, en] }
+        visitor:
+          type: object
+          properties:
+            name: { type: [string, 'null'] }
+            email: { type: [string, 'null'] }
+            phone: { type: [string, 'null'] }
+        inbox:
+          type: object
+          properties:
+            id: { type: integer }
+            slug: { type: string }
+            name: { type: string }
+        assigned_agent:
+          oneOf:
+            - type: object
+              properties:
+                id: { type: integer }
+                display_name: { type: string }
+            - type: 'null'
+        team:
+          oneOf:
+            - type: object
+              properties:
+                id: { type: integer }
+                name: { type: string }
+            - type: 'null'
+        meta: { type: [object, 'null'] }
+        last_activity_at: { type: string, format: date-time }
+        accepted_at: { type: [string, 'null'], format: date-time }
+        closed_at: { type: [string, 'null'], format: date-time }
+        created_at: { type: string, format: date-time }
+        messages:
+          type: array
+          description: Present when the endpoint includes messages
+          items: { $ref: '#/components/schemas/Message' }
+
+    Message:
+      type: object
+      properties:
+        id: { type: integer }
+        sender_type: { type: string, enum: [visitor, agent, bot, system] }
+        agent:
+          oneOf:
+            - type: object
+              properties:
+                id: { type: integer }
+                display_name: { type: string }
+            - type: 'null'
+        body: { type: string }
+        meta:
+          type: [object, 'null']
+          description: 'e.g. `{"faq_id": 7}` on bot answers'
+        created_at: { type: string, format: date-time }
+
+    Faq:
+      type: object
+      properties:
+        id: { type: integer }
+        language: { type: string, enum: [ms, en] }
+        question: { type: string }
+        answer: { type: string }
+
+    Agent:
+      type: object
+      properties:
+        id: { type: integer }
+        display_name: { type: string }
+        status: { $ref: '#/components/schemas/AgentStatus' }
+        max_concurrent_chats: { type: integer }
+        last_active_at: { type: [string, 'null'], format: date-time }
+
+    User:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        email: { type: string, format: email }
+        is_active: { type: boolean }
+        role: { type: string, examples: [agent] }
+        permissions:
+          type: array
+          items: { type: string }
+        agent:
+          oneOf:
+            - $ref: '#/components/schemas/Agent'
+            - type: 'null'
+
+    ConversationWebhookPayload:
+      type: object
+      properties:
+        event: { type: string, enum: [conversation.started, conversation.escalated, conversation.closed] }
+        timestamp: { type: string, format: date-time }
+        data:
+          type: object
+          properties:
+            conversation: { $ref: '#/components/schemas/Conversation' }
+
+    Error:
+      type: object
+      properties:
+        message: { type: string }
+
+    ValidationError:
+      type: object
+      properties:
+        message: { type: string }
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items: { type: string }

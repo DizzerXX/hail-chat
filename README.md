@@ -27,7 +27,7 @@ in Phase 4), [docker-compose.yml](docker-compose.yml) (Postgres + Redis for loca
 | Phase | Scope | Status |
 |-------|-------|--------|
 | 1 | Domain schema, models, factories, Sanctum auth, custom RBAC | ✅ Done |
-| 2 | Standalone chat engine: work-item providers, Reverb events, agent inbox API, FAQ chatbot, webhook dispatcher | 🚧 In progress |
+| 2 | Standalone chat engine: work-item providers, Reverb events, agent inbox API, FAQ chatbot, webhook dispatcher | ✅ Done |
 | 3 | Mitel MiCC Open Media adapter (create/complete/reroute work items, state polling, queue directory) | ⏳ Planned |
 | 4 | Angular agent + admin dashboards, FAQ CMS, analytics | ⏳ Planned |
 
@@ -57,8 +57,13 @@ php artisan key:generate
 # 3. Database — migrations + roles/permissions + admin user
 php artisan migrate --seed
 
-# 4. Run
+# 4. (optional) Demo data: 'website' inbox, General team, agent@tdechat.test, BM/EN FAQs
+php artisan db:seed --class=DevSeeder
+
+# 5. Run — three processes
 php artisan serve            # API on http://localhost:8000
+php artisan queue:work       # broadcasts + webhook deliveries
+php artisan reverb:start     # websockets on ws://localhost:8080
 ```
 
 > **Non-default ports.** The compose file binds Postgres to **5433** and Redis to **6380**
@@ -125,10 +130,30 @@ use dot notation (`conversations.view_own`, `faqs.manage`, …) and are defined 
 
 ### Your website (chat widget)
 
-Phase 2 ships a public REST API (no authentication, conversation UUID as capability) plus
-Reverb websocket channels, which any frontend — including the Phase 4 widget — drives:
-start a conversation against an inbox slug, post visitor messages, receive bot/agent replies
-in real time. See **API documentation** below once Phase 2 lands.
+The public API needs no authentication — the conversation UUID returned on start is the
+capability that authorizes all later calls for that conversation:
+
+```bash
+# Start a conversation on the 'website' inbox (bot answers if it can)
+curl -X POST http://localhost:8000/api/v1/public/inboxes/website/conversations \
+  -H 'Content-Type: application/json' \
+  -d '{"message": "Saya lupa kata laluan saya", "visitor_name": "Ahmad", "language": "ms"}'
+
+# Keep chatting / poll for replies
+curl -X POST http://localhost:8000/api/v1/public/conversations/{uuid}/messages \
+  -H 'Content-Type: application/json' -d '{"body": "Terima kasih!"}'
+curl http://localhost:8000/api/v1/public/conversations/{uuid}
+```
+
+For realtime instead of polling, subscribe over the Pusher protocol (Reverb):
+
+| Channel | Type | Events |
+|---------|------|--------|
+| `conversation.{uuid}` | public | `conversation.updated`, `message.sent`, `agent.typing` |
+| `private-inbox.{inboxId}` | private (agents) | `conversation.created`, `conversation.updated`, `message.sent` |
+| `private-agents.{agentId}` | private (agents) | `conversation.updated` on assignment |
+
+Private channels authorize via `POST /api/broadcasting/auth` with the agent's bearer token.
 
 ### External systems (webhooks)
 
@@ -141,9 +166,19 @@ Register webhook endpoints (per inbox or global) subscribed to any of:
 | `conversation.closed` | A conversation is closed |
 | `faq.missed` | The chatbot found no answer for a visitor query |
 
-Deliveries are queued, signed with `X-TDEChat-Signature` (HMAC-SHA256 of the raw body using
-the webhook's secret), retried with backoff, and logged to `webhook_deliveries` for
-debugging. Payload shape and signature verification examples ship with the Phase 2 API docs.
+Deliveries are queued `POST` requests carrying `{event, timestamp, data}` JSON with headers
+`X-TDEChat-Event`, `X-TDEChat-Delivery` (delivery id) and `X-TDEChat-Signature`. Non-2xx
+responses retry 3 times (30s / 2m / 10m backoff); every attempt is logged to
+`webhook_deliveries` (`status`, `attempts`, `last_status_code`, `last_error`) for debugging.
+
+Verify the signature by recomputing the HMAC over the **raw** request body:
+
+```php
+$expected = 'sha256='.hash_hmac('sha256', $request->getContent(), $webhookSecret);
+abort_unless(hash_equals($expected, $request->header('X-TDEChat-Signature')), 401);
+```
+
+Payload schemas for all four events are in the OpenAPI spec's `webhooks:` section.
 
 ### Mitel MiCC (Open Media) — Phase 3
 
@@ -161,5 +196,8 @@ the conversation UUID. Credentials and polling cadence will live in `backend/con
 
 ## API documentation
 
-The REST API is specified in OpenAPI (`backend/public/docs/openapi.yaml`) with Swagger UI
-served at `http://localhost:8000/docs` — both arrive with Phase 2.
+The REST API is specified in OpenAPI 3.1 at
+[backend/public/docs/openapi.yaml](backend/public/docs/openapi.yaml) — hand-authored as the
+contract, covering the public widget API, auth, the agent inbox API, websocket channels and
+all four outbound webhook payloads. Swagger UI is served at **http://localhost:8000/docs**
+while `php artisan serve` is running (no composer package needed; the UI is a static page).
