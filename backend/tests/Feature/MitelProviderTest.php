@@ -138,7 +138,7 @@ class MitelProviderTest extends TestCase
 
         Http::assertSent(fn (Request $request) => $request->url() === 'https://micc.test/miccsdk/api/v1/openmedia/wi-77'
             && $request->method() === 'PUT'
-            && $request->data() === ['Action' => 'Complete']);
+            && $request->data() === ['Action' => 0]);
     }
 
     public function test_complete_without_external_id_closes_locally_without_http(): void
@@ -151,14 +151,13 @@ class MitelProviderTest extends TestCase
         Http::assertNothingSent();
     }
 
-    public function test_reroute_maps_team_to_queue_when_configured(): void
+    public function test_reroute_sends_the_action_and_retargets_locally(): void
     {
         Http::fake(['micc.test/*' => Http::response(['ok' => true])]);
 
         $team = Team::factory()->create();
         $conversation = $this->makeMitelConversation(
             ['status' => ConversationStatus::Active, 'external_work_item_id' => 'wi-9'],
-            ['queue' => 'OpenMediaQ', 'team_queues' => [(string) $team->id => 'BillingQ']],
         );
 
         app(MitelOpenMediaProvider::class)->rerouteWorkItem($conversation, $team);
@@ -169,21 +168,8 @@ class MitelProviderTest extends TestCase
         $this->assertNull($conversation->assigned_agent_id);
         $this->assertNull($conversation->accepted_at);
 
+        // OpenMediaUpdateRequestModel carries only the Action field.
         Http::assertSent(fn (Request $request) => $request->method() === 'PUT'
-            && $request->data() === ['Action' => 'Reroute', 'Queue' => 'BillingQ']);
-    }
-
-    public function test_reroute_without_mapping_sends_plain_reroute(): void
-    {
-        Http::fake(['micc.test/*' => Http::response(['ok' => true])]);
-
-        $team = Team::factory()->create();
-        $conversation = $this->makeMitelConversation(
-            ['status' => ConversationStatus::AwaitingAcceptance, 'external_work_item_id' => 'wi-10'],
-        );
-
-        app(MitelOpenMediaProvider::class)->rerouteWorkItem($conversation, $team);
-
-        Http::assertSent(fn (Request $request) => $request->data() === ['Action' => 'Reroute']);
+            && $request->data() === ['Action' => 1]);
     }
 }

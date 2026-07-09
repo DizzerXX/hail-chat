@@ -15,7 +15,26 @@ final readonly class WorkItemSnapshot
         public ?string $agentId,
         public ?string $agentName,
         public array $raw,
+        public bool $missing = false,
     ) {
+    }
+
+    /**
+     * The work item is absent from MiCC's active (InQueue/ACD) list —
+     * it reached a Failed or Handled terminal state remotely.
+     */
+    public static function missing(Conversation $conversation): self
+    {
+        return new self(
+            conversationId: $conversation->id,
+            state: MitelConversationState::Unknown,
+            queueName: null,
+            positionInQueue: null,
+            agentId: null,
+            agentName: null,
+            raw: [],
+            missing: true,
+        );
     }
 
     public static function fromResponse(Conversation $conversation, array $data): self

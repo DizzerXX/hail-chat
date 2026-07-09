@@ -8,6 +8,7 @@ use App\Contracts\WorkItemProviderInterface;
 use App\Enums\ChannelType;
 use App\Enums\ConversationStatus;
 use App\Enums\MitelConversationState;
+use App\Enums\MitelWorkItemAction;
 use App\Enums\SenderType;
 use App\Exceptions\MitelApiException;
 use App\Models\Agent;
@@ -60,7 +61,7 @@ class MitelOpenMediaProvider implements PollableProviderInterface, QueueDirector
     public function completeWorkItem(Conversation $conversation): void
     {
         if ($conversation->external_work_item_id !== null) {
-            $this->client->putAction($conversation->external_work_item_id, 'Complete');
+            $this->client->putAction($conversation->external_work_item_id, MitelWorkItemAction::Complete);
         }
 
         $conversation->status = ConversationStatus::Closed;
@@ -68,17 +69,15 @@ class MitelOpenMediaProvider implements PollableProviderInterface, QueueDirector
         $conversation->save();
     }
 
+    /**
+     * The OpenMediaUpdateRequestModel carries only the Action — MiCC
+     * re-runs its own routing. Team/agent arguments retarget local
+     * metadata only.
+     */
     public function rerouteWorkItem(Conversation $conversation, ?Team $team = null, ?Agent $agent = null): void
     {
-        $extra = [];
-        $teamQueues = $conversation->inbox->channel_config['mitel']['team_queues'] ?? [];
-
-        if ($team !== null && isset($teamQueues[(string) $team->id])) {
-            $extra['Queue'] = $teamQueues[(string) $team->id];
-        }
-
         if ($conversation->external_work_item_id !== null) {
-            $this->client->putAction($conversation->external_work_item_id, 'Reroute', $extra);
+            $this->client->putAction($conversation->external_work_item_id, MitelWorkItemAction::Reroute);
         }
 
         $conversation->forceFill([
@@ -90,31 +89,43 @@ class MitelOpenMediaProvider implements PollableProviderInterface, QueueDirector
     }
 
     /**
+     * One OData list call per pass: the active list only contains
+     * InQueue/ACD items, so a pending conversation absent from it has
+     * reached a Failed/Handled state remotely (per-id GETs 404 there).
+     *
      * @return Collection<int, WorkItemSnapshot>
      */
     public function pollPendingWorkItems(): Collection
     {
-        return Conversation::query()
+        $pending = Conversation::query()
             ->where('status', ConversationStatus::AwaitingAcceptance)
             ->whereNotNull('external_work_item_id')
             ->whereHas('inbox', fn (Builder $query) => $query->where('channel_type', ChannelType::MitelOpenMedia))
-            ->get()
-            ->map(function (Conversation $conversation) {
-                try {
-                    $data = $this->client->getWorkItem($conversation->external_work_item_id);
-                } catch (MitelApiException $exception) {
-                    Log::warning('Mitel work-item poll failed; skipping conversation.', [
-                        'conversation' => $conversation->uuid,
-                        'work_item' => $conversation->external_work_item_id,
-                        'error' => $exception->getMessage(),
-                    ]);
+            ->get();
 
-                    return null;
-                }
+        if ($pending->isEmpty()) {
+            return new Collection();
+        }
 
-                return WorkItemSnapshot::fromResponse($conversation, $data);
+        try {
+            $activeItems = collect($this->client->listWorkItems())
+                ->keyBy(fn (array $item) => (string) ($item['Id'] ?? ''));
+        } catch (MitelApiException $exception) {
+            Log::warning('Mitel work-item list poll failed; skipping this pass.', [
+                'error' => $exception->getMessage(),
+            ]);
+
+            return new Collection();
+        }
+
+        return $pending
+            ->map(function (Conversation $conversation) use ($activeItems) {
+                $item = $activeItems->get($conversation->external_work_item_id);
+
+                return $item === null
+                    ? WorkItemSnapshot::missing($conversation)
+                    : WorkItemSnapshot::fromResponse($conversation, $item);
             })
-            ->filter()
             ->values();
     }
 
@@ -129,14 +140,13 @@ class MitelOpenMediaProvider implements PollableProviderInterface, QueueDirector
             function () {
                 $raw = $this->client->listQueues();
 
-                $items = array_is_list($raw)
-                    ? $raw
-                    : ($raw['_embedded']['queues'] ?? $raw['Queues'] ?? $raw['items'] ?? []);
+                // Confirmed shape: {_links, count, _embedded: {Items: [{id, name, reporting}]}}
+                $items = $raw['_embedded']['Items'] ?? (array_is_list($raw) ? $raw : []);
 
                 return collect($items)
                     ->map(fn (array $queue) => [
-                        'id' => isset($queue['Id']) ? (string) $queue['Id'] : ($queue['id'] ?? null),
-                        'name' => $queue['Name'] ?? $queue['name'] ?? null,
+                        'id' => isset($queue['id']) ? (string) $queue['id'] : (isset($queue['Id']) ? (string) $queue['Id'] : null),
+                        'name' => $queue['name'] ?? $queue['Name'] ?? null,
                     ])
                     ->values()
                     ->all();

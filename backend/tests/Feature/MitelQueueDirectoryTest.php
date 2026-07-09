@@ -28,9 +28,15 @@ class MitelQueueDirectoryTest extends TestCase
     public function test_list_queues_normalizes_and_caches(): void
     {
         Http::fake([
-            'micc.test/miccsdk/api/v1/openmedia/queues' => Http::response([
-                ['Id' => 'q-1', 'Name' => 'Support'],
-                ['Id' => 'q-2', 'Name' => 'Billing'],
+            'micc.test/miccsdk/api/v1/openmedia/queues*' => Http::response([
+                '_links' => '',
+                'count' => 2,
+                '_embedded' => [
+                    'Items' => [
+                        ['_links' => '', '_embedded' => '', 'id' => 'q-1', 'name' => 'Support', 'reporting' => ''],
+                        ['_links' => '', '_embedded' => '', 'id' => 'q-2', 'name' => 'Billing', 'reporting' => ''],
+                    ],
+                ],
             ]),
         ]);
 

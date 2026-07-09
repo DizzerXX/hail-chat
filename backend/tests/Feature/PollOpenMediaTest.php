@@ -46,21 +46,30 @@ class PollOpenMediaTest extends TestCase
             ]);
     }
 
-    private function fakeWorkItem(string $workItemId, int $state, array $extra = []): void
+    /**
+     * Fake the OData active-items list (InQueue/ACD items only).
+     *
+     * @param  list<array<string, mixed>>  $items
+     */
+    private function fakeActiveList(array $items): void
     {
         Http::fake([
-            "micc.test/miccsdk/api/v1/openmedia/$workItemId" => Http::response(
-                array_merge(['Id' => $workItemId, 'ConversationState' => $state], $extra),
-            ),
+            'micc.test/miccsdk/api/v1/openmedia?*' => Http::response([
+                '_links' => '',
+                'count' => count($items),
+                '_embedded' => ['Items' => $items],
+            ]),
         ]);
     }
 
-    public function test_acd_marks_the_conversation_active(): void
+    public function test_acd_in_the_active_list_marks_the_conversation_active(): void
     {
         Event::fake([WorkItemAccepted::class, ConversationUpdated::class]);
 
         $conversation = $this->makeAwaiting('wi-1');
-        $this->fakeWorkItem('wi-1', 3, ['AgentName' => 'MiCC Agent', 'AgentId' => '42']);
+        $this->fakeActiveList([
+            ['Id' => 'wi-1', 'ConversationState' => 3, 'AgentName' => 'MiCC Agent', 'AgentId' => '42'],
+        ]);
 
         dispatch_sync(new PollOpenMediaWorkItems());
 
@@ -74,29 +83,54 @@ class PollOpenMediaTest extends TestCase
         Event::assertDispatched(ConversationUpdated::class);
     }
 
-    public function test_abandoned_and_exited_queue_mark_abandoned(): void
+    public function test_terminal_states_reported_in_the_list_are_mapped(): void
     {
         Event::fake([WorkItemAbandoned::class, ConversationUpdated::class]);
 
         $abandoned = $this->makeAwaiting('wi-2');
         $exited = $this->makeAwaiting('wi-3');
+        $failed = $this->makeAwaiting('wi-5');
 
-        Http::fake([
-            'micc.test/miccsdk/api/v1/openmedia/wi-2' => Http::response(['Id' => 'wi-2', 'ConversationState' => 7]),
-            'micc.test/miccsdk/api/v1/openmedia/wi-3' => Http::response(['Id' => 'wi-3', 'ConversationState' => 8]),
+        $this->fakeActiveList([
+            ['Id' => 'wi-2', 'ConversationState' => 7],
+            ['Id' => 'wi-3', 'ConversationState' => 8],
+            ['Id' => 'wi-5', 'ConversationState' => 11],
         ]);
 
         dispatch_sync(new PollOpenMediaWorkItems());
 
         $this->assertSame(ConversationStatus::Abandoned, $abandoned->fresh()->status);
         $this->assertSame(ConversationStatus::Abandoned, $exited->fresh()->status);
+        $this->assertSame(ConversationStatus::Abandoned, $failed->fresh()->status);
         $this->assertSame('ExitedQueue', $exited->fresh()->external_state);
+        $this->assertSame('InboxFailed', $failed->fresh()->external_state);
         $this->assertNotNull($abandoned->fresh()->closed_at);
 
-        Event::assertDispatchedTimes(WorkItemAbandoned::class, 2);
+        Event::assertDispatchedTimes(WorkItemAbandoned::class, 3);
     }
 
-    public function test_ended_closes_and_fires_the_closed_webhook(): void
+    public function test_missing_from_the_active_list_marks_abandoned(): void
+    {
+        Event::fake([WorkItemAbandoned::class, ConversationUpdated::class]);
+
+        $gone = $this->makeAwaiting('wi-gone');
+        $this->fakeActiveList([
+            ['Id' => 'wi-other', 'ConversationState' => 9],
+        ]);
+
+        dispatch_sync(new PollOpenMediaWorkItems());
+
+        $gone->refresh();
+        $this->assertSame(ConversationStatus::Abandoned, $gone->status);
+        $this->assertNotNull($gone->closed_at);
+        $this->assertTrue($gone->meta['mitel']['no_longer_active']);
+        // Last observed state is preserved, not overwritten.
+        $this->assertSame('Queued', $gone->external_state);
+
+        Event::assertDispatched(WorkItemAbandoned::class);
+    }
+
+    public function test_ended_in_the_list_closes_and_fires_the_closed_webhook(): void
     {
         $conversation = $this->makeAwaiting('wi-4');
         Webhook::factory()->create([
@@ -105,7 +139,9 @@ class PollOpenMediaTest extends TestCase
         ]);
 
         Http::fake([
-            'micc.test/miccsdk/api/v1/openmedia/wi-4' => Http::response(['Id' => 'wi-4', 'ConversationState' => 6]),
+            'micc.test/miccsdk/api/v1/openmedia?*' => Http::response([
+                '_embedded' => ['Items' => [['Id' => 'wi-4', 'ConversationState' => 6]]],
+            ]),
             'sink.test/*' => Http::response(['ok' => true]),
         ]);
 
@@ -118,26 +154,14 @@ class PollOpenMediaTest extends TestCase
         $this->assertSame('system', $delivery->payload['data']['closed_by']);
     }
 
-    public function test_inbox_failed_marks_abandoned(): void
-    {
-        Event::fake([WorkItemAbandoned::class, ConversationUpdated::class]);
-
-        $conversation = $this->makeAwaiting('wi-5');
-        $this->fakeWorkItem('wi-5', 11);
-
-        dispatch_sync(new PollOpenMediaWorkItems());
-
-        $this->assertSame(ConversationStatus::Abandoned, $conversation->fresh()->status);
-        $this->assertSame('InboxFailed', $conversation->fresh()->external_state);
-        Event::assertDispatched(WorkItemAbandoned::class);
-    }
-
     public function test_unchanged_state_updates_meta_without_events(): void
     {
         Event::fake([WorkItemAccepted::class, WorkItemAbandoned::class, ConversationUpdated::class]);
 
         $conversation = $this->makeAwaiting('wi-6', 'Queued');
-        $this->fakeWorkItem('wi-6', 9, ['PositionInQueue' => 1, 'QueueName' => 'OpenMediaQ']);
+        $this->fakeActiveList([
+            ['Id' => 'wi-6', 'ConversationState' => 9, 'PositionInQueue' => 1, 'QueueName' => 'OpenMediaQ'],
+        ]);
 
         dispatch_sync(new PollOpenMediaWorkItems());
 
@@ -150,39 +174,50 @@ class PollOpenMediaTest extends TestCase
         Event::assertNotDispatched(ConversationUpdated::class);
     }
 
-    public function test_only_awaiting_mitel_conversations_are_polled(): void
+    public function test_one_list_call_covers_all_pending_conversations(): void
     {
-        Http::fake(['micc.test/*' => Http::response(['Id' => 'x', 'ConversationState' => 9])]);
-
-        $this->makeAwaiting('wi-7');
-        // Standalone awaiting — no external id, standalone inbox.
+        $first = $this->makeAwaiting('wi-7');
+        $second = $this->makeAwaiting('wi-8');
+        // Not polled: standalone awaiting, and mitel already active.
         Conversation::factory()->awaitingAcceptance()->create();
-        // Mitel but already active.
         Conversation::factory()
             ->for(Inbox::factory()->mitelOpenMedia())
             ->active()
-            ->create(['external_work_item_id' => 'wi-8', 'external_state' => 'Acd']);
+            ->create(['external_work_item_id' => 'wi-9', 'external_state' => 'Acd']);
 
-        dispatch_sync(new PollOpenMediaWorkItems());
-
-        Http::assertSentCount(1);
-    }
-
-    public function test_one_failing_work_item_does_not_sink_the_batch(): void
-    {
-        Event::fake([WorkItemAccepted::class, ConversationUpdated::class]);
-
-        $failing = $this->makeAwaiting('wi-bad');
-        $healthy = $this->makeAwaiting('wi-good');
-
-        Http::fake([
-            'micc.test/miccsdk/api/v1/openmedia/wi-bad' => Http::response('boom', 500),
-            'micc.test/miccsdk/api/v1/openmedia/wi-good' => Http::response(['Id' => 'wi-good', 'ConversationState' => 3]),
+        $this->fakeActiveList([
+            ['Id' => 'wi-7', 'ConversationState' => 9],
+            ['Id' => 'wi-8', 'ConversationState' => 1],
         ]);
 
         dispatch_sync(new PollOpenMediaWorkItems());
 
-        $this->assertSame(ConversationStatus::AwaitingAcceptance, $failing->fresh()->status);
-        $this->assertSame(ConversationStatus::Active, $healthy->fresh()->status);
+        Http::assertSentCount(1);
+        $this->assertSame('Offered', $second->fresh()->external_state);
+        $this->assertSame(ConversationStatus::AwaitingAcceptance, $first->fresh()->status);
+    }
+
+    public function test_no_http_at_all_when_nothing_is_pending(): void
+    {
+        Http::fake();
+
+        Conversation::factory()->awaitingAcceptance()->create();
+
+        dispatch_sync(new PollOpenMediaWorkItems());
+
+        Http::assertSentCount(0);
+    }
+
+    public function test_list_failure_skips_the_pass_without_touching_conversations(): void
+    {
+        Event::fake([WorkItemAbandoned::class, ConversationUpdated::class]);
+
+        $conversation = $this->makeAwaiting('wi-10');
+        Http::fake(['micc.test/*' => Http::response('boom', 500)]);
+
+        dispatch_sync(new PollOpenMediaWorkItems());
+
+        $this->assertSame(ConversationStatus::AwaitingAcceptance, $conversation->fresh()->status);
+        Event::assertNotDispatched(WorkItemAbandoned::class);
     }
 }

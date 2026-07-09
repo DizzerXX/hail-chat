@@ -2,6 +2,7 @@
 
 namespace App\Services\WorkItems\Mitel;
 
+use App\Enums\MitelWorkItemAction;
 use App\Exceptions\MitelApiException;
 use Closure;
 use Illuminate\Http\Client\ConnectionException;
@@ -33,6 +34,26 @@ class MitelClient
         );
     }
 
+    /**
+     * OData list of items currently being executed (InQueue/ACD only).
+     * Items in Failed/Handled states are absent from this list.
+     */
+    public function listWorkItems(int $top = 1000): array
+    {
+        $response = $this->send(
+            fn (PendingRequest $http) => $http
+                ->retry(2, 200, $this->onlyConnectionErrors(), throw: false)
+                ->get('/api/v1/openmedia', ['$top' => $top]),
+            'list work items',
+        );
+
+        return $response['_embedded']['Items'] ?? (array_is_list($response) ? $response : []);
+    }
+
+    /**
+     * Debug/tooling only — returns details solely while the item is in an
+     * InQueue or ACD state; Failed/Handled items respond 404.
+     */
     public function getWorkItem(string $id): array
     {
         return $this->send(
@@ -43,11 +64,11 @@ class MitelClient
         );
     }
 
-    public function putAction(string $id, string $action, array $extra = []): void
+    public function putAction(string $id, MitelWorkItemAction $action): void
     {
         $this->send(
-            fn (PendingRequest $http) => $http->put('/api/v1/openmedia/'.$id, ['Action' => $action] + $extra),
-            strtolower($action).' work item',
+            fn (PendingRequest $http) => $http->put('/api/v1/openmedia/'.$id, ['Action' => $action->value]),
+            strtolower($action->name).' work item',
         );
     }
 

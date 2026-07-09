@@ -193,10 +193,20 @@ Standalone inboxes use `StandaloneProvider` (pure database state). Inboxes with
 `channel_type = mitel_openmedia` use `MitelOpenMediaProvider`: escalated conversations are
 POSTed to `/api/v1/openmedia` with `TargetUriEmbedded=true` so the MiCC agent desktop embeds
 TDEChat's agent chat view (keyed by the conversation UUID), and `VariableData` carries the
-visitor's Name/Email/Phone for MiCC contact matching. A scheduler job then polls pending
-work items and syncs `ConversationState` transitions: `Acd` → active (`WorkItemAccepted`),
-`Abandoned`/`ExitedQueue`/`InboxFailed` → abandoned (`WorkItemAbandoned`), `Ended` → closed
-(+ `conversation.closed` webhook). Every transition also broadcasts `conversation.updated`.
+visitor's Name/Email/Phone for MiCC contact matching. A scheduler job then syncs work-item
+state with **one OData list call per pass** (`GET /api/v1/openmedia` returns only active
+InQueue/ACD items): `Acd` → active (`WorkItemAccepted`); a pending item **missing from the
+active list** has ended remotely without an agent → abandoned (`WorkItemAbandoned`); states
+reported directly (`Abandoned`/`ExitedQueue`/`InboxFailed` → abandoned, `Ended` → closed +
+`conversation.closed` webhook) are also mapped. Every transition broadcasts
+`conversation.updated`. Closing while queued/offered credits MiCC with an abandon; closing
+after ACD marks the item handled — matching the documented PUT semantics.
+
+> **[Guessing] — one unconfirmed constant.** The `PUT /api/v1/openmedia/{id}` body's
+> `Action` is an integer enum whose member values aren't in the swagger sections provided;
+> TDEChat assumes `Complete = 0`, `Reroute = 1`
+> ([MitelWorkItemAction](backend/app/Enums/MitelWorkItemAction.php)). Verify that enum's
+> schema before the first reroute against a real server.
 
 Configuration (`backend/config/mitel.php`, all via env — never hardcoded):
 
@@ -215,8 +225,11 @@ Configuration (`backend/config/mitel.php`, all via env — never hardcoded):
 Per-inbox queue mapping lives in the inbox's `channel_config`:
 
 ```json
-{"mitel": {"queue": "OpenMediaQueue1", "team_queues": {"2": "BillingQueue"}}}
+{"mitel": {"queue": "OpenMediaQueue1"}}
 ```
+
+(Reroute carries no queue target — the `OpenMediaUpdateRequestModel` only has `Action`;
+MiCC re-runs its own routing.)
 
 Authentication is OAuth2 **client credentials** against the MiCC Authorization Server
 (`POST /AuthorizationServer/Token`, form-encoded). Tokens are cached until shortly before

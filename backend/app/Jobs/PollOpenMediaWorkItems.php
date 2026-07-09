@@ -39,6 +39,12 @@ class PollOpenMediaWorkItems implements ShouldQueue
                 continue;
             }
 
+            if ($snapshot->missing) {
+                $this->markGone($conversation, $snapshot);
+
+                continue;
+            }
+
             $stateChanged = $conversation->external_state !== $snapshot->state->name;
 
             $conversation->forceFill([
@@ -78,6 +84,26 @@ class PollOpenMediaWorkItems implements ShouldQueue
         ])->save();
 
         event(new WorkItemAccepted($conversation, $snapshot));
+        broadcast(new ConversationUpdated($conversation));
+    }
+
+    /**
+     * The item left MiCC's active (InQueue/ACD) list while we were still
+     * awaiting acceptance — it ended without an agent. (Edge case: an
+     * accept + complete both happening inside one polling tick would also
+     * land here; treated as abandoned.)
+     */
+    private function markGone(Conversation $conversation, WorkItemSnapshot $snapshot): void
+    {
+        $conversation->forceFill([
+            'status' => ConversationStatus::Abandoned,
+            'closed_at' => now(),
+            'meta' => array_merge($conversation->meta ?? [], [
+                'mitel' => array_merge($conversation->meta['mitel'] ?? [], ['no_longer_active' => true]),
+            ]),
+        ])->save();
+
+        event(new WorkItemAbandoned($conversation, $snapshot));
         broadcast(new ConversationUpdated($conversation));
     }
 
