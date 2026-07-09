@@ -202,12 +202,6 @@ reported directly (`Abandoned`/`ExitedQueue`/`InboxFailed` → abandoned, `Ended
 `conversation.updated`. Closing while queued/offered credits MiCC with an abandon; closing
 after ACD marks the item handled — matching the documented PUT semantics.
 
-> **[Guessing] — one unconfirmed constant.** The `PUT /api/v1/openmedia/{id}` body's
-> `Action` is an integer enum whose member values aren't in the swagger sections provided;
-> TDEChat assumes `Complete = 0`, `Reroute = 1`
-> ([MitelWorkItemAction](backend/app/Enums/MitelWorkItemAction.php)). Verify that enum's
-> schema before the first reroute against a real server.
-
 Configuration (`backend/config/mitel.php`, all via env — never hardcoded):
 
 | Env var | Meaning | Default |
