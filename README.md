@@ -235,6 +235,23 @@ Before first use against a real MiCC server, run **`php artisan mitel:check`** �
 the config, acquires a token, and performs a live queue listing; `php artisan mitel:poll`
 runs one poll pass manually.
 
+## Dashboards
+
+The Angular app in [frontend/](frontend/) serves both dashboards (`ng serve` →
+http://localhost:4200):
+
+- **Agent** (`/agent`) — availability switcher, Mine/Queue/All conversation lists with
+  realtime updates, chat view with typing indicators, FAQ quick replies, accept/close/
+  reroute. `/agent/chat/{uuid}` is also the view MiCC embeds via the work-item TargetUri.
+- **Admin** (`/admin`) — inbox management (incl. MiCC queue mapping), teams, users & agent
+  profiles, the FAQ CMS with a BM/EN language toggle, webhook configuration with a
+  delivery log, per-inbox routing rules, and analytics (conversations/day, average handle
+  time, FAQ hit rate, top missed queries).
+
+The management REST API behind the admin screens lives under `/api/v1/admin/*`, gated by
+the per-area RBAC permissions (`inboxes.manage`, `faqs.manage`, …) and fully specified in
+the OpenAPI document below.
+
 ## API documentation
 
 The REST API is specified in OpenAPI 3.1 at

@@ -39,6 +39,8 @@ tags:
     description: Token authentication
   - name: Agent
     description: Agent inbox (bearer token + permission)
+  - name: Admin
+    description: Management API (bearer token + per-area permission)
 
 paths:
   /api/v1/public/inboxes/{inboxSlug}/conversations:
@@ -442,6 +444,33 @@ paths:
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /api/v1/agent/inboxes:
+    get:
+      tags: [Agent]
+      summary: Active inboxes (for realtime channel subscriptions and filters)
+      description: Permission `conversations.view_own`.
+      operationId: listAgentInboxes
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Active inboxes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: integer }
+                        name: { type: string }
+                        slug: { type: string }
+                        channel_type: { type: string, enum: [standalone, mitel_openmedia] }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
   /api/v1/agent/status:
     put:
       tags: [Agent]
@@ -468,6 +497,463 @@ paths:
                   data: { $ref: '#/components/schemas/Agent' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /api/v1/admin/inboxes:
+    get:
+      tags: [Admin]
+      summary: List inboxes
+      description: Permission `inboxes.manage`.
+      operationId: adminListInboxes
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Inboxes with conversation counts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/AdminInbox' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Admin]
+      summary: Create an inbox
+      operationId: adminCreateInbox
+      security: [{ bearerAuth: [] }]
+      requestBody: { $ref: '#/components/requestBodies/InboxBody' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/AdminInbox' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /api/v1/admin/inboxes/{id}:
+    get:
+      tags: [Admin]
+      summary: Inbox detail
+      operationId: adminShowInbox
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/NumericId' }]
+      responses:
+        '200':
+          description: Inbox
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/AdminInbox' }
+    put:
+      tags: [Admin]
+      summary: Update an inbox
+      operationId: adminUpdateInbox
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/NumericId' }]
+      requestBody: { $ref: '#/components/requestBodies/InboxBody' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/AdminInbox' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Admin]
+      summary: Delete an inbox
+      description: Fails with 409 while conversations exist — deactivate instead.
+      operationId: adminDeleteInbox
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/NumericId' }]
+      responses:
+        '204': { description: Deleted }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /api/v1/admin/mitel/queues:
+    get:
+      tags: [Admin]
+      summary: MiCC Open Media queue directory (for inbox configuration)
+      description: Permission `inboxes.manage`. 503 when the Mitel integration is not configured; 502 on upstream errors.
+      operationId: adminListMitelQueues
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Queues
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: [string, 'null'] }
+                        name: { type: [string, 'null'] }
+        '502': { description: Upstream MiCC error }
+        '503': { description: Mitel integration not configured }
+
+  /api/v1/admin/teams:
+    get:
+      tags: [Admin]
+      summary: List teams with members
+      description: Permission `teams.manage`.
+      operationId: adminListTeams
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Teams
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/AdminTeam' }
+    post:
+      tags: [Admin]
+      summary: Create a team
+      operationId: adminCreateTeam
+      security: [{ bearerAuth: [] }]
+      requestBody: { $ref: '#/components/requestBodies/TeamBody' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/AdminTeam' }
+
+  /api/v1/admin/teams/{id}:
+    put:
+      tags: [Admin]
+      summary: Update a team
+      operationId: adminUpdateTeam
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/NumericId' }]
+      requestBody: { $ref: '#/components/requestBodies/TeamBody' }
+      responses:
+        '200': { description: Updated }
+    delete:
+      tags: [Admin]
+      summary: Delete a team
+      operationId: adminDeleteTeam
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/NumericId' }]
+      responses:
+        '204': { description: Deleted }
+
+  /api/v1/admin/teams/{id}/members:
+    put:
+      tags: [Admin]
+      summary: Replace team membership
+      operationId: adminSyncTeamMembers
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/NumericId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [agent_ids]
+              properties:
+                agent_ids:
+                  type: array
+                  items: { type: integer }
+      responses:
+        '200': { description: Updated team with members }
+
+  /api/v1/admin/users:
+    get:
+      tags: [Admin]
+      summary: List users (paginated)
+      description: Permission `agents.manage`. Filters — `search` (name/email), `role` (role name).
+      operationId: adminListUsers
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: search, in: query, schema: { type: string } }
+        - { name: role, in: query, schema: { type: string } }
+        - { name: page, in: query, schema: { type: integer } }
+      responses:
+        '200':
+          description: Users
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/AdminUser' }
+                  links: { type: object }
+                  meta: { type: object }
+    post:
+      tags: [Admin]
+      summary: Create a user (optionally with an agent profile)
+      operationId: adminCreateUser
+      security: [{ bearerAuth: [] }]
+      requestBody: { $ref: '#/components/requestBodies/UserBody' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/AdminUser' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /api/v1/admin/users/{id}:
+    put:
+      tags: [Admin]
+      summary: Update a user
+      description: '`agent: null` removes the agent profile; omit `password` to keep it. Self-deactivation is rejected.'
+      operationId: adminUpdateUser
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/NumericId' }]
+      requestBody: { $ref: '#/components/requestBodies/UserBody' }
+      responses:
+        '200': { description: Updated user }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /api/v1/admin/roles:
+    get:
+      tags: [Admin]
+      summary: List roles (picker source)
+      operationId: adminListRoles
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: 'Roles (id, name, description)' }
+
+  /api/v1/admin/agents:
+    get:
+      tags: [Admin]
+      summary: Agent directory (picker source for reroute/membership dialogs)
+      operationId: adminListAgents
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: 'Agents (id, display_name, user_name, status, team_ids)' }
+
+  /api/v1/admin/faqs:
+    get:
+      tags: [Admin]
+      summary: List FAQ translation groups
+      description: Permission `faqs.manage`. `search` matches question/answer in any language.
+      operationId: adminListFaqGroups
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: search, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: Groups
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/FaqGroup' }
+    post:
+      tags: [Admin]
+      summary: Create a FAQ group (one or both languages)
+      operationId: adminCreateFaqGroup
+      security: [{ bearerAuth: [] }]
+      requestBody: { $ref: '#/components/requestBodies/FaqGroupBody' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/FaqGroup' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /api/v1/admin/faqs/{translationGroup}:
+    put:
+      tags: [Admin]
+      summary: Upsert/remove language versions of a group
+      description: 'Per language: an object upserts, an explicit null removes. Removing the last version is rejected (422).'
+      operationId: adminUpdateFaqGroup
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: translationGroup, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody: { $ref: '#/components/requestBodies/FaqGroupBody' }
+      responses:
+        '200': { description: Updated group }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Admin]
+      summary: Delete a FAQ group (all languages)
+      operationId: adminDeleteFaqGroup
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: translationGroup, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '204': { description: Deleted }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/v1/admin/webhooks:
+    get:
+      tags: [Admin]
+      summary: List webhooks (secret included; behind webhooks.manage)
+      operationId: adminListWebhooks
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Webhooks with delivery counts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/AdminWebhook' }
+    post:
+      tags: [Admin]
+      summary: Register a webhook (secret auto-generated)
+      operationId: adminCreateWebhook
+      security: [{ bearerAuth: [] }]
+      requestBody: { $ref: '#/components/requestBodies/WebhookBody' }
+      responses:
+        '201':
+          description: Created (includes the signing secret)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/AdminWebhook' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /api/v1/admin/webhooks/{id}:
+    put:
+      tags: [Admin]
+      summary: Update a webhook
+      operationId: adminUpdateWebhook
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/NumericId' }]
+      requestBody: { $ref: '#/components/requestBodies/WebhookBody' }
+      responses:
+        '200': { description: Updated }
+    delete:
+      tags: [Admin]
+      summary: Delete a webhook (and its delivery log)
+      operationId: adminDeleteWebhook
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/NumericId' }]
+      responses:
+        '204': { description: Deleted }
+
+  /api/v1/admin/webhooks/{id}/deliveries:
+    get:
+      tags: [Admin]
+      summary: Delivery log for a webhook (debugging failed sends)
+      operationId: adminListWebhookDeliveries
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/NumericId' }
+        - { name: page, in: query, schema: { type: integer } }
+      responses:
+        '200':
+          description: Paginated deliveries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/AdminWebhookDelivery' }
+                  links: { type: object }
+                  meta: { type: object }
+
+  /api/v1/admin/inboxes/{id}/routing-rules:
+    get:
+      tags: [Admin]
+      summary: Routing rules for an inbox (priority order)
+      description: Permission `routing.manage`.
+      operationId: adminListRoutingRules
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/NumericId' }]
+      responses:
+        '200':
+          description: Rules
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/RoutingRule' }
+    post:
+      tags: [Admin]
+      summary: Create a routing rule (exactly one of team_id/agent_id)
+      operationId: adminCreateRoutingRule
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/NumericId' }]
+      requestBody: { $ref: '#/components/requestBodies/RoutingRuleBody' }
+      responses:
+        '201': { description: Created }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /api/v1/admin/routing-rules/{id}:
+    put:
+      tags: [Admin]
+      summary: Update a routing rule (switching target type clears the other)
+      operationId: adminUpdateRoutingRule
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/NumericId' }]
+      requestBody: { $ref: '#/components/requestBodies/RoutingRuleBody' }
+      responses:
+        '200': { description: Updated }
+    delete:
+      tags: [Admin]
+      summary: Delete a routing rule
+      operationId: adminDeleteRoutingRule
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/NumericId' }]
+      responses:
+        '204': { description: Deleted }
+
+  /api/v1/admin/analytics:
+    get:
+      tags: [Admin]
+      summary: Dashboard analytics
+      description: Permission `analytics.view`. Defaults to the last 14 days; the range may span at most 92 days.
+      operationId: adminAnalytics
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: Summary
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AnalyticsSummary' }
         '422': { $ref: '#/components/responses/ValidationError' }
 
   /api/broadcasting/auth:
@@ -582,6 +1068,11 @@ components:
       required: true
       description: Public conversation identifier
       schema: { type: string, format: uuid }
+    NumericId:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer }
 
   requestBodies:
     MessageBody:
@@ -593,6 +1084,113 @@ components:
             required: [body]
             properties:
               body: { type: string, maxLength: 4000 }
+    InboxBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name, slug, channel_type]
+            properties:
+              name: { type: string, maxLength: 255 }
+              slug: { type: string, maxLength: 255, pattern: '^[A-Za-z0-9_-]+$' }
+              channel_type: { type: string, enum: [standalone, mitel_openmedia] }
+              channel_config:
+                type: [object, 'null']
+                properties:
+                  mitel:
+                    type: object
+                    properties:
+                      queue: { type: string }
+                  bot:
+                    type: object
+                    properties:
+                      escalate_on_miss: { type: boolean }
+              bot_enabled: { type: boolean }
+              is_active: { type: boolean }
+    TeamBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name]
+            properties:
+              name: { type: string, maxLength: 255 }
+              description: { type: [string, 'null'], maxLength: 255 }
+              is_active: { type: boolean }
+    UserBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name, email, role_id]
+            properties:
+              name: { type: string, maxLength: 255 }
+              email: { type: string, format: email }
+              password: { type: [string, 'null'], minLength: 8, description: Required on create; omit to keep on update }
+              role_id: { type: integer }
+              is_active: { type: boolean }
+              agent:
+                type: [object, 'null']
+                description: Agent profile; null removes it on update
+                properties:
+                  display_name: { type: [string, 'null'] }
+                  max_concurrent_chats: { type: integer, minimum: 1, maximum: 50 }
+                  team_ids:
+                    type: array
+                    items: { type: integer }
+    FaqGroupBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [translations]
+            properties:
+              translations:
+                type: object
+                description: 'Keys: ms / en. An object upserts that language; null removes it (update only).'
+                properties:
+                  ms: { $ref: '#/components/schemas/FaqTranslationInput' }
+                  en: { $ref: '#/components/schemas/FaqTranslationInput' }
+    WebhookBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name, url, events]
+            properties:
+              name: { type: string, maxLength: 255 }
+              url: { type: string, format: uri, maxLength: 2048 }
+              events:
+                type: array
+                minItems: 1
+                items: { type: string, enum: [conversation.started, conversation.closed, conversation.escalated, faq.missed] }
+              inbox_id: { type: [integer, 'null'], description: null fires for all inboxes }
+              is_active: { type: boolean }
+    RoutingRuleBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name]
+            properties:
+              name: { type: string, maxLength: 255 }
+              priority: { type: integer, minimum: 0, maximum: 1000 }
+              conditions:
+                type: [object, 'null']
+                properties:
+                  language: { type: string, enum: [ms, en] }
+                  keywords:
+                    type: array
+                    items: { type: string }
+              team_id: { type: integer, description: Exactly one of team_id/agent_id }
+              agent_id: { type: integer, description: Exactly one of team_id/agent_id }
+              is_active: { type: boolean }
 
   responses:
     NotFound:
@@ -702,6 +1300,190 @@ components:
         language: { type: string, enum: [ms, en] }
         question: { type: string }
         answer: { type: string }
+
+    FaqTranslationInput:
+      type: [object, 'null']
+      properties:
+        question: { type: string, maxLength: 500 }
+        answer: { type: string, maxLength: 10000 }
+        keywords:
+          type: array
+          maxItems: 20
+          items: { type: string, maxLength: 100 }
+        is_active: { type: boolean }
+
+    FaqGroup:
+      type: object
+      properties:
+        translation_group: { type: string, format: uuid }
+        translations:
+          type: object
+          properties:
+            ms: { $ref: '#/components/schemas/FaqGroupTranslation' }
+            en: { $ref: '#/components/schemas/FaqGroupTranslation' }
+        usage_count: { type: integer }
+        updated_at: { type: string, format: date-time }
+
+    FaqGroupTranslation:
+      type: [object, 'null']
+      properties:
+        id: { type: integer }
+        question: { type: string }
+        answer: { type: string }
+        keywords:
+          type: array
+          items: { type: string }
+        is_active: { type: boolean }
+        usage_count: { type: integer }
+
+    AdminInbox:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        slug: { type: string }
+        channel_type: { type: string, enum: [standalone, mitel_openmedia] }
+        channel_config: { type: object }
+        bot_enabled: { type: boolean }
+        is_active: { type: boolean }
+        conversations_count: { type: integer }
+        created_at: { type: string, format: date-time }
+
+    AdminTeam:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        description: { type: [string, 'null'] }
+        is_active: { type: boolean }
+        agents:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: integer }
+              display_name: { type: string }
+        created_at: { type: string, format: date-time }
+
+    AdminUser:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        email: { type: string, format: email }
+        role_id: { type: integer }
+        role: { type: string }
+        is_active: { type: boolean }
+        agent:
+          oneOf:
+            - type: object
+              properties:
+                id: { type: integer }
+                display_name: { type: [string, 'null'] }
+                status: { $ref: '#/components/schemas/AgentStatus' }
+                max_concurrent_chats: { type: integer }
+                team_ids:
+                  type: array
+                  items: { type: integer }
+            - type: 'null'
+        created_at: { type: string, format: date-time }
+
+    AdminWebhook:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        url: { type: string }
+        secret: { type: string, description: HMAC-SHA256 signing secret }
+        events:
+          type: array
+          items: { type: string }
+        inbox_id: { type: [integer, 'null'] }
+        inbox:
+          oneOf:
+            - type: object
+              properties:
+                id: { type: integer }
+                name: { type: string }
+                slug: { type: string }
+            - type: 'null'
+        is_active: { type: boolean }
+        deliveries_count: { type: integer }
+        failed_deliveries_count: { type: integer }
+        created_at: { type: string, format: date-time }
+
+    AdminWebhookDelivery:
+      type: object
+      properties:
+        id: { type: integer }
+        event: { type: string }
+        status: { type: string, enum: [pending, success, failed] }
+        attempts: { type: integer }
+        last_status_code: { type: [integer, 'null'] }
+        last_error: { type: [string, 'null'] }
+        next_attempt_at: { type: [string, 'null'], format: date-time }
+        completed_at: { type: [string, 'null'], format: date-time }
+        payload: { type: object }
+        created_at: { type: string, format: date-time }
+
+    RoutingRule:
+      type: object
+      properties:
+        id: { type: integer }
+        inbox_id: { type: integer }
+        name: { type: string }
+        priority: { type: integer }
+        conditions: { type: object }
+        team:
+          oneOf:
+            - type: object
+              properties:
+                id: { type: integer }
+                name: { type: string }
+            - type: 'null'
+        agent:
+          oneOf:
+            - type: object
+              properties:
+                id: { type: integer }
+                display_name: { type: string }
+            - type: 'null'
+        is_active: { type: boolean }
+
+    AnalyticsSummary:
+      type: object
+      properties:
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        conversations_per_day:
+          type: array
+          items:
+            type: object
+            properties:
+              date: { type: string, format: date }
+              count: { type: integer }
+        avg_handle_seconds: { type: [number, 'null'] }
+        faq:
+          type: object
+          properties:
+            queries: { type: integer }
+            hits: { type: integer }
+            hit_rate: { type: [number, 'null'], description: 0–1 }
+        totals:
+          type: object
+          properties:
+            conversations: { type: integer }
+            closed: { type: integer }
+            abandoned: { type: integer }
+            active_now: { type: integer }
+            awaiting_now: { type: integer }
+        top_missed_queries:
+          type: array
+          items:
+            type: object
+            properties:
+              query: { type: string }
+              count: { type: integer }
 
     Agent:
       type: object

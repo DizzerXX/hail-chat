@@ -1,0 +1,38 @@
+<?php
+
+namespace App\Http\Requests\Admin;
+
+use App\Enums\ChannelType;
+use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
+
+class InboxRequest extends FormRequest
+{
+    public function authorize(): bool
+    {
+        return true;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function rules(): array
+    {
+        return [
+            'name' => ['required', 'string', 'max:255'],
+            'slug' => [
+                'required',
+                'string',
+                'alpha_dash',
+                'max:255',
+                Rule::unique('inboxes', 'slug')->ignore($this->route('inbox')),
+            ],
+            'channel_type' => ['required', Rule::enum(ChannelType::class)],
+            'channel_config' => ['nullable', 'array'],
+            'channel_config.mitel.queue' => ['nullable', 'string', 'max:255'],
+            'channel_config.bot.escalate_on_miss' => ['nullable', 'boolean'],
+            'bot_enabled' => ['sometimes', 'boolean'],
+            'is_active' => ['sometimes', 'boolean'],
+        ];
+    }
+}
