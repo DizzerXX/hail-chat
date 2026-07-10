@@ -29,7 +29,7 @@ in Phase 4), [docker-compose.yml](docker-compose.yml) (Postgres + Redis for loca
 | 1 | Domain schema, models, factories, Sanctum auth, custom RBAC | ✅ Done |
 | 2 | Standalone chat engine: work-item providers, Reverb events, agent inbox API, FAQ chatbot, webhook dispatcher | ✅ Done |
 | 3 | Mitel MiCC Open Media adapter (create/complete/reroute work items, state polling, queue directory) | ✅ Done |
-| 4 | Angular agent + admin dashboards, FAQ CMS, analytics | ⏳ Planned |
+| 4 | Angular agent + admin dashboards, FAQ CMS, analytics | ✅ Done |
 
 ## Installation
 
@@ -237,8 +237,19 @@ runs one poll pass manually.
 
 ## Dashboards
 
-The Angular app in [frontend/](frontend/) serves both dashboards (`ng serve` →
-http://localhost:4200):
+The Angular app in [frontend/](frontend/) serves both dashboards:
+
+```bash
+cd frontend
+npm install
+ng serve                     # http://localhost:4200
+```
+
+API and Reverb endpoints are configured in
+[frontend/src/environments/environment.ts](frontend/src/environments/environment.ts)
+(defaults: API http://localhost:8000, websockets ws://localhost:8080 — the Reverb key must
+match your backend `.env`). Quality gates: `ng lint`, `ng test` (vitest — no browser
+needed), `ng build --configuration production`.
 
 - **Agent** (`/agent`) — availability switcher, Mine/Queue/All conversation lists with
   realtime updates, chat view with typing indicators, FAQ quick replies, accept/close/
