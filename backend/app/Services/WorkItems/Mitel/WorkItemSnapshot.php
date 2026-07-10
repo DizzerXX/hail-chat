@@ -16,12 +16,13 @@ final readonly class WorkItemSnapshot
         public ?string $agentName,
         public array $raw,
         public bool $missing = false,
+        public bool $terminal = false,
     ) {
     }
 
     /**
-     * The work item is absent from MiCC's active (InQueue/ACD) list —
-     * it reached a Failed or Handled terminal state remotely.
+     * The work item 404'd off the realtime endpoint and even the historical
+     * record has nothing — treated as abandoned.
      */
     public static function missing(Conversation $conversation): self
     {
@@ -34,10 +35,11 @@ final readonly class WorkItemSnapshot
             agentName: null,
             raw: [],
             missing: true,
+            terminal: true,
         );
     }
 
-    public static function fromResponse(Conversation $conversation, array $data): self
+    public static function fromResponse(Conversation $conversation, array $data, bool $terminal = false): self
     {
         // Field casing tolerant: swagger documents PascalCase, but the live
         // MCX queues endpoint emits camel/lowercase — cover both.
@@ -51,6 +53,7 @@ final readonly class WorkItemSnapshot
             agentId: $get('AgentId') !== null ? (string) $get('AgentId') : null,
             agentName: $get('AgentName'),
             raw: $data,
+            terminal: $terminal,
         );
     }
 }

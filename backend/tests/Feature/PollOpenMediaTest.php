@@ -47,28 +47,47 @@ class PollOpenMediaTest extends TestCase
     }
 
     /**
-     * Fake the OData active-items list (InQueue/ACD items only).
+     * Live-shape per-id responses (camelCase keys, string states) plus the
+     * historical $search endpoint for finished items.
      *
-     * @param  list<array<string, mixed>>  $items
+     * @param  array<string, array<string, mixed>|null>  $active  id => live item (camelCase)
+     * @param  array<string, array<string, mixed>|null>  $history  id => historical item or null
      */
-    private function fakeActiveList(array $items): void
+    private function fakeMitel(array $active, array $history = []): void
     {
-        Http::fake([
-            'micc.test/miccsdk/api/v1/openmedia?*' => Http::response([
-                '_links' => '',
-                'count' => count($items),
-                '_embedded' => ['Items' => $items],
-            ]),
-        ]);
+        Http::fake(function ($request) use ($active, $history) {
+            $url = $request->url();
+
+            if (str_contains($url, '%24search=') || str_contains($url, '$search=')) {
+                $items = [];
+                foreach ($history as $id => $item) {
+                    if (str_contains(urldecode($url), $id) && $item !== null) {
+                        $items[] = $item;
+                    }
+                }
+
+                return Http::response(['_embedded' => ['items' => $items]]);
+            }
+
+            foreach ($active as $id => $item) {
+                if (str_ends_with($url, "/api/v1/openmedia/{$id}")) {
+                    return $item === null
+                        ? Http::response('', 404)
+                        : Http::response($item);
+                }
+            }
+
+            return Http::response('', 500);
+        });
     }
 
-    public function test_acd_in_the_active_list_marks_the_conversation_active(): void
+    public function test_live_acd_with_camel_case_string_state_marks_active(): void
     {
         Event::fake([WorkItemAccepted::class, ConversationUpdated::class]);
 
         $conversation = $this->makeAwaiting('wi-1');
-        $this->fakeActiveList([
-            ['Id' => 'wi-1', 'ConversationState' => 3, 'AgentName' => 'MiCC Agent', 'AgentId' => '42'],
+        $this->fakeMitel([
+            'wi-1' => ['id' => 'wi-1', 'conversationState' => 'Acd', 'agentName' => 'MiCC Agent', 'agentId' => '42', 'queueName' => 'TDECHAT'],
         ]);
 
         dispatch_sync(new PollOpenMediaWorkItems());
@@ -78,137 +97,167 @@ class PollOpenMediaTest extends TestCase
         $this->assertSame('Acd', $conversation->external_state);
         $this->assertNotNull($conversation->accepted_at);
         $this->assertSame('MiCC Agent', $conversation->meta['mitel']['agent_name']);
+        $this->assertSame('TDECHAT', $conversation->meta['mitel']['queue_name']);
 
-        Event::assertDispatched(WorkItemAccepted::class, fn ($event) => $event->conversation->is($conversation));
+        Event::assertDispatched(WorkItemAccepted::class);
         Event::assertDispatched(ConversationUpdated::class);
     }
 
-    public function test_terminal_states_reported_in_the_list_are_mapped(): void
+    public function test_swagger_integer_states_still_map(): void
     {
-        Event::fake([WorkItemAbandoned::class, ConversationUpdated::class]);
+        Event::fake([WorkItemAccepted::class, ConversationUpdated::class]);
 
-        $abandoned = $this->makeAwaiting('wi-2');
-        $exited = $this->makeAwaiting('wi-3');
-        $failed = $this->makeAwaiting('wi-5');
-
-        $this->fakeActiveList([
-            ['Id' => 'wi-2', 'ConversationState' => 7],
-            ['Id' => 'wi-3', 'ConversationState' => 8],
-            ['Id' => 'wi-5', 'ConversationState' => 11],
+        $conversation = $this->makeAwaiting('wi-int');
+        $this->fakeMitel([
+            'wi-int' => ['Id' => 'wi-int', 'ConversationState' => 3, 'AgentName' => 'A'],
         ]);
 
         dispatch_sync(new PollOpenMediaWorkItems());
 
-        $this->assertSame(ConversationStatus::Abandoned, $abandoned->fresh()->status);
-        $this->assertSame(ConversationStatus::Abandoned, $exited->fresh()->status);
-        $this->assertSame(ConversationStatus::Abandoned, $failed->fresh()->status);
-        $this->assertSame('ExitedQueue', $exited->fresh()->external_state);
-        $this->assertSame('InboxFailed', $failed->fresh()->external_state);
-        $this->assertNotNull($abandoned->fresh()->closed_at);
-
-        Event::assertDispatchedTimes(WorkItemAbandoned::class, 3);
+        $this->assertSame(ConversationStatus::Active, $conversation->fresh()->status);
     }
 
-    public function test_missing_from_the_active_list_marks_abandoned(): void
-    {
-        Event::fake([WorkItemAbandoned::class, ConversationUpdated::class]);
-
-        $gone = $this->makeAwaiting('wi-gone');
-        $this->fakeActiveList([
-            ['Id' => 'wi-other', 'ConversationState' => 9],
-        ]);
-
-        dispatch_sync(new PollOpenMediaWorkItems());
-
-        $gone->refresh();
-        $this->assertSame(ConversationStatus::Abandoned, $gone->status);
-        $this->assertNotNull($gone->closed_at);
-        $this->assertTrue($gone->meta['mitel']['no_longer_active']);
-        // Last observed state is preserved, not overwritten.
-        $this->assertSame('Queued', $gone->external_state);
-
-        Event::assertDispatched(WorkItemAbandoned::class);
-    }
-
-    public function test_ended_in_the_list_closes_and_fires_the_closed_webhook(): void
-    {
-        $conversation = $this->makeAwaiting('wi-4');
-        Webhook::factory()->create([
-            'url' => 'https://sink.test/hooks',
-            'events' => [WebhookEvent::ConversationClosed->value],
-        ]);
-
-        Http::fake([
-            'micc.test/miccsdk/api/v1/openmedia?*' => Http::response([
-                '_embedded' => ['Items' => [['Id' => 'wi-4', 'ConversationState' => 6]]],
-            ]),
-            'sink.test/*' => Http::response(['ok' => true]),
-        ]);
-
-        dispatch_sync(new PollOpenMediaWorkItems());
-
-        $this->assertSame(ConversationStatus::Closed, $conversation->fresh()->status);
-
-        $delivery = WebhookDelivery::sole();
-        $this->assertSame('conversation.closed', $delivery->event);
-        $this->assertSame('system', $delivery->payload['data']['closed_by']);
-    }
-
-    public function test_unchanged_state_updates_meta_without_events(): void
+    public function test_unchanged_live_state_updates_meta_without_events(): void
     {
         Event::fake([WorkItemAccepted::class, WorkItemAbandoned::class, ConversationUpdated::class]);
 
-        $conversation = $this->makeAwaiting('wi-6', 'Queued');
-        $this->fakeActiveList([
-            ['Id' => 'wi-6', 'ConversationState' => 9, 'PositionInQueue' => 1, 'QueueName' => 'OpenMediaQ'],
+        $conversation = $this->makeAwaiting('wi-2', 'Queued');
+        $this->fakeMitel([
+            'wi-2' => ['id' => 'wi-2', 'conversationState' => 'Queued', 'positionInQueue' => 4, 'queueName' => 'TDECHAT'],
         ]);
 
         dispatch_sync(new PollOpenMediaWorkItems());
 
         $conversation->refresh();
         $this->assertSame(ConversationStatus::AwaitingAcceptance, $conversation->status);
-        $this->assertSame(1, $conversation->meta['mitel']['position_in_queue']);
+        $this->assertSame(4, $conversation->meta['mitel']['position_in_queue']);
 
         Event::assertNotDispatched(WorkItemAccepted::class);
-        Event::assertNotDispatched(WorkItemAbandoned::class);
         Event::assertNotDispatched(ConversationUpdated::class);
     }
 
-    public function test_one_list_call_covers_all_pending_conversations(): void
+    public function test_404_with_ended_history_closes_and_fires_webhook(): void
     {
-        $first = $this->makeAwaiting('wi-7');
-        $second = $this->makeAwaiting('wi-8');
-        // Not polled: standalone awaiting, and mitel already active.
+        $conversation = $this->makeAwaiting('wi-3');
+        Webhook::factory()->create([
+            'url' => 'https://sink.test/hooks',
+            'events' => [WebhookEvent::ConversationClosed->value],
+        ]);
+
+        Http::fake(function ($request) {
+            $url = urldecode($request->url());
+            if (str_contains($url, '$search=')) {
+                return Http::response(['_embedded' => ['items' => [
+                    ['id' => 'wi-3', 'conversationState' => 'Ended'],
+                ]]]);
+            }
+            if (str_contains($url, 'sink.test')) {
+                return Http::response(['ok' => true]);
+            }
+
+            return Http::response('', 404);
+        });
+
+        dispatch_sync(new PollOpenMediaWorkItems());
+
+        $this->assertSame(ConversationStatus::Closed, $conversation->fresh()->status);
+        $this->assertSame('conversation.closed', WebhookDelivery::sole()->event);
+    }
+
+    public function test_404_with_acd_history_means_handled_and_closes(): void
+    {
+        Event::fake([WorkItemAccepted::class, ConversationUpdated::class]);
+
+        $conversation = $this->makeAwaiting('wi-4');
+        $this->fakeMitel(
+            ['wi-4' => null],
+            ['wi-4' => ['id' => 'wi-4', 'conversationState' => 'Acd', 'agentName' => 'EmailAgent01']],
+        );
+
+        dispatch_sync(new PollOpenMediaWorkItems());
+
+        $conversation->refresh();
+        // Handled remotely — closed, never re-activated.
+        $this->assertSame(ConversationStatus::Closed, $conversation->status);
+        $this->assertSame('EmailAgent01', $conversation->meta['mitel']['agent_name']);
+        Event::assertNotDispatched(WorkItemAccepted::class);
+    }
+
+    public function test_404_with_abandoned_history_marks_abandoned(): void
+    {
+        Event::fake([WorkItemAbandoned::class, ConversationUpdated::class]);
+
+        $abandoned = $this->makeAwaiting('wi-5');
+        $failed = $this->makeAwaiting('wi-6');
+
+        $this->fakeMitel(
+            ['wi-5' => null, 'wi-6' => null],
+            [
+                'wi-5' => ['id' => 'wi-5', 'conversationState' => 'Abandoned'],
+                'wi-6' => ['id' => 'wi-6', 'conversationState' => 'InboxFailed'],
+            ],
+        );
+
+        dispatch_sync(new PollOpenMediaWorkItems());
+
+        $this->assertSame(ConversationStatus::Abandoned, $abandoned->fresh()->status);
+        $this->assertSame(ConversationStatus::Abandoned, $failed->fresh()->status);
+        $this->assertSame('InboxFailed', $failed->fresh()->external_state);
+        Event::assertDispatchedTimes(WorkItemAbandoned::class, 2);
+    }
+
+    public function test_404_with_empty_history_marks_abandoned_as_gone(): void
+    {
+        Event::fake([WorkItemAbandoned::class, ConversationUpdated::class]);
+
+        $gone = $this->makeAwaiting('wi-7');
+        $this->fakeMitel(['wi-7' => null], ['wi-7' => null]);
+
+        dispatch_sync(new PollOpenMediaWorkItems());
+
+        $gone->refresh();
+        $this->assertSame(ConversationStatus::Abandoned, $gone->status);
+        $this->assertTrue($gone->meta['mitel']['no_longer_active']);
+        Event::assertDispatched(WorkItemAbandoned::class);
+    }
+
+    public function test_fresh_items_get_a_routing_grace_before_being_declared_gone(): void
+    {
+        Event::fake([WorkItemAbandoned::class, ConversationUpdated::class]);
+
+        $fresh = $this->makeAwaiting('wi-fresh');
+        $fresh->forceFill([
+            'meta' => ['mitel' => ['work_item_created_at' => now()->toIso8601String()]],
+        ])->save();
+
+        $this->fakeMitel(['wi-fresh' => null], ['wi-fresh' => null]);
+
+        dispatch_sync(new PollOpenMediaWorkItems());
+
+        // Still routing on the MiCC side — untouched, will be re-polled.
+        $this->assertSame(ConversationStatus::AwaitingAcceptance, $fresh->fresh()->status);
+        Event::assertNotDispatched(WorkItemAbandoned::class);
+    }
+
+    public function test_only_awaiting_mitel_conversations_are_polled(): void
+    {
+        $this->makeAwaiting('wi-8');
         Conversation::factory()->awaitingAcceptance()->create();
         Conversation::factory()
             ->for(Inbox::factory()->mitelOpenMedia())
             ->active()
             ->create(['external_work_item_id' => 'wi-9', 'external_state' => 'Acd']);
 
-        $this->fakeActiveList([
-            ['Id' => 'wi-7', 'ConversationState' => 9],
-            ['Id' => 'wi-8', 'ConversationState' => 1],
+        $this->fakeMitel([
+            'wi-8' => ['id' => 'wi-8', 'conversationState' => 'Queued'],
         ]);
 
         dispatch_sync(new PollOpenMediaWorkItems());
 
         Http::assertSentCount(1);
-        $this->assertSame('Offered', $second->fresh()->external_state);
-        $this->assertSame(ConversationStatus::AwaitingAcceptance, $first->fresh()->status);
     }
 
-    public function test_no_http_at_all_when_nothing_is_pending(): void
-    {
-        Http::fake();
-
-        Conversation::factory()->awaitingAcceptance()->create();
-
-        dispatch_sync(new PollOpenMediaWorkItems());
-
-        Http::assertSentCount(0);
-    }
-
-    public function test_list_failure_skips_the_pass_without_touching_conversations(): void
+    public function test_transient_errors_skip_the_conversation_without_events(): void
     {
         Event::fake([WorkItemAbandoned::class, ConversationUpdated::class]);
 

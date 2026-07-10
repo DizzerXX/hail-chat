@@ -54,8 +54,8 @@ class MitelClient
     }
 
     /**
-     * Debug/tooling only — returns details solely while the item is in an
-     * InQueue or ACD state; Failed/Handled items respond 404.
+     * Returns details solely while the item is in an InQueue or ACD state;
+     * Failed/Handled items respond 404 (resolve those via searchWorkItem).
      */
     public function getWorkItem(string $id): array
     {
@@ -65,6 +65,30 @@ class MitelClient
                 ->get('/api/v1/openmedia/'.$id),
             'fetch work item',
         );
+    }
+
+    /**
+     * OData historical lookup — returns the item with its final state even
+     * after it left the active list. Null when nothing matches.
+     */
+    public function searchWorkItem(string $id): ?array
+    {
+        $response = $this->send(
+            fn (PendingRequest $http) => $http
+                ->retry(2, 200, $this->onlyConnectionErrors(), throw: false)
+                ->get('/api/v1/openmedia', ['$search' => "'{$id}'"]),
+            'search work item',
+        );
+
+        $items = $response['_embedded']['items'] ?? $response['_embedded']['Items'] ?? [];
+
+        foreach ($items as $item) {
+            if (($item['Id'] ?? $item['id'] ?? null) === $id) {
+                return $item;
+            }
+        }
+
+        return null;
     }
 
     public function putAction(string $id, MitelWorkItemAction $action): void
@@ -125,8 +149,11 @@ class MitelClient
         } while ($attempts < 2);
 
         if (! $response->successful()) {
+            $body = trim((string) $response->body());
+
             throw new MitelApiException(
-                "Mitel API: {$operation} failed with HTTP {$response->status()}.",
+                "Mitel API: {$operation} failed with HTTP {$response->status()}."
+                    .($body !== '' ? ' Response: '.mb_substr($body, 0, 300) : ''),
                 $response->status(),
             );
         }

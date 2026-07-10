@@ -45,15 +45,21 @@ class MitelOpenMediaProvider implements PollableProviderInterface, QueueDirector
             throw new MitelApiException('Mitel API: create work item response did not contain an Id.');
         }
 
-        $state = MitelConversationState::fromResponse($response['ConversationState'] ?? null);
+        $state = MitelConversationState::fromResponse(
+            $response['ConversationState'] ?? $response['conversationState'] ?? null,
+        );
 
         $conversation->forceFill([
             'external_work_item_id' => $workItemId,
             'external_state' => $state->name,
             'status' => ConversationStatus::AwaitingAcceptance,
             'meta' => $this->mergeMitelMeta($conversation, [
-                'queue_name' => $response['QueueName'] ?? null,
-                'position_in_queue' => $response['PositionInQueue'] ?? null,
+                'queue_name' => $response['QueueName'] ?? $response['queueName'] ?? null,
+                'position_in_queue' => $response['PositionInQueue'] ?? $response['positionInQueue'] ?? null,
+                // Anchors the routing grace window: MiCC can take ~10s to
+                // route a fresh item, during which per-id GETs 404 and the
+                // historical record is still empty.
+                'work_item_created_at' => now()->toIso8601String(),
             ]),
         ])->save();
     }
@@ -89,43 +95,43 @@ class MitelOpenMediaProvider implements PollableProviderInterface, QueueDirector
     }
 
     /**
-     * One OData list call per pass: the active list only contains
-     * InQueue/ACD items, so a pending conversation absent from it has
-     * reached a Failed/Handled state remotely (per-id GETs 404 there).
+     * Per-id polling (live-verified): GET /openmedia/{id} answers 200 while
+     * the item is InQueue/ACD and 404 once it reaches a Failed/Handled
+     * state. On 404, the historical OData $search lookup recovers the FINAL
+     * state (Ended vs Abandoned vs InboxFailed) so transitions map exactly.
+     * The plain active list is unreliable here — MCX filters it by device
+     * visibility, so pending items may never appear in it.
      *
      * @return Collection<int, WorkItemSnapshot>
      */
     public function pollPendingWorkItems(): Collection
     {
-        $pending = Conversation::query()
+        return Conversation::query()
             ->where('status', ConversationStatus::AwaitingAcceptance)
             ->whereNotNull('external_work_item_id')
             ->whereHas('inbox', fn (Builder $query) => $query->where('channel_type', ChannelType::MitelOpenMedia))
-            ->get();
+            ->get()
+            ->map(function (Conversation $conversation) {
+                try {
+                    return WorkItemSnapshot::fromResponse(
+                        $conversation,
+                        $this->client->getWorkItem($conversation->external_work_item_id),
+                    );
+                } catch (MitelApiException $exception) {
+                    if ($exception->statusCode !== 404) {
+                        Log::warning('Mitel work-item poll failed; skipping conversation.', [
+                            'conversation' => $conversation->uuid,
+                            'work_item' => $conversation->external_work_item_id,
+                            'error' => $exception->getMessage(),
+                        ]);
 
-        if ($pending->isEmpty()) {
-            return new Collection();
-        }
+                        return null;
+                    }
+                }
 
-        try {
-            $activeItems = collect($this->client->listWorkItems())
-                ->keyBy(fn (array $item) => (string) ($item['Id'] ?? $item['id'] ?? ''));
-        } catch (MitelApiException $exception) {
-            Log::warning('Mitel work-item list poll failed; skipping this pass.', [
-                'error' => $exception->getMessage(),
-            ]);
-
-            return new Collection();
-        }
-
-        return $pending
-            ->map(function (Conversation $conversation) use ($activeItems) {
-                $item = $activeItems->get($conversation->external_work_item_id);
-
-                return $item === null
-                    ? WorkItemSnapshot::missing($conversation)
-                    : WorkItemSnapshot::fromResponse($conversation, $item);
+                return $this->resolveTerminalState($conversation);
             })
+            ->filter()
             ->values();
     }
 
@@ -155,6 +161,30 @@ class MitelOpenMediaProvider implements PollableProviderInterface, QueueDirector
                     ->all();
             },
         );
+    }
+
+    /**
+     * The item 404'd off the realtime endpoint — pull its final state from
+     * the historical record; fall back to a missing-marker when even the
+     * history has nothing.
+     */
+    private function resolveTerminalState(Conversation $conversation): WorkItemSnapshot
+    {
+        try {
+            $historical = $this->client->searchWorkItem($conversation->external_work_item_id);
+        } catch (MitelApiException $exception) {
+            Log::warning('Mitel historical lookup failed for a finished work item.', [
+                'conversation' => $conversation->uuid,
+                'work_item' => $conversation->external_work_item_id,
+                'error' => $exception->getMessage(),
+            ]);
+
+            $historical = null;
+        }
+
+        return $historical === null
+            ? WorkItemSnapshot::missing($conversation)
+            : WorkItemSnapshot::fromResponse($conversation, $historical, terminal: true);
     }
 
     private function buildCreatePayload(Conversation $conversation): array

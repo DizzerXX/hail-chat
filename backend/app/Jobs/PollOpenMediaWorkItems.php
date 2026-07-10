@@ -40,6 +40,10 @@ class PollOpenMediaWorkItems implements ShouldQueue
             }
 
             if ($snapshot->missing) {
+                if ($this->withinRoutingGrace($conversation)) {
+                    continue;
+                }
+
                 $this->markGone($conversation, $snapshot);
 
                 continue;
@@ -58,6 +62,21 @@ class PollOpenMediaWorkItems implements ShouldQueue
                     ], fn (mixed $value) => $value !== null),
                 ]),
             ])->save();
+
+            if ($snapshot->terminal) {
+                // The item already left the realtime endpoint; its historical
+                // state decides the outcome. Acd/Ended here mean it was
+                // handled — never "activate" a finished conversation.
+                match ($snapshot->state) {
+                    MitelConversationState::Acd,
+                    MitelConversationState::Ended => $this->markEnded($conversation, $webhooks),
+                    MitelConversationState::InboxFailed,
+                    MitelConversationState::InboxFailedReply => $this->markAbandoned($conversation, $snapshot, failed: true),
+                    default => $this->markAbandoned($conversation, $snapshot),
+                };
+
+                continue;
+            }
 
             if (! $stateChanged) {
                 continue;
@@ -88,10 +107,26 @@ class PollOpenMediaWorkItems implements ShouldQueue
     }
 
     /**
-     * The item left MiCC's active (InQueue/ACD) list while we were still
-     * awaiting acceptance — it ended without an agent. (Edge case: an
-     * accept + complete both happening inside one polling tick would also
-     * land here; treated as abandoned.)
+     * Freshly created items 404 on the realtime endpoint AND have no
+     * historical record while MiCC's workflow routes them (~10s observed
+     * live) — don't declare them gone until the grace window has passed.
+     */
+    private function withinRoutingGrace(Conversation $conversation): bool
+    {
+        $createdAt = $conversation->meta['mitel']['work_item_created_at'] ?? null;
+
+        if (! is_string($createdAt)) {
+            return false;
+        }
+
+        $grace = (int) config('mitel.routing_grace_seconds', 60);
+
+        return now()->diffInSeconds($createdAt, true) < $grace;
+    }
+
+    /**
+     * The item is on neither the realtime endpoint nor the historical
+     * record after the routing grace — it ended without an agent.
      */
     private function markGone(Conversation $conversation, WorkItemSnapshot $snapshot): void
     {

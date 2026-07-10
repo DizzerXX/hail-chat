@@ -193,14 +193,19 @@ Standalone inboxes use `StandaloneProvider` (pure database state). Inboxes with
 `channel_type = mitel_openmedia` use `MitelOpenMediaProvider`: escalated conversations are
 POSTed to `/api/v1/openmedia` with `TargetUriEmbedded=true` so the MiCC agent desktop embeds
 TDEChat's agent chat view (keyed by the conversation UUID), and `VariableData` carries the
-visitor's Name/Email/Phone for MiCC contact matching. A scheduler job then syncs work-item
-state with **one OData list call per pass** (`GET /api/v1/openmedia` returns only active
-InQueue/ACD items): `Acd` → active (`WorkItemAccepted`); a pending item **missing from the
-active list** has ended remotely without an agent → abandoned (`WorkItemAbandoned`); states
-reported directly (`Abandoned`/`ExitedQueue`/`InboxFailed` → abandoned, `Ended` → closed +
-`conversation.closed` webhook) are also mapped. Every transition broadcasts
-`conversation.updated`. Closing while queued/offered credits MiCC with an abandon; closing
-after ACD marks the item handled — matching the documented PUT semantics.
+visitor's Name/Email/Phone for MiCC contact matching. The `Queue` field takes the queue
+**name** (live-verified). A scheduler job then syncs state with **per-id polling**
+(`GET /api/v1/openmedia/{id}` answers while the item is InQueue/ACD and 404s once it is
+Failed/Handled — live MCX servers filter the plain list by device visibility, so it can't
+be trusted): live states map `Acd` → active (`WorkItemAccepted`),
+`Abandoned`/`ExitedQueue`/`InboxFailed` → abandoned (`WorkItemAbandoned`); on a 404 the
+historical OData `$search` recovers the final state (`Ended`/`Acd` → closed +
+`conversation.closed` webhook, otherwise abandoned). Freshly created items get a routing
+grace (`MITEL_ROUTING_GRACE`, default 60s) because MiCC takes ~10s to route them, during
+which they exist nowhere queryable. Every transition broadcasts `conversation.updated`.
+Closing while queued/offered credits MiCC with an abandon; closing after ACD marks the
+item handled. Live responses use camelCase keys and string state names — the client accepts
+both those and the swagger's PascalCase/integers.
 
 Configuration (`backend/config/mitel.php`, all via env — never hardcoded):
 

@@ -22,8 +22,24 @@ enum MitelConversationState: int
     case InboxFailedReply = 12;
     case WorkTimer = 13;
 
+    /**
+     * The swagger documents an integer enum, but live MCX servers serialize
+     * the member NAME (e.g. "Acd") — accept both.
+     */
     public static function fromResponse(mixed $value): self
     {
-        return is_numeric($value) ? (self::tryFrom((int) $value) ?? self::Unknown) : self::Unknown;
+        if (is_numeric($value)) {
+            return self::tryFrom((int) $value) ?? self::Unknown;
+        }
+
+        if (is_string($value)) {
+            foreach (self::cases() as $case) {
+                if (strcasecmp($case->name, $value) === 0) {
+                    return $case;
+                }
+            }
+        }
+
+        return self::Unknown;
     }
 }

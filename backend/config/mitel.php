@@ -49,6 +49,11 @@ return [
 
     'queues_cache_ttl' => (int) env('MITEL_QUEUES_CACHE_TTL', 60),
 
+    // Seconds after work-item creation during which "not found anywhere"
+    // is treated as still-routing rather than gone (live MCX takes ~10s
+    // to route a new item into its queue).
+    'routing_grace_seconds' => (int) env('MITEL_ROUTING_GRACE', 60),
+
     // TargetUri template for the embedded agent chat view ({uuid} is replaced
     // with the conversation uuid). Defaults to APP_URL/agent/chat/{uuid}.
     'agent_chat_url' => env('MITEL_AGENT_CHAT_URL'),
