@@ -131,8 +131,24 @@ use dot notation (`conversations.view_own`, `faqs.manage`, …) and are defined 
 
 ### Your website (chat widget)
 
-The public API needs no authentication — the conversation UUID returned on start is the
-capability that authorizes all later calls for that conversation:
+Drop the embeddable widget ([backend/public/widget.js](backend/public/widget.js) — vanilla
+JS, no dependencies) into any page:
+
+```html
+<script src="https://your-tdechat-host/widget.js"
+        data-inbox="website"
+        data-reverb-key="YOUR_REVERB_APP_KEY"
+        data-ws-host="your-tdechat-host"
+        data-ws-port="8080"></script>
+```
+
+It renders a floating chat bubble with a pre-chat form (name + BM/EN language), talks to the
+public API, streams bot/agent replies and typing indicators over Reverb (with HTTP polling as
+a fallback), offers "Talk to a human" escalation, and resumes the conversation across page
+reloads via localStorage. A demo host page ships at `/widget-demo.html`.
+
+Prefer driving the API directly? It needs no authentication — the conversation UUID returned
+on start is the capability that authorizes all later calls for that conversation:
 
 ```bash
 # Start a conversation on the 'website' inbox (bot answers if it can)
