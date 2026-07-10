@@ -411,8 +411,19 @@
       return result.data;
     }
 
+    if (result.status >= 400 && result.status < 500) {
+      // Client-state conflict (e.g. escalating an already-escalated chat):
+      // resync with the server instead of alarming the visitor.
+      refresh();
+      return null;
+    }
+
     refs.status.textContent = 'Connection problem — retrying…';
     return null;
+  }
+
+  function isOpenStatus(status) {
+    return !!status && status !== 'closed' && status !== 'abandoned';
   }
 
   function element(tag, className, text) {
