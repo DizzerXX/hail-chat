@@ -39,7 +39,7 @@ class MitelOpenMediaProvider implements PollableProviderInterface, QueueDirector
 
         $response = $this->client->createWorkItem($this->buildCreatePayload($conversation));
 
-        $workItemId = $response['Id'] ?? null;
+        $workItemId = $response['Id'] ?? $response['id'] ?? null;
 
         if (! is_string($workItemId) || $workItemId === '') {
             throw new MitelApiException('Mitel API: create work item response did not contain an Id.');
@@ -109,7 +109,7 @@ class MitelOpenMediaProvider implements PollableProviderInterface, QueueDirector
 
         try {
             $activeItems = collect($this->client->listWorkItems())
-                ->keyBy(fn (array $item) => (string) ($item['Id'] ?? ''));
+                ->keyBy(fn (array $item) => (string) ($item['Id'] ?? $item['id'] ?? ''));
         } catch (MitelApiException $exception) {
             Log::warning('Mitel work-item list poll failed; skipping this pass.', [
                 'error' => $exception->getMessage(),
@@ -140,8 +140,11 @@ class MitelOpenMediaProvider implements PollableProviderInterface, QueueDirector
             function () {
                 $raw = $this->client->listQueues();
 
-                // Confirmed shape: {_links, count, _embedded: {Items: [{id, name, reporting}]}}
-                $items = $raw['_embedded']['Items'] ?? (array_is_list($raw) ? $raw : []);
+                // Live-verified shape: {_links, count, _embedded: {items: [{id, name, reporting}]}}
+                // (swagger example capitalizes "Items"; real MCX servers do not)
+                $items = $raw['_embedded']['items']
+                    ?? $raw['_embedded']['Items']
+                    ?? (array_is_list($raw) ? $raw : []);
 
                 return collect($items)
                     ->map(fn (array $queue) => [
@@ -175,7 +178,7 @@ class MitelOpenMediaProvider implements PollableProviderInterface, QueueDirector
             'Queue' => $mitelConfig['queue'] ?? null,
             'From' => $conversation->visitor_email ?? $conversation->visitor_name,
             'Subject' => $firstMessage !== null ? Str::limit($firstMessage->body, 80) : null,
-            'Tenant' => config('mitel.tenant'),
+            'Tenant' => config('mitel.tenant') ?: null,
             'VariableData' => $variableData !== [] ? $variableData : null,
         ], fn (mixed $value) => $value !== null);
     }

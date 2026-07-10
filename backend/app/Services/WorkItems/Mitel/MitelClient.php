@@ -47,7 +47,10 @@ class MitelClient
             'list work items',
         );
 
-        return $response['_embedded']['Items'] ?? (array_is_list($response) ? $response : []);
+        // Swagger examples show "Items" but real MCX servers emit "items".
+        return $response['_embedded']['Items']
+            ?? $response['_embedded']['items']
+            ?? (array_is_list($response) ? $response : []);
     }
 
     /**

@@ -26,8 +26,8 @@ return [
     | Tokens come from the MiCC Authorization Server via the client
     | credentials grant. The client_id must be registered as a trusted
     | server in the Authorization Server's clients.config. When auth_url
-    | is empty it is derived from base_url as
-    | {base_url}/AuthorizationServer/Token.
+    | is empty it is derived from base_url's host as
+    | {scheme}://{host}/AuthorizationServer/Token (site root).
     |
     */
 

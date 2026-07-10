@@ -49,9 +49,15 @@ class MitelTokenProvider
             return $configured;
         }
 
-        // Real MiCC deployments nest the Authorization Server under the SDK
-        // base path (e.g. https://host/miccsdk/AuthorizationServer/Token).
-        return rtrim((string) config('mitel.base_url'), '/').'/AuthorizationServer/Token';
+        // The Authorization Server lives at the MiCC site root while
+        // base_url points at the /miccsdk sub-path (verified against a real
+        // MCX deployment: /miccsdk/AuthorizationServer/Token 404s there).
+        $parts = parse_url((string) config('mitel.base_url'));
+        $scheme = $parts['scheme'] ?? 'https';
+        $host = $parts['host'] ?? '';
+        $port = isset($parts['port']) ? ':'.$parts['port'] : '';
+
+        return "{$scheme}://{$host}{$port}/AuthorizationServer/Token";
     }
 
     /**

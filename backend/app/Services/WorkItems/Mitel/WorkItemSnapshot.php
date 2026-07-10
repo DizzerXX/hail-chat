@@ -39,13 +39,17 @@ final readonly class WorkItemSnapshot
 
     public static function fromResponse(Conversation $conversation, array $data): self
     {
+        // Field casing tolerant: swagger documents PascalCase, but the live
+        // MCX queues endpoint emits camel/lowercase — cover both.
+        $get = fn (string $key) => $data[$key] ?? $data[lcfirst($key)] ?? null;
+
         return new self(
             conversationId: $conversation->id,
-            state: MitelConversationState::fromResponse($data['ConversationState'] ?? null),
-            queueName: $data['QueueName'] ?? null,
-            positionInQueue: isset($data['PositionInQueue']) ? (int) $data['PositionInQueue'] : null,
-            agentId: isset($data['AgentId']) ? (string) $data['AgentId'] : null,
-            agentName: $data['AgentName'] ?? null,
+            state: MitelConversationState::fromResponse($get('ConversationState')),
+            queueName: $get('QueueName'),
+            positionInQueue: $get('PositionInQueue') !== null ? (int) $get('PositionInQueue') : null,
+            agentId: $get('AgentId') !== null ? (string) $get('AgentId') : null,
+            agentName: $get('AgentName'),
             raw: $data,
         );
     }
