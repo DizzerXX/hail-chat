@@ -185,12 +185,26 @@
   }
 
   async function resume(uuid) {
-    const response = await api('GET', `/api/v1/public/conversations/${uuid}`);
-    if (!response) {
+    const result = await request('GET', `/api/v1/public/conversations/${uuid}`);
+
+    if (result.status === 404) {
+      // The conversation genuinely no longer exists server-side.
       localStorage.removeItem(storageKey);
       return;
     }
-    setConversation(response.data);
+
+    if (result.status < 200 || result.status >= 300) {
+      // Transient failure (backend/db down): keep the stored conversation
+      // and keep retrying until the server comes back.
+      show('chat');
+      refs.status.textContent = 'Connection problem — retrying…';
+      refs.input.disabled = true;
+      refs.send.disabled = true;
+      setTimeout(() => resume(uuid), 5000);
+      return;
+    }
+
+    setConversation(result.data.data);
     (conversation.messages || []).forEach(render);
     connect();
   }
@@ -373,19 +387,32 @@
   }
 
   // ---------- helpers ----------
-  async function api(method, path, body) {
+  async function request(method, path, body) {
     try {
       const response = await fetch(config.api + path, {
         method: method,
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: body ? JSON.stringify(body) : undefined,
       });
-      if (!response.ok) throw new Error('HTTP ' + response.status);
-      return response.status === 204 ? {} : await response.json();
+
+      return {
+        status: response.status,
+        data: response.status === 204 ? {} : await response.json().catch(() => null),
+      };
     } catch (error) {
-      refs.status.textContent = 'Connection problem — retrying…';
-      return null;
+      return { status: 0, data: null };
     }
+  }
+
+  async function api(method, path, body) {
+    const result = await request(method, path, body);
+
+    if (result.status >= 200 && result.status < 300) {
+      return result.data;
+    }
+
+    refs.status.textContent = 'Connection problem — retrying…';
+    return null;
   }
 
   function element(tag, className, text) {

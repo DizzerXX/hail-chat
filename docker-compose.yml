@@ -2,6 +2,7 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: tdechat-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_DB: tdechat
       POSTGRES_USER: tdechat
@@ -21,6 +22,7 @@ services:
   redis:
     image: redis:7-alpine
     container_name: tdechat-redis
+    restart: unless-stopped
     ports:
       # 6380 on the host: another project's Redis owns 6379 on this machine.
       - "6380:6379"
