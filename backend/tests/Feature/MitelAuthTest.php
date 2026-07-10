@@ -48,11 +48,11 @@ class MitelAuthTest extends TestCase
         });
     }
 
-    public function test_auth_url_defaults_to_the_site_root_and_respects_override(): void
+    public function test_auth_url_defaults_under_the_sdk_base_path_and_respects_override(): void
     {
         config(['mitel.base_url' => 'https://micc.test:8443/miccsdk']);
         $this->assertSame(
-            'https://micc.test:8443/AuthorizationServer/Token',
+            'https://micc.test:8443/miccsdk/AuthorizationServer/Token',
             app(MitelTokenProvider::class)->authUrl(),
         );
 

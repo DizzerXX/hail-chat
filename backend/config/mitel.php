@@ -27,7 +27,7 @@ return [
     | credentials grant. The client_id must be registered as a trusted
     | server in the Authorization Server's clients.config. When auth_url
     | is empty it is derived from base_url as
-    | {scheme}://{host}/AuthorizationServer/Token.
+    | {base_url}/AuthorizationServer/Token.
     |
     */
 
