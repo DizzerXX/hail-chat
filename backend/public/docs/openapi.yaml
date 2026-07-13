@@ -1256,6 +1256,14 @@ components:
                     type: object
                     properties:
                       escalate_on_miss: { type: boolean }
+                  cms_url:
+                    type: [string, 'null']
+                    format: uri
+                    maxLength: 2048
+                    description: >-
+                      Optional http(s) URL of an external CMS/ticketing system. When set,
+                      the agent dashboard opens it in a new tab after an agent closes a
+                      conversation in this inbox.
               bot_enabled: { type: boolean }
               is_active: { type: boolean }
     TeamBody:
@@ -1401,6 +1409,12 @@ components:
             id: { type: integer }
             slug: { type: string }
             name: { type: string }
+            cms_url:
+              type: [string, 'null']
+              format: uri
+              description: >-
+                CMS/ticketing URL configured on the inbox. Only present on
+                authenticated (agent) responses — never on the public widget API.
         assigned_agent:
           oneOf:
             - type: object

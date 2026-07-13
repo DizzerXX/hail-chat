@@ -31,7 +31,7 @@ export interface Conversation {
   status: ConversationStatus;
   language: string;
   visitor: { name: string | null; email: string | null; phone: string | null };
-  inbox?: { id: number; slug: string; name: string };
+  inbox?: { id: number; slug: string; name: string; cms_url?: string | null };
   assigned_agent?: { id: number; display_name: string } | null;
   team?: { id: number; name: string } | null;
   meta: Record<string, unknown> | null;
@@ -76,6 +76,7 @@ export interface AdminInbox extends InboxSummary {
   channel_config: {
     mitel?: { queue?: string };
     bot?: { escalate_on_miss?: boolean };
+    cms_url?: string | null;
   };
   bot_enabled: boolean;
   is_active: boolean;

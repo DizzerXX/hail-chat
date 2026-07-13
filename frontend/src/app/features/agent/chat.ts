@@ -335,6 +335,11 @@ export class Chat implements OnInit, OnDestroy {
 
   protected async close(): Promise<void> {
     await this.action(() => firstValueFrom(this.api.close(this.uuid)), 'Conversation closed');
+
+    const cmsUrl = this.conversation()?.inbox?.cms_url;
+    if (!this.isOpen() && cmsUrl) {
+      window.open(cmsUrl, '_blank', 'noopener');
+    }
   }
 
   protected reroute(): void {

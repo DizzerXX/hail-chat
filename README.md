@@ -280,6 +280,12 @@ needed), `ng build --configuration production`.
   delivery log, per-inbox routing rules, and analytics (conversations/day, average handle
   time, FAQ hit rate, top missed queries).
 
+An inbox can optionally point at an external CMS/ticketing system: set **CMS URL** in the
+inbox dialog (stored as `channel_config.cms_url`, validated as an http(s) URL). When set,
+the agent dashboard opens that URL in a new tab right after an agent closes a conversation
+in that inbox — handy for logging the interaction in a ticketing system. The URL is only
+exposed on authenticated agent responses, never on the public widget API.
+
 The management REST API behind the admin screens lives under `/api/v1/admin/*`, gated by
 the per-area RBAC permissions (`inboxes.manage`, `faqs.manage`, …) and fully specified in
 the OpenAPI document below.

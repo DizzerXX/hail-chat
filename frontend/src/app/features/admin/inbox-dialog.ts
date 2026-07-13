@@ -61,6 +61,12 @@ import { AdminApiService } from './admin-api.service';
         </mat-form-field>
       }
 
+      <mat-form-field appearance="outline">
+        <mat-label>CMS URL (optional)</mat-label>
+        <input matInput type="url" [(ngModel)]="cmsUrl" placeholder="https://cms.example.com/tickets/new" />
+        <mat-hint>Opened in a new tab when an agent closes a conversation</mat-hint>
+      </mat-form-field>
+
       <mat-slide-toggle [(ngModel)]="botEnabled">FAQ bot answers first</mat-slide-toggle>
       @if (botEnabled) {
         <mat-slide-toggle [(ngModel)]="escalateOnMiss">Escalate to agents on bot miss</mat-slide-toggle>
@@ -83,6 +89,7 @@ export class InboxDialog {
   protected slug = this.inbox?.slug ?? '';
   protected channelType: AdminInbox['channel_type'] = this.inbox?.channel_type ?? 'standalone';
   protected mitelQueue = this.inbox?.channel_config.mitel?.queue ?? '';
+  protected cmsUrl = this.inbox?.channel_config.cms_url ?? '';
   protected botEnabled = this.inbox?.bot_enabled ?? true;
   protected escalateOnMiss = this.inbox?.channel_config.bot?.escalate_on_miss ?? true;
   protected isActive = this.inbox?.is_active ?? true;
@@ -114,6 +121,7 @@ export class InboxDialog {
       is_active: this.isActive,
       channel_config: {
         bot: { escalate_on_miss: this.escalateOnMiss },
+        ...(this.cmsUrl.trim() ? { cms_url: this.cmsUrl.trim() } : {}),
         ...(this.channelType === 'mitel_openmedia' && this.mitelQueue
           ? { mitel: { queue: this.mitelQueue } }
           : {}),

@@ -36,6 +36,24 @@ class AgentConversationTest extends TestCase
         return $agent;
     }
 
+    public function test_cms_url_is_visible_to_agents_but_not_on_the_public_api(): void
+    {
+        $me = $this->makeAgent();
+        $conversation = Conversation::factory()->active()->create(['assigned_agent_id' => $me->id]);
+        $conversation->inbox->update([
+            'channel_config' => ['cms_url' => 'https://cms.telediant.com.my/tickets/new'],
+        ]);
+
+        $this->getJson("/api/v1/public/conversations/{$conversation->uuid}")
+            ->assertOk()
+            ->assertJsonMissingPath('data.inbox.cms_url');
+
+        Sanctum::actingAs($me->user);
+        $this->getJson("/api/v1/agent/conversations/{$conversation->uuid}")
+            ->assertOk()
+            ->assertJsonPath('data.inbox.cms_url', 'https://cms.telediant.com.my/tickets/new');
+    }
+
     public function test_queue_scope_lists_only_conversations_visible_to_the_agent(): void
     {
         $myTeam = Team::factory()->create();

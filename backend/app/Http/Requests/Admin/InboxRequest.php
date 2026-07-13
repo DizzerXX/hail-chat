@@ -31,6 +31,7 @@ class InboxRequest extends FormRequest
             'channel_config' => ['nullable', 'array'],
             'channel_config.mitel.queue' => ['nullable', 'string', 'max:255'],
             'channel_config.bot.escalate_on_miss' => ['nullable', 'boolean'],
+            'channel_config.cms_url' => ['nullable', 'url:http,https', 'max:2048'],
             'bot_enabled' => ['sometimes', 'boolean'],
             'is_active' => ['sometimes', 'boolean'],
         ];

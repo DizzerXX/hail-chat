@@ -54,6 +54,24 @@ class AdminInboxTest extends TestCase
         $this->assertDatabaseCount('inboxes', 0);
     }
 
+    public function test_cms_url_is_stored_and_must_be_a_valid_url(): void
+    {
+        $this->postJson('/api/v1/admin/inboxes', [
+            'name' => 'Website',
+            'slug' => 'website',
+            'channel_type' => 'standalone',
+            'channel_config' => ['cms_url' => 'not-a-url'],
+        ])->assertUnprocessable()->assertJsonValidationErrors('channel_config.cms_url');
+
+        $this->postJson('/api/v1/admin/inboxes', [
+            'name' => 'Website',
+            'slug' => 'website',
+            'channel_type' => 'standalone',
+            'channel_config' => ['cms_url' => 'https://cms.telediant.com.my/tickets/new'],
+        ])->assertCreated()
+            ->assertJsonPath('data.channel_config.cms_url', 'https://cms.telediant.com.my/tickets/new');
+    }
+
     public function test_duplicate_slug_is_rejected(): void
     {
         Inbox::factory()->create(['slug' => 'website']);
