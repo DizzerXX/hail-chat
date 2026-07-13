@@ -272,9 +272,12 @@ API and Reverb endpoints are configured in
 match your backend `.env`). Quality gates: `ng lint`, `ng test` (vitest — no browser
 needed), `ng build --configuration production`.
 
-- **Agent** (`/agent`) — availability switcher, Mine/Queue/All conversation lists with
-  realtime updates, chat view with typing indicators, FAQ quick replies, accept/close/
-  reroute. `/agent/chat/{uuid}` is also the view MiCC embeds via the work-item TargetUri.
+- **Agent** (`/agent`) — a Slack-style three-pane workspace: icon rail (with availability
+  switcher on the avatar menu), a searchable sidebar with Queue/Mine/All conversation
+  groups updating in realtime, the chat thread with bubble-style messages (agent messages
+  right-aligned in blue), and a details panel with visitor info and a CMS shortcut. FAQ
+  quick replies, accept/close/reroute as before. `/agent/chat/{uuid}` is also the view
+  MiCC embeds via the work-item TargetUri.
 - **Admin** (`/admin`) — inbox management (incl. MiCC queue mapping), teams, users & agent
   profiles, the FAQ CMS with a BM/EN language toggle, webhook configuration with a
   delivery log, per-inbox routing rules, and analytics (conversations/day, average handle

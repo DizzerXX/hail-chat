@@ -15,7 +15,7 @@ export const routes: Routes = [
       {
         path: '',
         loadComponent: () =>
-          import('./features/agent/conversation-list').then((m) => m.ConversationList),
+          import('./features/agent/no-conversation').then((m) => m.NoConversation),
       },
       {
         path: 'chat/:uuid',
