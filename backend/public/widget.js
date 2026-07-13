@@ -30,6 +30,7 @@
 
   const storageKey = 'tdechat.' + config.inbox;
   const seenMessages = new Set();
+  const messageNodes = new Map();
 
   let conversation = null;
   let socket = null;
@@ -57,6 +58,8 @@
   .tdec-msg.agent,.tdec-msg.bot{align-self:flex-start;background:#fff;border:1px solid #e1e0d9;border-bottom-left-radius:4px}
   .tdec-msg.bot{border-style:dashed}
   .tdec-msg.system{align-self:center;background:none;color:#898781;font-size:12px;padding:2px}
+  .tdec-trans{margin-top:5px;padding-top:5px;border-top:1px dashed #e1e0d9;font-style:italic;
+    font-size:12.5px;color:#52514e}
   .tdec-sender{font-size:11px;color:#898781;margin:0 4px 2px}
   .tdec-typing{align-self:flex-start;color:#898781;font-size:12px;padding:2px 6px;display:none}
   .tdec-typing.on{display:block}
@@ -248,6 +251,7 @@
     disconnect();
     conversation = null;
     seenMessages.clear();
+    messageNodes.clear();
     refs.msgs.innerHTML = '';
     show('pre');
     refs.status.textContent = 'TDEChat';
@@ -294,8 +298,30 @@
       refs.msgs.appendChild(sender);
     }
 
-    refs.msgs.appendChild(element('div', 'tdec-msg ' + message.sender_type, message.body));
+    const bubble = element('div', 'tdec-msg ' + message.sender_type, message.body);
+    refs.msgs.appendChild(bubble);
+    messageNodes.set(message.id, { bubble: bubble, senderType: message.sender_type });
+
+    applyTranslation(message.id, (message.meta && message.meta.translations) || null);
     refs.msgs.scrollTop = refs.msgs.scrollHeight;
+  }
+
+  /**
+   * Shows the visitor-language translation under agent replies (auto mode
+   * translates agent messages into the conversation language).
+   */
+  function applyTranslation(messageId, translations) {
+    const entry = messageNodes.get(messageId);
+    if (!entry || entry.senderType !== 'agent' || !translations || !conversation) return;
+
+    const text = translations[conversation.language];
+    if (!text || text === entry.bubble.firstChild?.textContent) return;
+
+    if (!entry.translationNode) {
+      entry.translationNode = element('div', 'tdec-trans');
+      entry.bubble.appendChild(entry.translationNode);
+    }
+    entry.translationNode.textContent = text;
   }
 
   function show(which) {
@@ -340,6 +366,9 @@
           break;
         case 'agent.typing':
           showTyping(payload.typing);
+          break;
+        case 'message.translated':
+          applyTranslation(payload.message_id, payload.translations);
           break;
         case 'conversation.updated':
           conversation.assigned_agent = payload.conversation.assigned_agent;

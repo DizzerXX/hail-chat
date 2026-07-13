@@ -4,14 +4,17 @@ use App\Http\Controllers\Api\V1\Admin\AgentDirectoryController;
 use App\Http\Controllers\Api\V1\Admin\AnalyticsController;
 use App\Http\Controllers\Api\V1\Admin\FaqGroupController;
 use App\Http\Controllers\Api\V1\Admin\InboxController as AdminInboxController;
+use App\Http\Controllers\Api\V1\Admin\LicenseController;
 use App\Http\Controllers\Api\V1\Admin\MitelQueueController;
 use App\Http\Controllers\Api\V1\Admin\RoutingRuleController;
 use App\Http\Controllers\Api\V1\Admin\TeamController;
 use App\Http\Controllers\Api\V1\Admin\UserController;
 use App\Http\Controllers\Api\V1\Admin\WebhookController;
 use App\Http\Controllers\Api\V1\Agent\AgentStatusController;
+use App\Http\Controllers\Api\V1\Agent\AppConfigController;
 use App\Http\Controllers\Api\V1\Agent\ConversationController as AgentConversationController;
 use App\Http\Controllers\Api\V1\Agent\InboxController as AgentInboxController;
+use App\Http\Controllers\Api\V1\Agent\TranslationController;
 use App\Http\Controllers\Api\V1\Auth\AuthController;
 use App\Http\Controllers\Api\V1\Public\ConversationController as PublicConversationController;
 use App\Http\Controllers\Api\V1\Public\FaqController as PublicFaqController;
@@ -38,6 +41,12 @@ Route::prefix('v1')->group(function () {
 
     // Agent inbox API
     Route::prefix('agent')->middleware('auth:sanctum')->group(function () {
+        Route::get('/app-config', [AppConfigController::class, 'show']);
+        Route::post('/translate', [TranslationController::class, 'draft'])
+            ->middleware('permission:messages.send');
+        Route::post('/conversations/{conversation}/messages/{message}/translate', [TranslationController::class, 'message'])
+            ->middleware('permission:messages.send')
+            ->scopeBindings();
         Route::get('/inboxes', [AgentInboxController::class, 'index'])
             ->middleware('permission:conversations.view_own');
         Route::get('/conversations', [AgentConversationController::class, 'index'])
@@ -76,12 +85,22 @@ Route::prefix('v1')->group(function () {
             Route::put('/teams/{team}/members', [TeamController::class, 'members']);
         });
 
-        Route::middleware('permission:agents.manage')->group(function () {
+        // User management is license-gated; the seats endpoint stays outside
+        // the gate so the dashboard can explain WHY access is blocked.
+        Route::middleware(['permission:agents.manage', 'license.valid'])->group(function () {
             Route::get('/users', [UserController::class, 'index']);
             Route::post('/users', [UserController::class, 'store']);
             Route::put('/users/{user}', [UserController::class, 'update']);
             Route::get('/roles', [UserController::class, 'roles']);
             Route::get('/agents', [AgentDirectoryController::class, 'index']);
+        });
+        Route::get('/license/seats', [LicenseController::class, 'seats'])
+            ->middleware('permission:agents.manage');
+
+        Route::middleware('permission:license.manage')->group(function () {
+            Route::get('/license', [LicenseController::class, 'show']);
+            Route::post('/license/revalidate', [LicenseController::class, 'revalidate']);
+            Route::post('/license/deactivate', [LicenseController::class, 'deactivate']);
         });
 
         Route::middleware('permission:faqs.manage')->group(function () {

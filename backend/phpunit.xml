@@ -28,6 +28,11 @@
         <env name="MITEL_CLIENT_ID" value=""/>
         <env name="MITEL_CLIENT_SECRET" value=""/>
         <env name="MITEL_TENANT" value=""/>
+        <env name="TRANSLATION" value="false"/>
+        <env name="TRANSLATION_METHOD" value="none"/>
+        <env name="TRANSLATION_ENDPOINT" value=""/>
+        <env name="LICENSE_MANAGER_URL" value=""/>
+        <env name="LICENSE_KEY" value=""/>
         <env name="CACHE_STORE" value="array"/>
         <env name="DB_CONNECTION" value="pgsql"/>
         <env name="DB_HOST" value="127.0.0.1"/>

@@ -22,6 +22,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { ActivatedRoute } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { Conversation, Message, PublicFaq } from '../../core/api-types';
+import { AppConfigService } from '../../core/app-config.service';
 import { AuthService } from '../../core/auth.service';
 import { EchoService } from '../../core/echo.service';
 import { AgentApiService } from './agent-api.service';
@@ -74,8 +75,21 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
             <div class="bubble" [class]="message.sender_type">
               <div class="meta muted">
                 {{ senderLabel(message) }} · {{ message.created_at | date: 'HH:mm' }}
+                @if (canTranslate(message)) {
+                  <button
+                    matIconButton
+                    class="translate-btn"
+                    (click)="translateMessage(message)"
+                    aria-label="Translate message"
+                  >
+                    <mat-icon>translate</mat-icon>
+                  </button>
+                }
               </div>
               <div class="body">{{ message.body }}</div>
+              @for (entry of translationsOf(message); track entry.lang) {
+                <div class="translation muted">{{ entry.lang.toUpperCase() }} · {{ entry.text }}</div>
+              }
             </div>
           }
         </main>
@@ -109,6 +123,17 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
             (keydown.enter)="onEnter($event)"
             [disabled]="!canSend()"
           ></textarea>
+
+          @if (appConfig.translation().enabled) {
+            <button
+              matIconButton
+              (click)="translateDraft()"
+              [disabled]="!canSend() || !draft.trim()"
+              aria-label="Translate draft to the visitor's language"
+            >
+              <mat-icon>translate</mat-icon>
+            </button>
+          }
 
           <button matIconButton (click)="send()" [disabled]="!canSend() || !draft.trim()" aria-label="Send">
             <mat-icon>send</mat-icon>
@@ -177,6 +202,20 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
       background: transparent;
       color: var(--mat-sys-on-surface-variant);
     }
+    .translation {
+      margin-top: 4px;
+      padding-top: 4px;
+      border-top: 1px dashed var(--mat-sys-outline-variant);
+      font-size: 12.5px;
+      font-style: italic;
+    }
+    .translate-btn {
+      width: 24px;
+      height: 24px;
+      padding: 0;
+      margin-left: 4px;
+      --mdc-icon-button-icon-size: 15px;
+    }
     footer {
       display: flex;
       align-items: flex-end;
@@ -205,6 +244,7 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
 })
 export class Chat implements OnInit, OnDestroy {
   protected readonly auth = inject(AuthService);
+  protected readonly appConfig = inject(AppConfigService);
   private readonly api = inject(AgentApiService);
   private readonly echoService = inject(EchoService);
   private readonly route = inject(ActivatedRoute);
@@ -257,11 +297,19 @@ export class Chat implements OnInit, OnDestroy {
           this.messages.update((messages) => [...messages, payload.message]);
         }
       })
+      .listen(
+        '.message.translated',
+        (payload: { message_id: number; translations: Record<string, string> }) => {
+          this.patchTranslations(payload.message_id, payload.translations);
+        },
+      )
       .listen('.conversation.updated', (payload: { conversation: Conversation }) => {
         this.conversation.update((current) =>
           current === null ? current : { ...current, ...payload.conversation },
         );
       });
+
+    void this.appConfig.load();
   }
 
   ngOnDestroy(): void {
@@ -359,6 +407,62 @@ export class Chat implements OnInit, OnDestroy {
 
   protected useFaq(faq: PublicFaq): void {
     this.draft = this.draft === '' ? faq.answer : `${this.draft}\n${faq.answer}`;
+  }
+
+  protected translationsOf(message: Message): { lang: string; text: string }[] {
+    const translations = (message.meta?.['translations'] ?? {}) as Record<string, string>;
+
+    return Object.entries(translations).map(([lang, text]) => ({ lang, text }));
+  }
+
+  protected canTranslate(message: Message): boolean {
+    return (
+      this.appConfig.translation().method === 'manual' &&
+      (message.sender_type === 'visitor' || message.sender_type === 'agent')
+    );
+  }
+
+  protected async translateMessage(message: Message): Promise<void> {
+    try {
+      const response = await firstValueFrom(this.api.translateMessage(this.uuid, message.id));
+      this.patchTranslations(
+        message.id,
+        (response.data.meta?.['translations'] ?? {}) as Record<string, string>,
+      );
+    } catch (error) {
+      const text =
+        (error as { error?: { message?: string } }).error?.message ?? 'Translation failed.';
+      this.snackBar.open(text, 'Dismiss', { duration: 4000 });
+    }
+  }
+
+  protected async translateDraft(): Promise<void> {
+    const conversation = this.conversation();
+    const text = this.draft.trim();
+    if (conversation === null || text === '') {
+      return;
+    }
+
+    try {
+      const response = await firstValueFrom(
+        this.api.translateDraft(text, conversation.language),
+      );
+      this.draft = response.data.translation;
+    } catch (error) {
+      const message =
+        (error as { error?: { message?: string } }).error?.message ?? 'Translation failed.';
+      this.snackBar.open(message, 'Dismiss', { duration: 4000 });
+    }
+  }
+
+  private patchTranslations(messageId: number, translations: Record<string, string>): void {
+    this.messages.update((messages) =>
+      messages.map((message) =>
+        message.id === messageId
+          ? { ...message, meta: { ...(message.meta ?? {}), translations } }
+          : message,
+      ),
+    );
   }
 
   private stopTyping(): void {

@@ -15,7 +15,11 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->singleton(\App\Services\License\LicenseService::class);
+        $this->app->bind(
+            \App\Contracts\TranslatorInterface::class,
+            \App\Services\Translation\HttpTranslator::class,
+        );
     }
 
     /**

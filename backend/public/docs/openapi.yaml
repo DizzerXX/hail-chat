@@ -18,8 +18,8 @@ info:
 
     | Channel | Type | Events |
     |---------|------|--------|
-    | `conversation.{uuid}` | public | `conversation.updated`, `message.sent`, `agent.typing` |
-    | `private-inbox.{inboxId}` | private | `conversation.created`, `conversation.updated`, `message.sent` |
+    | `conversation.{uuid}` | public | `conversation.updated`, `message.sent`, `message.translated`, `agent.typing` |
+    | `private-inbox.{inboxId}` | private | `conversation.created`, `conversation.updated`, `message.sent`, `message.translated` |
     | `private-agents.{agentId}` | private | `conversation.updated` (when assigned) |
 
     Private channels authenticate via `POST /api/broadcasting/auth` (bearer token).
@@ -498,6 +498,156 @@ paths:
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '422': { $ref: '#/components/responses/ValidationError' }
+
+  /api/v1/agent/app-config:
+    get:
+      tags: [Agent]
+      summary: Feature flags for the dashboard (translation mode, languages)
+      operationId: agentAppConfig
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Config
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      translation:
+                        type: object
+                        properties:
+                          enabled: { type: boolean }
+                          method: { type: [string, 'null'], enum: [manual, auto, null] }
+                      languages:
+                        type: array
+                        items: { type: string }
+
+  /api/v1/agent/translate:
+    post:
+      tags: [Agent]
+      summary: Translate a composer draft (nothing stored)
+      description: Permission `messages.send`. 404 when translation is disabled; 503 when the AI endpoint is not configured; 502 on AI failure.
+      operationId: translateDraft
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text, target]
+              properties:
+                text: { type: string, maxLength: 4000 }
+                target: { type: string, enum: [ms, en] }
+      responses:
+        '200':
+          description: Translation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      translation: { type: string }
+                      target: { type: string }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '502': { description: Translation server failure }
+        '503': { description: Translation server not configured }
+
+  /api/v1/agent/conversations/{conversationUuid}/messages/{id}/translate:
+    post:
+      tags: [Agent]
+      summary: Translate a stored message (cached on the message, broadcast as message.translated)
+      description: Permission `messages.send`; message must belong to the conversation. Default target follows the pair rule (visitor→counterpart, agent→conversation language).
+      operationId: translateMessage
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ConversationUuid'
+        - $ref: '#/components/parameters/NumericId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                target: { type: string, enum: [ms, en] }
+      responses:
+        '200':
+          description: Message with meta.translations populated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Message' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '502': { description: Translation server failure }
+        '503': { description: Translation server not configured }
+
+  /api/v1/admin/license:
+    get:
+      tags: [Admin]
+      summary: License status for the admin screen
+      description: Permission `license.manage`. `configured=false` means the license manager env is unset (installation runs unrestricted).
+      operationId: adminLicense
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: License payload (status, expiry, seats, activations, features, heartbeat times, masked key)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/LicenseInfo' }
+
+  /api/v1/admin/license/seats:
+    get:
+      tags: [Admin]
+      summary: Seat usage for the user-management screen
+      description: Permission `agents.manage`. Reachable even while the license gate blocks user management.
+      operationId: adminLicenseSeats
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Seats
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      enforced: { type: boolean }
+                      used: { type: integer }
+                      max: { type: [integer, 'null'] }
+
+  /api/v1/admin/license/revalidate:
+    post:
+      tags: [Admin]
+      summary: Re-run activation/validation now
+      operationId: adminLicenseRevalidate
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Refreshed license payload }
+        '502': { description: License manager rejected or unreachable }
+
+  /api/v1/admin/license/deactivate:
+    post:
+      tags: [Admin]
+      summary: Free this installation's activation slot
+      operationId: adminLicenseDeactivate
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Deactivated }
+        '502': { description: License manager rejected or unreachable }
 
   /api/v1/admin/inboxes:
     get:
@@ -1509,6 +1659,36 @@ components:
           oneOf:
             - $ref: '#/components/schemas/Agent'
             - type: 'null'
+
+    LicenseInfo:
+      type: object
+      properties:
+        configured: { type: boolean }
+        activated: { type: boolean }
+        valid: { type: boolean }
+        problem: { type: [string, 'null'] }
+        masked_key: { type: [string, 'null'] }
+        status: { type: [string, 'null'] }
+        type: { type: [string, 'null'] }
+        expires_at: { type: [string, 'null'], format: date-time }
+        days_remaining: { type: [integer, 'null'] }
+        seats:
+          type: object
+          properties:
+            used: { type: integer }
+            max: { type: [integer, 'null'] }
+        activations:
+          type: object
+          properties:
+            used: { type: [integer, 'null'] }
+            max: { type: [integer, 'null'] }
+        features:
+          type: array
+          items: { type: string }
+        instance_id: { type: [string, 'null'] }
+        activated_at: { type: [string, 'null'], format: date-time }
+        last_heartbeat_at: { type: [string, 'null'], format: date-time }
+        last_valid_at: { type: [string, 'null'], format: date-time }
 
     ConversationWebhookPayload:
       type: object

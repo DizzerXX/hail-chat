@@ -82,6 +82,7 @@ export class AdminShell {
     { path: 'faqs', label: 'FAQ CMS', icon: 'quiz', permission: 'faqs.manage' },
     { path: 'webhooks', label: 'Webhooks', icon: 'webhook', permission: 'webhooks.manage' },
     { path: 'routing', label: 'Routing rules', icon: 'alt_route', permission: 'routing.manage' },
+    { path: 'license', label: 'License', icon: 'key', permission: 'license.manage' },
   ];
 
   protected visibleNav(): NavItem[] {

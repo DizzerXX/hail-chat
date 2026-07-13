@@ -1,5 +1,6 @@
 <?php
 
+use App\Jobs\LicenseHeartbeatJob;
 use App\Jobs\PollOpenMediaWorkItems;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -14,6 +15,11 @@ Artisan::command('inspire', function () {
  * Requires `php artisan schedule:work` (sub-minute cadences need it even
  * on servers with a classic cron entry).
  */
+// Hourly license heartbeat against the central License Manager.
+if (config('license.url') !== '' && config('license.key') !== '') {
+    Schedule::job(new LicenseHeartbeatJob())->hourly();
+}
+
 if (config('mitel.enabled')) {
     $poll = Schedule::job(new PollOpenMediaWorkItems())->withoutOverlapping();
 

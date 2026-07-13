@@ -60,6 +60,11 @@ export const routes: Routes = [
         loadComponent: () => import('./features/admin/webhooks').then((m) => m.Webhooks),
       },
       {
+        path: 'license',
+        canActivate: [permissionGuard('license.manage')],
+        loadComponent: () => import('./features/admin/license').then((m) => m.License),
+      },
+      {
         path: 'routing',
         canActivate: [permissionGuard('routing.manage')],
         loadComponent: () =>

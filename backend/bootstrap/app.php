@@ -18,6 +18,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->alias([
             'permission' => \App\Http\Middleware\RequirePermission::class,
+            'license.valid' => \App\Http\Middleware\EnsureLicenseValid::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

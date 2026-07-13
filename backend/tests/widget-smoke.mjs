@@ -190,6 +190,38 @@ const agentMessage = { id: 3, sender_type: 'agent', agent: { id: 1, display_name
   await refs.send.fire('click');
   check(refs.msgs.children.some((n) => n.textContent === 'lagi'), 'sendMessage renders own message');
 
+  // Agent reply arriving WITH a stored translation renders it inline.
+  socket.onmessage({
+    data: JSON.stringify({
+      event: 'message.sent',
+      data: JSON.stringify({
+        message: {
+          id: 5,
+          sender_type: 'agent',
+          agent: { display_name: 'Aina' },
+          body: 'Hello there',
+          meta: { translations: { ms: 'Salam sejahtera' } },
+        },
+      }),
+    }),
+  });
+  const inline = refs.msgs.children.some((n) =>
+    n.children.some((c) => c.classes.has('tdec-trans') && c.textContent === 'Salam sejahtera'),
+  );
+  check(inline, 'agent message renders its stored translation');
+
+  // A later message.translated event patches an already-rendered bubble.
+  socket.onmessage({
+    data: JSON.stringify({
+      event: 'message.translated',
+      data: JSON.stringify({ message_id: 3, translations: { ms: 'Terjemahan baru' } }),
+    }),
+  });
+  const patched = refs.msgs.children.some((n) =>
+    n.children.some((c) => c.classes.has('tdec-trans') && c.textContent === 'Terjemahan baru'),
+  );
+  check(patched, 'message.translated patches the existing bubble');
+
   await refs.end.fire('click');
   check(!('tdechat.website' in storage), 'end chat clears the stored uuid');
   check(timeouts.length >= 0, 'no unhandled paths');

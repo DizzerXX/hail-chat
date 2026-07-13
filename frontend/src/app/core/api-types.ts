@@ -178,6 +178,36 @@ export interface MitelQueue {
   name: string | null;
 }
 
+export interface AppConfig {
+  translation: { enabled: boolean; method: 'manual' | 'auto' | null };
+  languages: string[];
+}
+
+export interface SeatInfo {
+  enforced: boolean;
+  used: number;
+  max: number | null;
+}
+
+export interface LicenseInfo {
+  configured: boolean;
+  activated?: boolean;
+  valid?: boolean;
+  problem?: string | null;
+  masked_key?: string | null;
+  status?: string | null;
+  type?: string | null;
+  expires_at?: string | null;
+  days_remaining?: number | null;
+  seats?: { used: number; max: number | null };
+  activations?: { used: number | null; max: number | null };
+  features?: string[];
+  instance_id?: string;
+  activated_at?: string | null;
+  last_heartbeat_at?: string | null;
+  last_valid_at?: string | null;
+}
+
 export interface AnalyticsSummary {
   from: string;
   to: string;

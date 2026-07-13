@@ -41,6 +41,10 @@ class UserController extends Controller
 
     public function store(UserRequest $request): JsonResponse
     {
+        if ($request->validated('is_active', true) !== false) {
+            $this->assertSeatAvailable();
+        }
+
         $user = DB::transaction(function () use ($request) {
             $user = User::create([
                 'name' => $request->validated('name'),
@@ -66,6 +70,11 @@ class UserController extends Controller
             abort(422, 'You cannot deactivate your own account.');
         }
 
+        // Re-activating a user consumes a seat.
+        if (! $user->is_active && $request->validated('is_active', true) === true) {
+            $this->assertSeatAvailable();
+        }
+
         DB::transaction(function () use ($request, $user) {
             $user->update(array_filter([
                 'name' => $request->validated('name'),
@@ -88,6 +97,17 @@ class UserController extends Controller
         return response()->json([
             'data' => Role::orderBy('name')->get(['id', 'name', 'description']),
         ]);
+    }
+
+    private function assertSeatAvailable(): void
+    {
+        if (! license()->canAddSeat()) {
+            abort(422, sprintf(
+                'Seat limit reached: %d of %d seats in use. Deactivate a user or upgrade the license.',
+                license()->seatsUsed(),
+                license()->maxUsers(),
+            ));
+        }
     }
 
     private function syncAgentProfile(User $user, UserRequest $request): void

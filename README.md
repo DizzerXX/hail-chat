@@ -284,6 +284,45 @@ The management REST API behind the admin screens lives under `/api/v1/admin/*`, 
 the per-area RBAC permissions (`inboxes.manage`, `faqs.manage`, …) and fully specified in
 the OpenAPI document below.
 
+## AI translation (BM ↔ EN)
+
+Optional, env-controlled message translation via an **external AI server** (bring your own):
+
+| Env var | Meaning | Default |
+|---------|---------|---------|
+| `TRANSLATION` | Master switch | `false` |
+| `TRANSLATION_METHOD` | `manual` (per-message/draft buttons for agents), `auto` (background job translates every visitor/agent message), `none` | `none` |
+| `TRANSLATION_ENDPOINT` | Your AI server's translate URL | — |
+| `TRANSLATION_TOKEN` | Optional bearer token | — |
+
+Assumed AI contract (adapt `app/Services/Translation/HttpTranslator.php` — the only file
+that knows the wire format): `POST {endpoint}` with `{"text","source","target"}` →
+`{"translation":"…"}`. Translations cache on `messages.meta.translations` and broadcast as
+**`message.translated`**; the dashboard shows them under bubbles (with translate buttons in
+manual mode) and the widget shows agent replies in the visitor's language. Auto mode skips
+bot/system messages, never blocks message delivery, and degrades to a logged no-op when the
+endpoint is unset (manual returns a friendly 503).
+
+## Licensing (central License Manager)
+
+User management (users, roles, agent directory) is license-gated against the central
+License Manager. **Unset env = disabled-open** (no restrictions — for dev/self-hosted):
+
+| Env var | Meaning |
+|---------|---------|
+| `LICENSE_MANAGER_URL` | e.g. `https://license.example.com` |
+| `LICENSE_PLATFORM_SLUG` / `LICENSE_PLATFORM_ID` / `LICENSE_PLATFORM_ACCESS_TOKEN` | Platform registration |
+| `LICENSE_KEY` | License key for this installation |
+| `LICENSE_GRACE_HOURS` | Last-known-good window when the manager is unreachable (default 72) |
+
+Activate once with `php artisan license:activate` (the instance id is a stable hash of app
+key + hostname — it never consumes a second activation slot). An hourly heartbeat
+(`schedule:work`) re-checks validity; expired/invalid licenses return a clean 403 with
+`code: license_invalid` on gated routes, and **seat limits** (`max_users`) are enforced
+locally on user creation/re-activation. Feature gates: `license()->hasFeature('x')`. The
+admin **License** screen shows status, expiry, seats, activations, features, heartbeat
+times, and offers Re-validate / Deactivate.
+
 ## API documentation
 
 The REST API is specified in OpenAPI 3.1 at

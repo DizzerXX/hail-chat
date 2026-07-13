@@ -1,6 +1,7 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
+import { MatCardModule } from '@angular/material/card';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -8,7 +9,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatTableModule } from '@angular/material/table';
 import { firstValueFrom } from 'rxjs';
-import { AdminUser } from '../../core/api-types';
+import { AdminUser, SeatInfo } from '../../core/api-types';
 import { AdminApiService } from './admin-api.service';
 import { UserDialog } from './user-dialog';
 
@@ -17,6 +18,7 @@ import { UserDialog } from './user-dialog';
   imports: [
     FormsModule,
     MatButtonModule,
+    MatCardModule,
     MatChipsModule,
     MatDialogModule,
     MatFormFieldModule,
@@ -28,6 +30,13 @@ import { UserDialog } from './user-dialog';
     <div class="page">
       <div class="page-header">
         <h1>Users &amp; Agents</h1>
+        @if (seats(); as seats) {
+          @if (seats.enforced) {
+            <mat-chip [highlighted]="seats.max !== null && seats.used >= seats.max">
+              Seats: {{ seats.used }} / {{ seats.max }}
+            </mat-chip>
+          }
+        }
         <span class="spacer"></span>
         <mat-form-field appearance="outline" class="search" subscriptSizing="dynamic">
           <mat-label>Search</mat-label>
@@ -38,6 +47,14 @@ import { UserDialog } from './user-dialog';
           New user
         </button>
       </div>
+
+      @if (licenseProblem(); as problem) {
+        <mat-card appearance="outlined" class="license-blocked">
+          <mat-card-content>
+            <strong>User management is locked:</strong> {{ problem }}
+          </mat-card-content>
+        </mat-card>
+      }
 
       <table mat-table [dataSource]="users()">
         <ng-container matColumnDef="name">
@@ -90,6 +107,11 @@ import { UserDialog } from './user-dialog';
     .search {
       width: 240px;
     }
+    .license-blocked {
+      margin-bottom: 16px;
+      border-color: var(--mat-sys-error);
+      color: var(--mat-sys-error);
+    }
   `,
 })
 export class Users implements OnInit {
@@ -98,10 +120,18 @@ export class Users implements OnInit {
 
   protected readonly columns = ['name', 'role', 'agent', 'active', 'actions'];
   protected readonly users = signal<AdminUser[]>([]);
+  protected readonly seats = signal<SeatInfo | null>(null);
+  protected readonly licenseProblem = signal<string | null>(null);
   protected search = '';
 
   async ngOnInit(): Promise<void> {
     await this.reload();
+
+    try {
+      this.seats.set((await firstValueFrom(this.api.licenseSeats())).data);
+    } catch {
+      this.seats.set(null);
+    }
   }
 
   protected edit(user?: AdminUser): void {
@@ -116,7 +146,16 @@ export class Users implements OnInit {
   }
 
   protected async reload(): Promise<void> {
-    const response = await firstValueFrom(this.api.users(this.search || undefined));
-    this.users.set(response.data);
+    try {
+      const response = await firstValueFrom(this.api.users(this.search || undefined));
+      this.users.set(response.data);
+      this.licenseProblem.set(null);
+    } catch (error) {
+      const body = (error as { error?: { code?: string; message?: string } }).error;
+      if (body?.code === 'license_invalid') {
+        this.licenseProblem.set(body.message ?? 'The license is invalid.');
+        this.users.set([]);
+      }
+    }
   }
 }

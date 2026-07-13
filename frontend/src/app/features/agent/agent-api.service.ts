@@ -77,4 +77,18 @@ export class AgentApiService {
       params: { language },
     });
   }
+
+  translateMessage(uuid: string, messageId: number, target?: string): Observable<{ data: Message }> {
+    return this.http.post<{ data: Message }>(
+      `${api}/agent/conversations/${uuid}/messages/${messageId}/translate`,
+      target ? { target } : {},
+    );
+  }
+
+  translateDraft(text: string, target: string): Observable<{ data: { translation: string } }> {
+    return this.http.post<{ data: { translation: string } }>(`${api}/agent/translate`, {
+      text,
+      target,
+    });
+  }
 }

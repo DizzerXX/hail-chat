@@ -34,7 +34,7 @@ class ConversationService
      */
     public function start(Inbox $inbox, array $visitor, string $messageBody): Conversation
     {
-        $conversation = DB::transaction(function () use ($inbox, $visitor, $messageBody) {
+        [$conversation, $firstMessage] = DB::transaction(function () use ($inbox, $visitor, $messageBody) {
             $conversation = $inbox->conversations()->create([
                 'status' => ConversationStatus::Pending,
                 'language' => $visitor['language'] ?? config('tdechat.default_language'),
@@ -45,15 +45,16 @@ class ConversationService
                 'last_activity_at' => now(),
             ]);
 
-            $conversation->messages()->create([
+            $message = $conversation->messages()->create([
                 'sender_type' => SenderType::Visitor,
                 'body' => $messageBody,
             ]);
 
-            return $conversation;
+            return [$conversation, $message];
         });
 
         broadcast(new ConversationCreated($conversation));
+        $this->maybeAutoTranslate($firstMessage);
         $this->webhooks->dispatch(
             WebhookEvent::ConversationStarted,
             ['conversation' => $this->payload($conversation)],
@@ -233,8 +234,20 @@ class ConversationService
         $conversation->forceFill(['last_activity_at' => now()])->save();
 
         broadcast(new MessageSent($message));
+        $this->maybeAutoTranslate($message);
 
         return $message;
+    }
+
+    private function maybeAutoTranslate(Message $message): void
+    {
+        if (
+            config('translation.enabled')
+            && config('translation.method') === 'auto'
+            && in_array($message->sender_type, [SenderType::Visitor, SenderType::Agent], true)
+        ) {
+            \App\Jobs\TranslateMessageJob::dispatch($message);
+        }
     }
 
     private function payload(Conversation $conversation): array

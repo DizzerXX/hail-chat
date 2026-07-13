@@ -9,10 +9,12 @@ import {
   AnalyticsSummary,
   FaqGroup,
   FaqTranslation,
+  LicenseInfo,
   MitelQueue,
   Paginated,
   Role,
   RoutingRule,
+  SeatInfo,
   Team,
   Webhook,
   WebhookDelivery,
@@ -158,6 +160,23 @@ export class AdminApiService {
 
   deleteRoutingRule(ruleId: number): Observable<unknown> {
     return this.http.delete(`${api}/routing-rules/${ruleId}`);
+  }
+
+  // License
+  license(): Observable<{ data: LicenseInfo }> {
+    return this.http.get<{ data: LicenseInfo }>(`${api}/license`);
+  }
+
+  licenseSeats(): Observable<{ data: SeatInfo }> {
+    return this.http.get<{ data: SeatInfo }>(`${api}/license/seats`);
+  }
+
+  licenseRevalidate(): Observable<{ data: LicenseInfo }> {
+    return this.http.post<{ data: LicenseInfo }>(`${api}/license/revalidate`, {});
+  }
+
+  licenseDeactivate(): Observable<unknown> {
+    return this.http.post(`${api}/license/deactivate`, {});
   }
 
   // Analytics
