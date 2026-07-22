@@ -15,9 +15,9 @@ import { AgentApiService } from '../features/agent/agent-api.service';
  * left-edge navigation is identical.
  */
 @Component({
-  selector: 'app-nav-rail',
-  imports: [RouterLink, RouterLinkActive, MatIconModule, MatMenuModule, MatTooltipModule],
-  template: `
+    selector: 'app-nav-rail',
+    imports: [RouterLink, RouterLinkActive, MatIconModule, MatMenuModule, MatTooltipModule],
+    template: `
     <nav class="rail">
       <a routerLink="/agent" class="brand" matTooltip="TDEChat" matTooltipPosition="right">
         <mat-icon>forum</mat-icon>
@@ -76,10 +76,10 @@ import { AgentApiService } from '../features/agent/agent-api.service';
       </mat-menu>
     </nav>
   `,
-  styles: `
+    styles: `
     .rail {
       width: 64px;
-      height: 100%;
+      height: calc(100% - 28px);
       flex-shrink: 0;
       display: flex;
       flex-direction: column;
@@ -196,46 +196,46 @@ import { AgentApiService } from '../features/agent/agent-api.service';
   `,
 })
 export class NavRail {
-  protected readonly auth = inject(AuthService);
-  private readonly api = inject(AgentApiService);
+    protected readonly auth = inject(AuthService);
+    private readonly api = inject(AgentApiService);
 
-  protected readonly statusOptions: AgentStatus[] = ['available', 'busy', 'away', 'offline'];
-  protected readonly status = signal<AgentStatus>(this.auth.user()?.agent?.status ?? 'offline');
+    protected readonly statusOptions: AgentStatus[] = ['available', 'busy', 'away', 'offline'];
+    protected readonly status = signal<AgentStatus>(this.auth.user()?.agent?.status ?? 'offline');
 
-  protected readonly initials = computed(() => {
-    const name = this.auth.user()?.name ?? '?';
-    return name
-      .split(/\s+/)
-      .slice(0, 2)
-      .map((part) => part.charAt(0).toUpperCase())
-      .join('');
-  });
+    protected readonly initials = computed(() => {
+        const name = this.auth.user()?.name ?? '?';
+        return name
+            .split(/\s+/)
+            .slice(0, 2)
+            .map((part) => part.charAt(0).toUpperCase())
+            .join('');
+    });
 
-  protected canSeeAdmin(): boolean {
-    return [
-      'analytics.view',
-      'inboxes.manage',
-      'teams.manage',
-      'agents.manage',
-      'faqs.manage',
-      'webhooks.manage',
-      'routing.manage',
-      'license.manage',
-    ].some((permission) => this.auth.hasPermission(permission));
-  }
-
-  protected async setStatus(status: AgentStatus): Promise<void> {
-    const previous = this.status();
-    this.status.set(status);
-
-    try {
-      await firstValueFrom(this.api.updateStatus(status));
-    } catch {
-      this.status.set(previous);
+    protected canSeeAdmin(): boolean {
+        return [
+            'analytics.view',
+            'inboxes.manage',
+            'teams.manage',
+            'agents.manage',
+            'faqs.manage',
+            'webhooks.manage',
+            'routing.manage',
+            'license.manage',
+        ].some((permission) => this.auth.hasPermission(permission));
     }
-  }
 
-  protected logout(): void {
-    void this.auth.logout();
-  }
+    protected async setStatus(status: AgentStatus): Promise<void> {
+        const previous = this.status();
+        this.status.set(status);
+
+        try {
+            await firstValueFrom(this.api.updateStatus(status));
+        } catch {
+            this.status.set(previous);
+        }
+    }
+
+    protected logout(): void {
+        void this.auth.logout();
+    }
 }

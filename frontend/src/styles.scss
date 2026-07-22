@@ -97,12 +97,56 @@ table.mat-mdc-table {
   background: var(--tde-panel);
 }
 
-.dialog-form {
+/*
+ * Dialogs. The second selector is what actually wins over Material's own
+ * `.mat-mdc-dialog-content { display: block }` — equal specificity would
+ * otherwise leave the winner up to stylesheet injection order, which collapses
+ * the form into inline fields that wrap two-across.
+ */
+.dialog-form,
+.mat-mdc-dialog-content.dialog-form {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  min-width: 420px;
-  padding-top: 8px;
+  gap: 6px;
+  min-width: 440px;
+  max-width: 100%;
+  box-sizing: border-box;
+  /* Keeps the first field's floating label clear of the top edge when the
+     content scrolls to a focused field. */
+  scroll-padding-top: 20px;
+
+  .mat-mdc-form-field {
+    width: 100%;
+  }
+
+  /* Toggles carry no subscript space of their own, so they need their own. */
+  mat-slide-toggle {
+    margin: 4px 0;
+  }
+}
+
+/*
+ * Material zeroes the content's top padding when it directly follows a title
+ * (`.mat-mdc-dialog-container .mat-mdc-dialog-title + .mat-mdc-dialog-content`),
+ * which flushes the first outline field against the scroll container's edge and
+ * clips its floating label. Out-specify that exact rule to restore the padding.
+ */
+.mat-mdc-dialog-container .mat-mdc-dialog-title + .mat-mdc-dialog-content.dialog-form {
+  padding-top: 20px;
+}
+
+.mat-mdc-dialog-surface {
+  border-radius: 14px;
+}
+
+.mat-mdc-dialog-title {
+  color: var(--tde-ink);
+  font-weight: 600;
+}
+
+.mat-mdc-dialog-actions {
+  padding: 8px 24px 20px;
+  gap: 8px;
 }
 
 .muted {

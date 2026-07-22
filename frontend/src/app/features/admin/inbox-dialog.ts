@@ -64,7 +64,7 @@ import { AdminApiService } from './admin-api.service';
       <mat-form-field appearance="outline">
         <mat-label>CMS URL (optional)</mat-label>
         <input matInput type="url" [(ngModel)]="cmsUrl" placeholder="https://cms.example.com/tickets/new" />
-        <mat-hint>Opened in a new tab when an agent closes a conversation</mat-hint>
+        <mat-hint>Opened when an agent closes a conversation</mat-hint>
       </mat-form-field>
 
       <mat-slide-toggle [(ngModel)]="botEnabled">FAQ bot answers first</mat-slide-toggle>
@@ -145,7 +145,7 @@ export class InboxDialog {
       this.queues.set((await firstValueFrom(this.api.mitelQueues())).data);
       this.queueError.set(null);
     } catch {
-      this.queueError.set('Queue directory unavailable — type the queue name manually.');
+      this.queueError.set('Queue directory unavailable — type the name.');
     }
   }
 }
