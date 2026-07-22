@@ -24,6 +24,14 @@ export const routes: Routes = [
     ],
   },
   {
+    // Bare chat window for embedding (MiCC Ignite opens this as the work item's
+    // TargetUri). authGuard sends unauthenticated agents to /login?returnUrl=…,
+    // which lands them back here after signing in.
+    path: 'embed/chat/:uuid',
+    canActivate: [authGuard],
+    loadComponent: () => import('./features/agent/embed-chat').then((m) => m.EmbedChat),
+  },
+  {
     path: 'admin',
     canActivate: [authGuard],
     loadComponent: () => import('./features/admin/admin-shell').then((m) => m.AdminShell),

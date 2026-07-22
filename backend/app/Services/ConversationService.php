@@ -145,6 +145,50 @@ class ConversationService
         return $conversation;
     }
 
+    /**
+     * Attach an agent to a conversation that is open but unowned.
+     *
+     * This exists for the embedded chat window MiCC opens once an agent accepts
+     * the work item in Ignite: by then the poller has usually already moved the
+     * conversation to active (MiCC ACD'd it) while leaving assigned_agent_id
+     * null, because MiCC never tells us which of its agents took the item. In
+     * that state accept() would 409 and the agent could not even reply, so the
+     * embed claims ownership instead. Idempotent when the caller already owns it.
+     */
+    public function claim(Conversation $conversation, Agent $agent): Conversation
+    {
+        if ($conversation->assigned_agent_id === $agent->id && $conversation->status === ConversationStatus::Active) {
+            return $conversation;
+        }
+
+        if ($conversation->status === ConversationStatus::AwaitingAcceptance) {
+            return $this->accept($conversation, $agent);
+        }
+
+        abort_unless(
+            $conversation->status === ConversationStatus::Active,
+            409,
+            'This conversation is no longer open.',
+        );
+
+        abort_unless(
+            $conversation->assigned_agent_id === null
+                || $agent->user->hasPermission('conversations.assign'),
+            409,
+            'This conversation is assigned to another agent.',
+        );
+
+        $conversation->forceFill([
+            'assigned_agent_id' => $agent->id,
+            'accepted_at' => $conversation->accepted_at ?? now(),
+            'last_activity_at' => now(),
+        ])->save();
+
+        broadcast(new ConversationUpdated($conversation));
+
+        return $conversation;
+    }
+
     public function agentMessage(Conversation $conversation, Agent $agent, string $body): Message
     {
         abort_unless(

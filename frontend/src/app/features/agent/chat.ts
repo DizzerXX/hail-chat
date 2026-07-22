@@ -7,6 +7,7 @@ import {
   computed,
   effect,
   inject,
+  input,
   signal,
   viewChild,
 } from '@angular/core';
@@ -41,7 +42,12 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
     MatTooltipModule,
   ],
   template: `
-    @if (conversation(); as conversation) {
+    @if (loadError(); as message) {
+      <div class="load-error">
+        <mat-icon>lock</mat-icon>
+        <h3>{{ message }}</h3>
+      </div>
+    } @else if (conversation(); as conversation) {
       <div class="workspace">
         <section class="chat">
           <header>
@@ -514,6 +520,29 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
         height: 16px;
       }
     }
+    .load-error {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      color: var(--tde-muted);
+      text-align: center;
+      padding: 24px;
+
+      mat-icon {
+        font-size: 40px;
+        width: 40px;
+        height: 40px;
+      }
+      h3 {
+        margin: 0;
+        font-size: 15px;
+        font-weight: 500;
+        color: var(--tde-ink);
+      }
+    }
     .faq-question {
       max-width: 420px;
       overflow: hidden;
@@ -541,10 +570,19 @@ export class Chat implements OnInit, OnDestroy {
 
   private readonly thread = viewChild<ElementRef<HTMLElement>>('thread');
 
+  /**
+   * Embedded mode (the MiCC Ignite panel) claims the conversation on arrival,
+   * since the agent already accepted the work item in Ignite. Never do this on
+   * the normal route, or a supervisor browsing the queue would silently take
+   * whatever they open.
+   */
+  readonly embedded = input(false);
+
   protected readonly conversation = signal<Conversation | null>(null);
   protected readonly messages = signal<Message[]>([]);
   protected readonly faqs = signal<PublicFaq[]>([]);
   protected readonly busy = signal(false);
+  protected readonly loadError = signal<string | null>(null);
 
   protected draft = '';
 
@@ -579,13 +617,24 @@ export class Chat implements OnInit, OnDestroy {
   );
 
   protected readonly composerPlaceholder = computed(() => {
+    const conversation = this.conversation();
+
     if (this.canSend()) {
-      return `Message # ${this.conversation()?.inbox?.name ?? ''}`;
+      return `Message # ${conversation?.inbox?.name ?? ''}`;
     }
 
-    return this.isAgent()
-      ? 'Accept the conversation to reply'
-      : 'This account has no agent profile, so it cannot reply';
+    if (!this.isAgent()) {
+      return 'This account has no agent profile, so it cannot reply';
+    }
+
+    const holder = conversation?.assigned_agent;
+    if (holder && holder.id !== this.auth.user()?.agent?.id) {
+      return `Handled by ${holder.display_name}`;
+    }
+
+    return conversation?.status === 'closed' || conversation?.status === 'abandoned'
+      ? 'This conversation is closed'
+      : 'Accept the conversation to reply';
   });
 
   constructor() {
@@ -625,6 +674,12 @@ export class Chat implements OnInit, OnDestroy {
     this.messages.set([]);
     this.faqs.set([]);
     this.draft = '';
+
+    if (this.embedded() && this.isAgent()) {
+      // A 409 just means someone else already owns it (or it is closed) — the
+      // thread still renders, read-only.
+      await firstValueFrom(this.api.claim(uuid)).catch(() => undefined);
+    }
 
     await this.refresh();
 
@@ -822,9 +877,25 @@ export class Chat implements OnInit, OnDestroy {
   }
 
   private async refresh(): Promise<void> {
-    const response = await firstValueFrom(this.api.conversation(this.uuid));
-    this.conversation.set(response.data);
-    this.messages.set(response.data.messages ?? []);
+    try {
+      const response = await firstValueFrom(this.api.conversation(this.uuid));
+      this.conversation.set(response.data);
+      this.messages.set(response.data.messages ?? []);
+      this.loadError.set(null);
+    } catch (error) {
+      const status = (error as { status?: number }).status;
+
+      // 403 here means the conversation belongs to someone else and this account
+      // cannot view others' conversations — the usual case being an agent opening
+      // an embed link for an item that has since been rerouted.
+      this.loadError.set(
+        status === 403
+          ? 'This conversation is being handled by another agent.'
+          : status === 404
+            ? 'This conversation no longer exists.'
+            : 'This conversation could not be loaded.',
+      );
+    }
   }
 
   private async action(run: () => Promise<unknown>, successMessage: string): Promise<void> {

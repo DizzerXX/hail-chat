@@ -74,7 +74,8 @@ class MitelProviderTest extends TestCase
                 && $request->method() === 'POST'
                 && $request->header('Authorization')[0] === 'Bearer secret-token'
                 && $data['TargetUriEmbedded'] === true
-                && str_contains($data['TargetUri'], $conversation->uuid)
+                // The bare chat window, not the full agent workspace.
+                && str_contains($data['TargetUri'], '/embed/chat/'.$conversation->uuid)
                 && $data['Queue'] === 'OpenMediaQ'
                 && $data['From'] === 'ahmad@example.com'
                 && $data['Subject'] === \Illuminate\Support\Str::limit(

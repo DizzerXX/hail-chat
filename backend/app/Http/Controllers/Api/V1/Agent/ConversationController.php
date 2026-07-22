@@ -74,6 +74,15 @@ class ConversationController extends Controller
         return ConversationResource::make($accepted->load(['inbox', 'assignedAgent', 'team']));
     }
 
+    public function claim(Request $request, Conversation $conversation): ConversationResource
+    {
+        // No authorizeView() here: claiming *is* how an agent gains visibility of
+        // a MiCC-routed conversation. The service vets the state and ownership.
+        $claimed = $this->conversations->claim($conversation, $this->requireAgent($request));
+
+        return ConversationResource::make($claimed->load(['inbox', 'assignedAgent', 'team']));
+    }
+
     public function close(Request $request, Conversation $conversation): ConversationResource
     {
         $this->authorizeHandle($request, $conversation);
@@ -155,11 +164,15 @@ class ConversationController extends Controller
 
         $isMine = $conversation->assigned_agent_id === $agent->id;
 
-        $isQueueVisible = $conversation->status === ConversationStatus::AwaitingAcceptance
-            && $conversation->assigned_agent_id === null
+        // Any open conversation nobody owns yet: either still queued, or active
+        // but unassigned because MiCC ACD'd it to one of its own agents (the
+        // poller cannot tell us which). The latter is what the embedded chat
+        // window loads before claiming it.
+        $isUnowned = $conversation->assigned_agent_id === null
+            && $conversation->status->isOpen()
             && ($conversation->team_id === null || $agent->teams()->whereKey($conversation->team_id)->exists());
 
-        abort_unless($isMine || $isQueueVisible, 403, 'You cannot view this conversation.');
+        abort_unless($isMine || $isUnowned, 403, 'You cannot view this conversation.');
     }
 
     private function authorizeHandle(Request $request, Conversation $conversation): void

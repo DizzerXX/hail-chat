@@ -235,7 +235,7 @@ Configuration (`backend/config/mitel.php`, all via env — never hardcoded):
 | `MITEL_TENANT` | Optional tenant sent on work-item creation | — |
 | `MITEL_VERIFY_SSL` | Disable for on-prem self-signed certs | `true` |
 | `MITEL_POLL_INTERVAL` | Poll cadence in seconds (1/2/5/10/15/20/30/60) | `15` |
-| `MITEL_AGENT_CHAT_URL` | TargetUri template, `{uuid}` placeholder | `APP_URL/agent/chat/{uuid}` |
+| `MITEL_AGENT_CHAT_URL` | TargetUri template, `{uuid}` placeholder | `APP_URL/embed/chat/{uuid}` |
 
 Per-inbox queue mapping lives in the inbox's `channel_config`:
 
@@ -276,12 +276,40 @@ needed), `ng build --configuration production`.
   switcher on the avatar menu), a searchable sidebar with Queue/Mine/All conversation
   groups updating in realtime, the chat thread with bubble-style messages (agent messages
   right-aligned in blue), and a details panel with visitor info and a CMS shortcut. FAQ
-  quick replies, accept/close/reroute as before. `/agent/chat/{uuid}` is also the view
-  MiCC embeds via the work-item TargetUri.
+  quick replies, accept/close/reroute as before.
 - **Admin** (`/admin`) — inbox management (incl. MiCC queue mapping), teams, users & agent
   profiles, the FAQ CMS with a BM/EN language toggle, webhook configuration with a
   delivery log, per-inbox routing rules, and analytics (conversations/day, average handle
   time, FAQ hit rate, top missed queries).
+
+### Embedded chat window (MiCC Ignite)
+
+`/embed/chat/{uuid}` renders **only** the chat window — no icon rail, no conversation list —
+and is the default `TargetUri` on Open Media work items, so the Ignite flow reads:
+
+1. The agent is notified of the new livechat in Ignite and accepts it there.
+2. MiCC ACDs the work item and opens the embedded Open Media tab at this URL. If the agent
+   is not signed in, TDEChat sends them to the login page and back afterwards
+   (`/login?returnUrl=…`) — no separate embed login to maintain.
+3. They land straight in the conversation.
+4. The window **claims** the conversation on arrival
+   (`POST /api/v1/agent/conversations/{uuid}/claim`), so no second "Accept" click.
+
+That claim step is necessary rather than cosmetic: when MiCC ACDs an item the poller marks
+the conversation `active` but cannot fill in `assigned_agent_id`, because MiCC never reports
+which of *its* agents took it. Without an assigned agent the backend rejects replies from
+anyone lacking `conversations.assign`, so the embed would otherwise be read-only for ordinary
+agents. Claiming is idempotent, so reloading the tab is safe.
+
+If the conversation is already held by someone else (or is closed), nothing is taken over.
+What the viewer then sees depends on their permissions, which the existing `conversations.view_all`
+rule decides: a supervisor or admin gets the full transcript read-only with "Handled by …" in
+place of the composer, while an ordinary agent — who may not read another agent's conversation
+— gets a plain "This conversation is being handled by another agent." notice.
+
+Auto-claiming happens **only** on this route — opening a conversation from the normal
+workspace never silently reassigns it. The Close button is kept in the embed, so resolving
+there still completes the MiCC work item and opens the inbox's CMS URL if one is set.
 
 An inbox can optionally point at an external CMS/ticketing system: set **CMS URL** in the
 inbox dialog (stored as `channel_config.cms_url`, validated as an http(s) URL). When set,

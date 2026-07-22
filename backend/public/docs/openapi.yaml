@@ -343,6 +343,37 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
 
+  /api/v1/agent/conversations/{conversationUuid}/claim:
+    post:
+      tags: [Agent]
+      summary: Take ownership of an unowned conversation
+      description: >-
+        Permission `conversations.accept`. Used by the embedded chat window
+        (`/embed/chat/{uuid}`, the MiCC work-item TargetUri): once an agent accepts
+        the item in Ignite, MiCC ACDs it and the poller marks the conversation
+        `active` while leaving it unassigned, because MiCC never reports which of
+        its agents took it. Claiming attaches the caller so they can reply.
+        A queued conversation is accepted outright; one the caller already owns
+        returns unchanged (safe to call on every load). Conflicts when the
+        conversation is closed, or held by another agent and the caller lacks
+        `conversations.assign`.
+      operationId: claimConversation
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ConversationUuid'
+      responses:
+        '200':
+          description: Claimed — the caller is now the assigned agent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Conversation' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
   /api/v1/agent/conversations/{conversationUuid}/close:
     post:
       tags: [Agent]

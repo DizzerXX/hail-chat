@@ -215,8 +215,10 @@ class MitelOpenMediaProvider implements PollableProviderInterface, QueueDirector
 
     private function targetUri(Conversation $conversation): string
     {
+        // The embed route is the chat window alone — no rail, no conversation
+        // list — which is what belongs inside the Ignite agent desktop.
         $template = config('mitel.agent_chat_url')
-            ?: rtrim(config('app.url'), '/').'/agent/chat/{uuid}';
+            ?: rtrim(config('app.url'), '/').'/embed/chat/{uuid}';
 
         return str_replace('{uuid}', $conversation->uuid, $template);
     }

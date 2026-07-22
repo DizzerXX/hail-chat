@@ -55,6 +55,10 @@ Route::prefix('v1')->group(function () {
             ->middleware('permission:conversations.view_own');
         Route::post('/conversations/{conversation}/accept', [AgentConversationController::class, 'accept'])
             ->middleware('permission:conversations.accept');
+        // Used by the embedded chat window (MiCC Ignite) to take ownership of a
+        // conversation MiCC has already routed to the agent.
+        Route::post('/conversations/{conversation}/claim', [AgentConversationController::class, 'claim'])
+            ->middleware('permission:conversations.accept');
         Route::post('/conversations/{conversation}/close', [AgentConversationController::class, 'close'])
             ->middleware('permission:conversations.close');
         Route::post('/conversations/{conversation}/messages', [AgentConversationController::class, 'message'])

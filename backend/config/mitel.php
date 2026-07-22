@@ -55,7 +55,8 @@ return [
     'routing_grace_seconds' => (int) env('MITEL_ROUTING_GRACE', 60),
 
     // TargetUri template for the embedded agent chat view ({uuid} is replaced
-    // with the conversation uuid). Defaults to APP_URL/agent/chat/{uuid}.
+    // with the conversation uuid). Defaults to APP_URL/embed/chat/{uuid} — the
+    // bare chat window, which also claims the conversation for whoever opens it.
     'agent_chat_url' => env('MITEL_AGENT_CHAT_URL'),
 
 ];

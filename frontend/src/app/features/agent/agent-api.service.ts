@@ -47,6 +47,11 @@ export class AgentApiService {
     return this.http.post<{ data: Conversation }>(`${api}/agent/conversations/${uuid}/accept`, {});
   }
 
+  /** Takes ownership of a conversation MiCC already routed to this agent. */
+  claim(uuid: string): Observable<{ data: Conversation }> {
+    return this.http.post<{ data: Conversation }>(`${api}/agent/conversations/${uuid}/claim`, {});
+  }
+
   close(uuid: string): Observable<{ data: Conversation }> {
     return this.http.post<{ data: Conversation }>(`${api}/agent/conversations/${uuid}/close`, {});
   }
