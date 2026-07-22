@@ -55,7 +55,11 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
             </div>
             <span class="spacer"></span>
 
-            @if (conversation.status === 'awaiting_acceptance' && auth.hasPermission('conversations.accept')) {
+            @if (
+              conversation.status === 'awaiting_acceptance' &&
+              isAgent() &&
+              auth.hasPermission('conversations.accept')
+            ) {
               <button matButton="filled" (click)="accept()">Accept</button>
             }
             @if (auth.hasPermission('conversations.assign') && isOpen()) {
@@ -142,7 +146,7 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
 
             <textarea
               rows="1"
-              placeholder="{{ canSend() ? composerPlaceholder() : 'Accept the conversation to reply' }}"
+              placeholder="{{ composerPlaceholder() }}"
               [(ngModel)]="draft"
               (ngModelChange)="onTyping()"
               (keydown.enter)="onEnter($event)"
@@ -553,9 +557,17 @@ export class Chat implements OnInit, OnDestroy {
     return status !== undefined && status !== 'closed' && status !== 'abandoned';
   });
 
+  /**
+   * Replying, accepting and typing signals all act *as* an agent, so accounts
+   * without an agent profile (a plain admin, say) can view and close but not
+   * take part in the conversation.
+   */
+  protected readonly isAgent = computed(() => this.auth.user()?.agent != null);
+
   protected readonly canSend = computed(() => {
     const conversation = this.conversation();
     return (
+      this.isAgent() &&
       conversation?.status === 'active' &&
       (conversation.assigned_agent?.id === this.auth.user()?.agent?.id ||
         this.auth.hasPermission('conversations.assign'))
@@ -566,9 +578,15 @@ export class Chat implements OnInit, OnDestroy {
     (this.conversation()?.visitor.name || 'A').charAt(0).toUpperCase(),
   );
 
-  protected readonly composerPlaceholder = computed(
-    () => `Message # ${this.conversation()?.inbox?.name ?? ''}`,
-  );
+  protected readonly composerPlaceholder = computed(() => {
+    if (this.canSend()) {
+      return `Message # ${this.conversation()?.inbox?.name ?? ''}`;
+    }
+
+    return this.isAgent()
+      ? 'Accept the conversation to reply'
+      : 'This account has no agent profile, so it cannot reply';
+  });
 
   constructor() {
     effect(() => {

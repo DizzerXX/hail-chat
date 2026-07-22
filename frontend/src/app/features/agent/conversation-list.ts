@@ -1,5 +1,13 @@
 import { DatePipe } from '@angular/common';
-import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
+import {
+  Component,
+  OnDestroy,
+  OnInit,
+  WritableSignal,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
@@ -29,6 +37,12 @@ interface Section {
     }
 
     <div class="sections">
+      @if (sections().length === 0) {
+        <p class="empty">
+          This account has no agent profile and cannot view conversations.
+        </p>
+      }
+
       @for (section of sections(); track section.key) {
         <div class="section">
           <div class="section-header">
@@ -253,9 +267,17 @@ export class ConversationList implements OnInit, OnDestroy {
   private readonly mine = signal<Conversation[]>([]);
   private readonly all = signal<Conversation[]>([]);
 
+  /**
+   * Queue and Mine are per-agent scopes, so they only exist for accounts that
+   * have an agent profile — asking for them as, say, an admin is a 403.
+   */
   protected readonly sections = computed<Section[]>(() => [
-    { key: 'queue', label: 'QUEUE' },
-    { key: 'mine', label: 'MINE' },
+    ...(this.auth.user()?.agent
+      ? ([
+          { key: 'queue', label: 'QUEUE' },
+          { key: 'mine', label: 'MINE' },
+        ] as Section[])
+      : []),
     ...(this.auth.hasPermission('conversations.view_all')
       ? [{ key: 'all', label: 'ALL' } as Section]
       : []),
@@ -315,19 +337,22 @@ export class ConversationList implements OnInit, OnDestroy {
 
   private async reload(): Promise<void> {
     this.loading.set(true);
-    try {
-      const scopes = [
-        firstValueFrom(this.api.conversations('queue')),
-        firstValueFrom(this.api.conversations('mine')),
-        ...(this.auth.hasPermission('conversations.view_all')
-          ? [firstValueFrom(this.api.conversations('all', this.statusFilter()))]
-          : []),
-      ];
-      const [queue, mine, all] = await Promise.all(scopes);
 
-      this.queue.set(queue.data);
-      this.mine.set(mine.data);
-      this.all.set(all?.data ?? []);
+    const targets: Record<Section['key'], WritableSignal<Conversation[]>> = {
+      queue: this.queue,
+      mine: this.mine,
+      all: this.all,
+    };
+
+    try {
+      await Promise.all(
+        this.sections().map(async ({ key }) => {
+          const response = await firstValueFrom(
+            this.api.conversations(key, key === 'all' ? this.statusFilter() : undefined),
+          );
+          targets[key].set(response.data);
+        }),
+      );
     } finally {
       this.loading.set(false);
     }
