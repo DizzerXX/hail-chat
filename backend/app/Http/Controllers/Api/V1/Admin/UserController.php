@@ -109,10 +109,7 @@ class UserController extends Controller
 
         $agent = Agent::updateOrCreate(
             ['user_id' => $user->id],
-            [
-                'display_name' => $profile['display_name'] ?? null,
-                'max_concurrent_chats' => $profile['max_concurrent_chats'] ?? 5,
-            ],
+            ['display_name' => $profile['display_name'] ?? null],
         );
 
         $agent->teams()->sync($profile['team_ids'] ?? []);

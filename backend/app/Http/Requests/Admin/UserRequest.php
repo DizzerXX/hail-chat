@@ -33,7 +33,6 @@ class UserRequest extends FormRequest
             'is_active' => ['sometimes', 'boolean'],
             'agent' => ['sometimes', 'nullable', 'array'],
             'agent.display_name' => ['nullable', 'string', 'max:255'],
-            'agent.max_concurrent_chats' => ['nullable', 'integer', 'min:1', 'max:50'],
             'agent.team_ids' => ['nullable', 'array'],
             'agent.team_ids.*' => ['integer', 'exists:teams,id'],
         ];

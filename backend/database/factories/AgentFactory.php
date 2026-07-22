@@ -22,7 +22,6 @@ class AgentFactory extends Factory
             'user_id' => User::factory(),
             'display_name' => fake()->firstName(),
             'status' => AgentStatus::Offline,
-            'max_concurrent_chats' => 5,
             'last_active_at' => null,
         ];
     }

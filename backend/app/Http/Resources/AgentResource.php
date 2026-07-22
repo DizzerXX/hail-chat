@@ -16,7 +16,6 @@ class AgentResource extends JsonResource
             'id' => $this->id,
             'display_name' => $this->displayName(),
             'status' => $this->status,
-            'max_concurrent_chats' => $this->max_concurrent_chats,
             'last_active_at' => $this->last_active_at,
         ];
     }

@@ -37,7 +37,6 @@ export interface UserPayload {
   is_active: boolean;
   agent?: {
     display_name: string | null;
-    max_concurrent_chats: number;
     team_ids: number[];
   } | null;
 }

@@ -77,7 +77,6 @@ import { UserDialog } from './user-dialog';
           <td mat-cell *matCellDef="let user">
             @if (user.agent) {
               {{ user.agent.display_name || '—' }}
-              <span class="muted">· max {{ user.agent.max_concurrent_chats }} chats</span>
             } @else {
               <span class="muted">None</span>
             }

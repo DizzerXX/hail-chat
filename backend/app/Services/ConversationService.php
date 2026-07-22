@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\ChannelType;
 use App\Enums\ConversationStatus;
 use App\Enums\SenderType;
 use App\Enums\WebhookEvent;
@@ -118,6 +119,8 @@ class ConversationService
             'This conversation is not awaiting acceptance.',
         );
 
+        $this->assertAgentFree($conversation, $agent);
+
         $canOverride = $agent->user->hasPermission('conversations.assign');
 
         if ($conversation->assigned_agent_id !== null && $conversation->assigned_agent_id !== $agent->id && ! $canOverride) {
@@ -178,6 +181,8 @@ class ConversationService
             'This conversation is assigned to another agent.',
         );
 
+        $this->assertAgentFree($conversation, $agent);
+
         $conversation->forceFill([
             'assigned_agent_id' => $agent->id,
             'accepted_at' => $conversation->accepted_at ?? now(),
@@ -230,11 +235,38 @@ class ConversationService
             ConversationStatus::Active,
         ], true), 409, 'Only queued or active conversations can be rerouted.');
 
+        // Targeting a busy agent would park the conversation where nobody can
+        // accept it, so say so rather than creating a stuck chat.
+        if ($agent !== null) {
+            $this->assertAgentFree($conversation, $agent);
+        }
+
         $this->providers->resolve($conversation->inbox)->rerouteWorkItem($conversation, $team, $agent);
 
         broadcast(new ConversationUpdated($conversation));
 
         return $conversation;
+    }
+
+    /**
+     * An agent handles one conversation at a time.
+     *
+     * Mitel inboxes are exempt: MiCC does its own routing and has its own agent
+     * capacity settings, so refusing here would strand a work item it has
+     * already ACD'd to that agent.
+     */
+    private function assertAgentFree(Conversation $conversation, Agent $agent): void
+    {
+        if ($conversation->inbox->channel_type === ChannelType::MitelOpenMedia) {
+            return;
+        }
+
+        $busy = $agent->conversations()
+            ->where('status', ConversationStatus::Active)
+            ->whereKeyNot($conversation->id)
+            ->exists();
+
+        abort_if($busy, 409, 'You are already handling a conversation. Close it before taking another.');
     }
 
     private function queueForAgents(Conversation $conversation): void

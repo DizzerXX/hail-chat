@@ -59,11 +59,6 @@ import { AdminApiService, UserPayload } from './admin-api.service';
         </mat-form-field>
 
         <mat-form-field appearance="outline">
-          <mat-label>Max concurrent chats</mat-label>
-          <input matInput type="number" min="1" max="50" [(ngModel)]="maxChats" />
-        </mat-form-field>
-
-        <mat-form-field appearance="outline">
           <mat-label>Teams</mat-label>
           <mat-select [(ngModel)]="teamIds" multiple>
             @for (team of teams(); track team.id) {
@@ -92,7 +87,6 @@ export class UserDialog {
   protected isActive = this.user?.is_active ?? true;
   protected hasAgentProfile = this.user?.agent !== null && this.user !== null;
   protected displayName = this.user?.agent?.display_name ?? '';
-  protected maxChats = this.user?.agent?.max_concurrent_chats ?? 5;
   protected teamIds: number[] = this.user?.agent?.team_ids ?? [];
 
   protected readonly roles = signal<Role[]>([]);
@@ -122,7 +116,6 @@ export class UserDialog {
       agent: this.hasAgentProfile
         ? {
             display_name: this.displayName || null,
-            max_concurrent_chats: this.maxChats,
             team_ids: this.teamIds,
           }
         : null,

@@ -19,7 +19,6 @@ class Agent extends Model
         'user_id',
         'display_name',
         'status',
-        'max_concurrent_chats',
         'last_active_at',
     ];
 
@@ -27,7 +26,6 @@ class Agent extends Model
     {
         return [
             'status' => AgentStatus::class,
-            'max_concurrent_chats' => 'integer',
             'last_active_at' => 'datetime',
         ];
     }

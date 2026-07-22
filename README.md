@@ -296,6 +296,22 @@ needed), `ng build --configuration production`.
   delivery log, per-inbox routing rules, and analytics (conversations/day, average handle
   time, FAQ hit rate, top missed queries).
 
+### One chat per agent
+
+An agent handles **one conversation at a time**. Accepting (or claiming) a second one while a
+chat is still `active` is refused with a 409 — "You are already handling a conversation. Close
+it before taking another." Only `active` conversations occupy an agent: being offered several
+in the queue is fine, and closed ones never count. There is no per-agent limit to configure;
+the rule is fixed.
+
+Two related behaviours keep the queue moving rather than parking work on someone unavailable:
+a routing rule targeting a busy agent falls through to the general queue instead of assigning,
+and rerouting *to* a busy agent is refused with the same 409.
+
+**Mitel inboxes are exempt.** MiCC does its own routing and has its own agent capacity
+settings, so TDEChat never refuses a work item MiCC has already ACD'd — otherwise a chat could
+strand in the Ignite embed with no way to open it.
+
 ### Embedded chat window (MiCC Ignite)
 
 `/embed/chat/{uuid}` renders **only** the chat window — no icon rail, no conversation list —

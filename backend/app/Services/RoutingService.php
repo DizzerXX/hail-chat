@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Enums\ChannelType;
+use App\Enums\ConversationStatus;
 use App\Models\Conversation;
 use App\Models\RoutingRule;
 
@@ -26,7 +28,32 @@ class RoutingService
         }
 
         $conversation->team_id = $rule->team_id;
-        $conversation->assigned_agent_id = $rule->agent_id;
+        $conversation->assigned_agent_id = $this->available($rule->agent_id, $conversation)
+            ? $rule->agent_id
+            : null;
+    }
+
+    /**
+     * An agent handles one conversation at a time, so targeting one who is
+     * already chatting would park this conversation where they cannot accept
+     * it. A rule targets a team or an agent (never both), so skipping a busy
+     * agent drops it into the general queue where anyone can pick it up.
+     * Mitel inboxes are exempt — MiCC does its own routing.
+     */
+    private function available(?int $agentId, Conversation $conversation): bool
+    {
+        if ($agentId === null) {
+            return false;
+        }
+
+        if ($conversation->inbox->channel_type === ChannelType::MitelOpenMedia) {
+            return true;
+        }
+
+        return ! Conversation::query()
+            ->where('assigned_agent_id', $agentId)
+            ->where('status', ConversationStatus::Active)
+            ->exists();
     }
 
     private function matches(RoutingRule $rule, Conversation $conversation, string $messageBody): bool

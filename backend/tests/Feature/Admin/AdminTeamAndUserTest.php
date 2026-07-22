@@ -62,7 +62,6 @@ class AdminTeamAndUserTest extends TestCase
             'role_id' => $agentRole->id,
             'agent' => [
                 'display_name' => 'Aina',
-                'max_concurrent_chats' => 3,
                 'team_ids' => [$team->id],
             ],
         ]);
@@ -70,7 +69,6 @@ class AdminTeamAndUserTest extends TestCase
         $response->assertCreated()
             ->assertJsonPath('data.role', 'agent')
             ->assertJsonPath('data.agent.display_name', 'Aina')
-            ->assertJsonPath('data.agent.max_concurrent_chats', 3)
             ->assertJsonPath('data.agent.team_ids.0', $team->id);
 
         // The new account can actually log in.

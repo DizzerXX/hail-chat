@@ -12,7 +12,6 @@ export interface AgentProfile {
   id: number;
   display_name: string;
   status: AgentStatus;
-  max_concurrent_chats: number;
   last_active_at: string | null;
 }
 
@@ -102,7 +101,6 @@ export interface AdminUser {
     id: number;
     display_name: string | null;
     status: AgentStatus;
-    max_concurrent_chats: number;
     team_ids: number[];
   } | null;
 }

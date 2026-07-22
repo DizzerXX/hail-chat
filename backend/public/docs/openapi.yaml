@@ -1357,7 +1357,6 @@ components:
                 description: Agent profile; null removes it on update
                 properties:
                   display_name: { type: [string, 'null'] }
-                  max_concurrent_chats: { type: integer, minimum: 1, maximum: 50 }
                   team_ids:
                     type: array
                     items: { type: integer }
@@ -1607,7 +1606,6 @@ components:
                 id: { type: integer }
                 display_name: { type: [string, 'null'] }
                 status: { $ref: '#/components/schemas/AgentStatus' }
-                max_concurrent_chats: { type: integer }
                 team_ids:
                   type: array
                   items: { type: integer }
@@ -1717,7 +1715,6 @@ components:
         id: { type: integer }
         display_name: { type: string }
         status: { $ref: '#/components/schemas/AgentStatus' }
-        max_concurrent_chats: { type: integer }
         last_active_at: { type: [string, 'null'], format: date-time }
 
     User:

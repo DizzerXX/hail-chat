@@ -23,7 +23,6 @@ class AdminUserResource extends JsonResource
                 'id' => $this->agent->id,
                 'display_name' => $this->agent->display_name,
                 'status' => $this->agent->status,
-                'max_concurrent_chats' => $this->agent->max_concurrent_chats,
                 'team_ids' => $this->agent->relationLoaded('teams')
                     ? $this->agent->teams->pluck('id')
                     : [],
