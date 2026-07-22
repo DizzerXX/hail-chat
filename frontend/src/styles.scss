@@ -11,6 +11,22 @@ html {
   );
 }
 
+:root {
+  /* Shared TDEChat workspace palette — used by both the agent and admin shells. */
+  --tde-bg: #eef1f5;
+  --tde-panel: #ffffff;
+  --tde-ink: #29323d;
+  --tde-muted: #97a1b0;
+  --tde-accent: #2f80ed;
+  --tde-accent-soft: #eaf2fe;
+  --tde-bubble: #f4f6f9;
+  --tde-border: #edf0f4;
+  --tde-green: #2ecc71;
+  --tde-amber: #f2a33c;
+  --tde-red: #ef5350;
+  --tde-shadow: 0 1px 3px rgba(24, 39, 75, 0.06);
+}
+
 html,
 body {
   height: 100%;
@@ -19,8 +35,8 @@ body {
 
 body {
   font-family: Roboto, 'Helvetica Neue', sans-serif;
-  background: var(--mat-sys-surface);
-  color: var(--mat-sys-on-surface);
+  background: var(--tde-bg);
+  color: var(--tde-ink);
 }
 
 .spacer {
@@ -37,17 +53,48 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 
   h1 {
     font-size: 22px;
-    font-weight: 500;
+    font-weight: 600;
     margin: 0;
+    color: var(--tde-ink);
   }
 }
 
+/* Material tables sit inside a white, rounded panel to match the workspace theme. */
 table.mat-mdc-table {
   width: 100%;
+  background: var(--tde-panel);
+  border-radius: 12px;
+  box-shadow: var(--tde-shadow);
+  overflow: hidden;
+
+  .mat-mdc-header-cell {
+    color: var(--tde-muted);
+    font-weight: 600;
+    font-size: 12px;
+    letter-spacing: 0.3px;
+    border-bottom-color: var(--tde-border);
+  }
+
+  .mat-mdc-cell {
+    color: var(--tde-ink);
+    border-bottom-color: var(--tde-border);
+  }
+
+  .mat-mdc-row:last-child .mat-mdc-cell {
+    border-bottom: none;
+  }
+}
+
+/* Outlined cards adopt the same soft panel look. */
+.mat-mdc-card.mat-mdc-card-outlined {
+  border: 1px solid var(--tde-border);
+  border-radius: 12px;
+  box-shadow: var(--tde-shadow);
+  background: var(--tde-panel);
 }
 
 .dialog-form {
@@ -59,7 +106,7 @@ table.mat-mdc-table {
 }
 
 .muted {
-  color: var(--mat-sys-on-surface-variant);
+  color: var(--tde-muted);
 }
 
 .mono {

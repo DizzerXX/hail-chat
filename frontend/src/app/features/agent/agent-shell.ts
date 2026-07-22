@@ -64,19 +64,6 @@ import { ConversationList } from './conversation-list';
   `,
   styles: `
     :host {
-      /* Shared palette for the whole agent workspace (inherited by children). */
-      --tde-bg: #eef1f5;
-      --tde-panel: #ffffff;
-      --tde-ink: #29323d;
-      --tde-muted: #97a1b0;
-      --tde-accent: #2f80ed;
-      --tde-accent-soft: #eaf2fe;
-      --tde-bubble: #f4f6f9;
-      --tde-border: #edf0f4;
-      --tde-green: #2ecc71;
-      --tde-amber: #f2a33c;
-      --tde-red: #ef5350;
-
       display: block;
       height: 100vh;
       background: var(--tde-bg);
