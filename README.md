@@ -356,23 +356,37 @@ endpoint is unset (manual returns a friendly 503).
 
 ## Licensing (central License Manager)
 
-User management (users, roles, agent directory) is license-gated against the central
-License Manager. **Unset env = disabled-open** (no restrictions — for dev/self-hosted):
+Licenses are a **pool synced from the central platform, spent one per agent**. There is no
+per-installation license key — the platform id and its access token identify TDEChat.
+**Unset env = disabled-open** (no restrictions — for dev/self-hosted):
 
 | Env var | Meaning |
 |---------|---------|
-| `LICENSE_MANAGER_URL` | e.g. `https://license.example.com` |
-| `LICENSE_PLATFORM_SLUG` / `LICENSE_PLATFORM_ID` / `LICENSE_PLATFORM_ACCESS_TOKEN` | Platform registration |
-| `LICENSE_KEY` | License key for this installation |
-| `LICENSE_GRACE_HOURS` | Last-known-good window when the manager is unreachable (default 72) |
+| `LICENSE_MANAGER_URL` | e.g. `https://lic-serv.example.com` |
+| `LICENSE_PLATFORM_ID` / `LICENSE_PLATFORM_ACCESS_TOKEN` | Identifies this platform to the license server |
+| `LICENSE_PLATFORM_SLUG` | Display label only |
 
-Activate once with `php artisan license:activate` (the instance id is a stable hash of app
-key + hostname — it never consumes a second activation slot). An hourly heartbeat
-(`schedule:work`) re-checks validity; expired/invalid licenses return a clean 403 with
-`code: license_invalid` on gated routes, and **seat limits** (`max_users`) are enforced
-locally on user creation/re-activation. Feature gates: `license()->hasFeature('x')`. The
-admin **License** screen shows status, expiry, seats, activations, features, heartbeat
-times, and offers Re-validate / Deactivate.
+The flow: the platform creates licenses for TDEChat (they start `inactive`) → TDEChat syncs
+with `php artisan license:sync` or the admin screen's **Sync now** → synced licenses become
+`active` on the platform, new ones join the local pool, and every status is refreshed. Sync is
+idempotent, runs hourly under `schedule:work`, and calls two endpoints:
+`admin/platforms/sync-licenses` to activate, then `admin/platforms/licenses` for the detail
+(type, features, `max_users`) the sync response omits.
+
+**One license activates one agent**, so `max_users` on a license record is ignored — it is
+boilerplate from the platform's bulk generator. Licenses are claimed automatically when an
+agent profile is created or re-activated, and existing agents are auto-assigned (oldest first)
+the first time a sync runs, so switching licensing on never strands anyone. Running out
+returns a friendly 422 on user creation. Users **without** an agent profile — admins,
+supervisors — consume nothing.
+
+A license **stays bound** to its agent when that user is deactivated; only an explicit
+**Release** on the admin screen returns it to the pool (removing the agent profile entirely
+also frees it). With no usable license at all, gated routes return a clean 403 with
+`code: license_invalid`, though the license screen itself stays reachable. Because the pool
+lives in the local database, an unreachable platform never locks anyone out — statuses simply
+stop refreshing until the next successful sync. Feature gates read the union of features
+across usable licenses: `license()->hasFeature('x')`.
 
 ## API documentation
 

@@ -33,7 +33,7 @@ import { UserDialog } from './user-dialog';
         @if (seats(); as seats) {
           @if (seats.enforced) {
             <mat-chip [highlighted]="seats.max !== null && seats.used >= seats.max">
-              Seats: {{ seats.used }} / {{ seats.max }}
+              Licensed agents: {{ seats.used }} / {{ seats.max }}
             </mat-chip>
           }
         }

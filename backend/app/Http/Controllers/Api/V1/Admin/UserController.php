@@ -41,10 +41,6 @@ class UserController extends Controller
 
     public function store(UserRequest $request): JsonResponse
     {
-        if ($request->validated('is_active', true) !== false) {
-            $this->assertSeatAvailable();
-        }
-
         $user = DB::transaction(function () use ($request) {
             $user = User::create([
                 'name' => $request->validated('name'),
@@ -68,11 +64,6 @@ class UserController extends Controller
     {
         if ($user->is($request->user()) && $request->validated('is_active', true) === false) {
             abort(422, 'You cannot deactivate your own account.');
-        }
-
-        // Re-activating a user consumes a seat.
-        if (! $user->is_active && $request->validated('is_active', true) === true) {
-            $this->assertSeatAvailable();
         }
 
         DB::transaction(function () use ($request, $user) {
@@ -99,17 +90,6 @@ class UserController extends Controller
         ]);
     }
 
-    private function assertSeatAvailable(): void
-    {
-        if (! license()->canAddSeat()) {
-            abort(422, sprintf(
-                'Seat limit reached: %d of %d seats in use. Deactivate a user or upgrade the license.',
-                license()->seatsUsed(),
-                license()->maxUsers(),
-            ));
-        }
-    }
-
     private function syncAgentProfile(User $user, UserRequest $request): void
     {
         if (! $request->has('agent')) {
@@ -119,6 +99,9 @@ class UserController extends Controller
         $profile = $request->validated('agent');
 
         if ($profile === null) {
+            // Removing the agent profile is a deliberate "no longer an agent",
+            // so the license goes back to the pool (the FK nulls on delete).
+            // Merely deactivating a user does not — that binding is kept.
             $user->agent?->delete();
 
             return;
@@ -133,5 +116,26 @@ class UserController extends Controller
         );
 
         $agent->teams()->sync($profile['team_ids'] ?? []);
+
+        $this->assertLicensed($user, $agent);
+    }
+
+    /**
+     * One license activates one agent. An agent who already holds one keeps it
+     * through deactivation, so re-activating them needs no new license.
+     */
+    private function assertLicensed(User $user, Agent $agent): void
+    {
+        if (! license()->configured() || ! $user->is_active) {
+            return;
+        }
+
+        if (license()->assign($agent) === null) {
+            abort(422, sprintf(
+                'No licenses available: %d of %d in use. Sync the license platform, add licenses, or release one from another agent.',
+                license()->seatsUsed(),
+                license()->capacity(),
+            ));
+        }
     }
 }

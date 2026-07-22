@@ -302,7 +302,8 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
       font-weight: 500;
       flex-shrink: 0;
     }
-    .header-avatar {
+    .header-avatar,
+    .detail-avatar {
       width: 38px;
       height: 38px;
       font-size: 15px;
@@ -480,11 +481,6 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
         font-weight: 600;
       }
     }
-    .detail-avatar {
-      width: 40px;
-      height: 40px;
-      font-size: 16px;
-    }
     .muted-line {
       font-size: 12px;
       color: var(--tde-muted);
@@ -522,14 +518,12 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
     }
     .load-error {
       flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
+      display: grid;
+      place-content: center center;
+      justify-items: center;
       gap: 10px;
-      color: var(--tde-muted);
-      text-align: center;
       padding: 24px;
+      color: var(--tde-muted);
 
       mat-icon {
         font-size: 40px;
@@ -538,7 +532,6 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
       }
       h3 {
         margin: 0;
-        font-size: 15px;
         font-weight: 500;
         color: var(--tde-ink);
       }
@@ -548,9 +541,6 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
       overflow: hidden;
       text-overflow: ellipsis;
       display: block;
-    }
-    .spacer {
-      flex: 1;
     }
     @media (max-width: 1100px) {
       .details {

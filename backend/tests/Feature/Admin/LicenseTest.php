@@ -2,17 +2,20 @@
 
 namespace Tests\Feature\Admin;
 
-use App\Jobs\LicenseHeartbeatJob;
-use App\Models\LicenseState;
+use App\Models\Agent;
+use App\Models\License;
 use App\Models\Role;
 use App\Models\User;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
+/**
+ * Licenses are a pool synced from the platform and spent one per agent.
+ * Http::fake stands in for the platform as a transport double only.
+ */
 class LicenseTest extends TestCase
 {
     use RefreshDatabase;
@@ -28,229 +31,277 @@ class LicenseTest extends TestCase
         Sanctum::actingAs($this->admin);
     }
 
-    private function configureManager(): void
+    private function configurePlatform(): void
     {
         config([
             'license.url' => 'https://license.test',
-            'license.key' => 'LIC-TDECHAT-123456789',
             'license.platform_slug' => 'tdechat',
-            'license.platform_id' => 7,
+            'license.platform_id' => 6,
             'license.platform_access_token' => 'plat_secret',
         ]);
     }
 
-    private function activeState(array $overrides = []): LicenseState
+    /** @var list<array<string, mixed>> */
+    private array $platformLicenses = [];
+
+    private bool $platformFaked = false;
+
+    /**
+     * Http::fake() appends stubs rather than replacing them, so registering it
+     * twice would leave the first response winning. Register once and let the
+     * stubs read mutable state instead.
+     *
+     * @param  list<array<string, mixed>>  $licenses
+     */
+    private function fakePlatform(array $licenses): void
     {
-        return LicenseState::create(array_merge([
-            'instance_id' => 'instance-1',
-            'status' => 'active',
-            'type' => 'annual',
-            'expires_at' => now()->addYear(),
-            'max_users' => 10,
-            'features' => ['translation'],
-            'activated_at' => now(),
-            'last_heartbeat_at' => now(),
-            'last_valid_at' => now(),
-        ], $overrides));
+        $this->platformLicenses = $licenses;
+
+        if ($this->platformFaked) {
+            return;
+        }
+
+        $this->platformFaked = true;
+
+        Http::fake([
+            'https://license.test/api/v1/admin/platforms/sync-licenses' => fn () => Http::response([
+                'success' => true,
+                'message' => 'Successfully synced '.count($this->platformLicenses).' licenses',
+                'data' => [
+                    'platform' => ['id' => 6, 'slug' => 'tdechat'],
+                    'sync_time' => now()->toIso8601String(),
+                    'synced_count' => count($this->platformLicenses),
+                    'synced_licenses' => $this->platformLicenses,
+                ],
+            ]),
+            'https://license.test/api/v1/admin/platforms/licenses' => fn () => Http::response([
+                'success' => true,
+                'message' => 'ok',
+                'data' => [
+                    'platform' => ['id' => 6, 'slug' => 'tdechat'],
+                    'licenses' => $this->platformLicenses,
+                    'total_licenses' => count($this->platformLicenses),
+                ],
+            ]),
+        ]);
     }
 
-    public function test_unconfigured_manager_is_disabled_open(): void
+    /**
+     * @param  array<string, mixed>  $overrides
+     * @return list<array<string, mixed>>
+     */
+    private function platformLicenses(int $count, array $overrides = []): array
     {
-        $this->getJson('/api/v1/admin/users')->assertOk();
+        return collect(range(1, $count))
+            ->map(fn (int $i) => array_merge([
+                'id' => 100 + $i,
+                'license_key' => 'KEY-000'.$i.'-ABCDEFGH',
+                'status' => 'active',
+                'type' => 'premium',
+                'customer_company' => 'Telediant',
+                'issued_at' => now()->subDay()->toIso8601String(),
+                'expires_at' => now()->addYear()->toIso8601String(),
+                'activation_date' => now()->toIso8601String(),
+                'max_users' => 100,
+                'max_instances' => 1,
+                'features' => ['translation'],
+                'metadata' => ['bulk_generated' => true],
+            ], $overrides))
+            ->all();
+    }
 
-        $this->getJson('/api/v1/admin/license/seats')
-            ->assertOk()
-            ->assertJsonPath('data.enforced', false)
-            ->assertJsonPath('data.max', null);
+    private function makeAgent(string $email): Agent
+    {
+        $user = User::factory()
+            ->for(Role::where('name', 'agent')->first())
+            ->create(['email' => $email, 'is_active' => true]);
 
+        return Agent::factory()->for($user)->create();
+    }
+
+    public function test_unconfigured_platform_leaves_everything_open(): void
+    {
         $this->getJson('/api/v1/admin/license')
             ->assertOk()
             ->assertJsonPath('data.configured', false);
+
+        $this->getJson('/api/v1/admin/users')->assertOk();
+        $this->assertTrue(license()->canActivateAgent());
+        $this->assertTrue(license()->hasFeature('anything'));
     }
 
-    public function test_activation_persists_the_license_payload(): void
+    public function test_sync_stores_licenses_with_their_detail(): void
     {
-        $this->configureManager();
+        $this->configurePlatform();
+        $this->fakePlatform($this->platformLicenses(3));
 
-        Http::fake([
-            'license.test/api/v1/validate/license' => Http::response([
-                'success' => true,
-                'message' => 'Activated',
-                'data' => ['license' => [
-                    'type' => 'annual',
-                    'status' => 'active',
-                    'expires_at' => now()->addDays(30)->toIso8601String(),
-                    'max_users' => 5,
-                    'max_instances' => 2,
-                    'features' => ['translation', 'reports'],
-                    'metadata' => ['customer' => 'Telediant'],
-                ]],
-            ]),
-        ]);
-
-        $this->artisan('license:activate')->assertExitCode(0);
-
-        $state = LicenseState::sole();
-        $this->assertSame('active', $state->status);
-        $this->assertSame(5, $state->max_users);
-        $this->assertSame(['translation', 'reports'], $state->features);
-        $this->assertNotEmpty($state->instance_id);
-
-        Http::assertSent(function ($request) {
-            $data = $request->data();
-
-            return str_contains($request->url(), '/api/v1/validate/license')
-                && $data['license_key'] === 'LIC-TDECHAT-123456789'
-                && $data['platform_slug'] === 'tdechat'
-                && $data['instance_id'] !== '';
-        });
-    }
-
-    public function test_expired_license_blocks_user_management_with_a_clean_403(): void
-    {
-        $this->configureManager();
-        $this->activeState(['expires_at' => now()->subDay()]);
-
-        $this->getJson('/api/v1/admin/users')
-            ->assertForbidden()
-            ->assertJsonPath('code', 'license_invalid');
-
-        $this->getJson('/api/v1/admin/roles')->assertForbidden();
-
-        // The license screen itself must stay reachable to fix the problem.
-        $this->getJson('/api/v1/admin/license')
+        $this->postJson('/api/v1/admin/license/sync')
             ->assertOk()
-            ->assertJsonPath('data.valid', false);
+            ->assertJsonPath('data.configured', true)
+            ->assertJsonCount(3, 'data.licenses');
 
-        // ...and non-gated admin areas stay open.
-        $this->getJson('/api/v1/admin/teams')->assertOk();
+        $license = License::orderBy('platform_license_id')->first();
+        $this->assertSame(101, $license->platform_license_id);
+        $this->assertSame('active', $license->status);
+        // Detail the sync response omits comes from the platform listing.
+        $this->assertSame('premium', $license->type);
+        $this->assertSame(['translation'], $license->features);
+        $this->assertNotNull($license->last_synced_at);
     }
 
-    public function test_seat_limit_blocks_creation_and_reactivation(): void
+    public function test_sync_is_idempotent_and_updates_statuses(): void
     {
-        $this->configureManager();
-        $this->activeState(['max_users' => 1]); // the admin already uses the only seat
+        $this->configurePlatform();
+        $this->fakePlatform($this->platformLicenses(2));
+        license()->sync();
 
-        $payload = fn (string $email, bool $active) => [
-            'name' => 'Seat Test',
+        $this->fakePlatform($this->platformLicenses(2, ['status' => 'suspended']));
+        $result = license()->sync();
+
+        $this->assertSame(2, License::count(), 'licenses must upsert, not duplicate');
+        $this->assertSame(0, $result['added']);
+        $this->assertSame('suspended', License::first()->status);
+    }
+
+    public function test_first_sync_assigns_existing_agents_oldest_first(): void
+    {
+        $first = $this->makeAgent('first@tdechat.test');
+        $second = $this->makeAgent('second@tdechat.test');
+
+        $this->configurePlatform();
+        $this->fakePlatform($this->platformLicenses(3));
+
+        $result = license()->sync();
+
+        $this->assertSame(2, $result['assigned']);
+        $this->assertSame($first->id, License::orderBy('platform_license_id')->first()->assigned_agent_id);
+        $this->assertNotNull($second->fresh()->license);
+        $this->assertSame(2, license()->seatsUsed());
+        $this->assertSame(1, license()->freeSeats());
+    }
+
+    public function test_creating_an_agent_takes_a_license_and_the_pool_runs_out(): void
+    {
+        $this->configurePlatform();
+        $this->fakePlatform($this->platformLicenses(1));
+        license()->sync();
+
+        $payload = fn (string $email) => [
+            'name' => 'Agent '.$email,
             'email' => $email,
             'password' => 'password123',
             'role_id' => Role::where('name', 'agent')->first()->id,
-            'is_active' => $active,
+            'agent' => ['display_name' => 'A', 'max_concurrent_chats' => 5],
         ];
 
-        $this->postJson('/api/v1/admin/users', $payload('one@t.test', true))
-            ->assertUnprocessable();
+        $this->postJson('/api/v1/admin/users', $payload('one@tdechat.test'))->assertCreated();
+        $this->assertSame(1, license()->seatsUsed());
 
-        // Inactive users don't consume seats.
-        $created = $this->postJson('/api/v1/admin/users', $payload('two@t.test', false))
-            ->assertCreated()
-            ->json('data');
+        $this->postJson('/api/v1/admin/users', $payload('two@tdechat.test'))
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'No licenses available: 1 of 1 in use. Sync the license platform, add licenses, or release one from another agent.');
 
-        // Re-activating would exceed the cap.
-        $this->putJson('/api/v1/admin/users/'.$created['id'], [
-            ...$payload('two@t.test', true),
-            'password' => null,
-        ])->assertUnprocessable();
-
-        $this->getJson('/api/v1/admin/license/seats')
-            ->assertOk()
-            ->assertJsonPath('data.enforced', true)
-            ->assertJsonPath('data.used', 1)
-            ->assertJsonPath('data.max', 1);
+        // The rejected user must not have been created.
+        $this->assertDatabaseMissing('users', ['email' => 'two@tdechat.test']);
     }
 
-    public function test_feature_gate_helper(): void
+    public function test_a_user_without_an_agent_profile_uses_no_license(): void
     {
-        $this->assertTrue(license()->hasFeature('anything')); // unconfigured → open
+        $this->configurePlatform();
+        $this->fakePlatform($this->platformLicenses(1));
+        license()->sync();
 
-        $this->configureManager();
-        $this->activeState();
+        $this->postJson('/api/v1/admin/users', [
+            'name' => 'Supervisor',
+            'email' => 'sup@tdechat.test',
+            'password' => 'password123',
+            'role_id' => Role::where('name', 'supervisor')->first()->id,
+        ])->assertCreated();
+
+        $this->assertSame(0, license()->seatsUsed());
+    }
+
+    public function test_deactivating_an_agent_keeps_their_license(): void
+    {
+        $agent = $this->makeAgent('holder@tdechat.test');
+
+        $this->configurePlatform();
+        $this->fakePlatform($this->platformLicenses(1));
+        license()->sync();
+
+        $this->putJson("/api/v1/admin/users/{$agent->user->id}", [
+            'name' => $agent->user->name,
+            'email' => $agent->user->email,
+            'role_id' => $agent->user->role_id,
+            'is_active' => false,
+        ])->assertOk();
+
+        $this->assertSame($agent->id, License::first()->assigned_agent_id);
+        $this->assertSame(1, license()->seatsUsed());
+    }
+
+    public function test_releasing_a_license_returns_it_to_the_pool(): void
+    {
+        $agent = $this->makeAgent('holder@tdechat.test');
+
+        $this->configurePlatform();
+        $this->fakePlatform($this->platformLicenses(1));
+        license()->sync();
+
+        $license = License::first();
+        $this->assertSame($agent->id, $license->assigned_agent_id);
+
+        $this->postJson("/api/v1/admin/licenses/{$license->id}/release")
+            ->assertOk()
+            ->assertJsonPath('data.seats.used', 0)
+            ->assertJsonPath('data.seats.free', 1);
+
+        $this->assertNull($license->fresh()->assigned_agent_id);
+    }
+
+    public function test_expired_and_inactive_licenses_do_not_count_as_capacity(): void
+    {
+        $this->configurePlatform();
+        $this->fakePlatform([
+            ...$this->platformLicenses(1, ['status' => 'inactive']),
+            [
+                'id' => 200,
+                'license_key' => 'KEY-EXPIRED-ZZZZ',
+                'status' => 'active',
+                'expires_at' => now()->subDay()->toIso8601String(),
+                'features' => [],
+            ],
+        ]);
+        license()->sync();
+
+        $this->assertSame(0, license()->capacity());
+        $this->assertFalse(license()->isValid());
+        $this->assertFalse(license()->canActivateAgent());
+
+        // User management is gated, but the license screen stays reachable.
+        $this->getJson('/api/v1/admin/users')
+            ->assertStatus(403)
+            ->assertJsonPath('code', 'license_invalid');
+        $this->getJson('/api/v1/admin/license')->assertOk();
+    }
+
+    public function test_features_come_from_usable_licenses_only(): void
+    {
+        $this->configurePlatform();
+        $this->fakePlatform($this->platformLicenses(1, ['features' => ['translation']]));
+        license()->sync();
 
         $this->assertTrue(license()->hasFeature('translation'));
-        $this->assertFalse(license()->hasFeature('reports'));
+        $this->assertFalse(license()->hasFeature('sms'));
     }
 
-    public function test_unreachable_manager_honors_then_exhausts_the_grace_period(): void
-    {
-        $this->configureManager();
-        $this->activeState(['last_valid_at' => now()]);
-
-        Http::fake(fn () => throw new ConnectionException('timeout'));
-
-        // Heartbeat with the manager down keeps the last known good state.
-        (new LicenseHeartbeatJob())->handle(app(\App\Services\License\LicenseService::class));
-        $this->assertSame('active', LicenseState::sole()->status);
-        $this->getJson('/api/v1/admin/users')->assertOk();
-
-        // Inside the 72h grace window access continues…
-        $this->travel(71)->hours();
-        $this->getJson('/api/v1/admin/users')->assertOk();
-
-        // …and past it the license goes invalid.
-        $this->travel(2)->hours();
-        $this->getJson('/api/v1/admin/users')
-            ->assertForbidden()
-            ->assertJsonPath('code', 'license_invalid');
-    }
-
-    public function test_heartbeat_rejection_invalidates_immediately(): void
-    {
-        $this->configureManager();
-        $this->activeState();
-
-        Http::fake([
-            'license.test/api/v1/validate/check' => Http::response([
-                'success' => false,
-                'message' => 'License revoked',
-            ], 400),
-        ]);
-
-        (new LicenseHeartbeatJob())->handle(app(\App\Services\License\LicenseService::class));
-
-        $this->assertSame('invalid', LicenseState::sole()->status);
-        $this->getJson('/api/v1/admin/users')->assertForbidden();
-    }
-
-    public function test_admin_license_screen_payload_and_deactivation(): void
-    {
-        $this->configureManager();
-        $this->activeState(['max_instances' => 2]);
-
-        Http::fake([
-            'license.test/api/v1/admin/platforms/licenses' => Http::response([
-                'success' => true,
-                'data' => ['licenses' => [[
-                    'license_key' => 'LIC-TDECHAT-123456789',
-                    'status' => 'active',
-                    'current_activations' => 1,
-                ]]],
-            ]),
-            'license.test/api/v1/validate/deactivate' => Http::response([
-                'success' => true,
-                'message' => 'Deactivated',
-                'data' => [],
-            ]),
-        ]);
-
-        $this->getJson('/api/v1/admin/license')
-            ->assertOk()
-            ->assertJsonPath('data.valid', true)
-            ->assertJsonPath('data.activations.used', 1)
-            ->assertJsonPath('data.activations.max', 2)
-            ->assertJsonPath('data.masked_key', 'LIC-•••••••••••••6789');
-
-        $this->postJson('/api/v1/admin/license/deactivate')->assertOk();
-        $this->assertDatabaseCount('license_state', 0);
-    }
-
-    public function test_license_endpoints_require_the_license_manage_permission(): void
+    public function test_license_management_requires_the_permission(): void
     {
         $supervisor = User::factory()->for(Role::where('name', 'supervisor')->first())->create();
         Sanctum::actingAs($supervisor);
 
-        $this->getJson('/api/v1/admin/license')->assertForbidden();
-        // But the seats banner works for anyone who manages users.
+        $this->getJson('/api/v1/admin/license')->assertStatus(403);
+        // Seats power the Users screen banner, so agents.manage is enough.
         $this->getJson('/api/v1/admin/license/seats')->assertOk();
     }
 }

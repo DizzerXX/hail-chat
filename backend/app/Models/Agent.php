@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Agent extends Model
 {
@@ -39,6 +40,12 @@ class Agent extends Model
     public function teams(): BelongsToMany
     {
         return $this->belongsToMany(Team::class)->withTimestamps();
+    }
+
+    /** The license activating this agent, when licensing is configured. */
+    public function license(): HasOne
+    {
+        return $this->hasOne(License::class, 'assigned_agent_id');
     }
 
     public function conversations(): HasMany

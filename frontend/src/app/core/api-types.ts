@@ -190,23 +190,27 @@ export interface SeatInfo {
   max: number | null;
 }
 
+export interface LicenseRecord {
+  id: number;
+  masked_key: string;
+  status: string | null;
+  type: string | null;
+  usable: boolean;
+  expires_at: string | null;
+  days_remaining: number | null;
+  features: string[];
+  assigned_agent: { id: number; display_name: string } | null;
+  assigned_at: string | null;
+}
+
 export interface LicenseInfo {
   configured: boolean;
-  activated?: boolean;
   valid?: boolean;
   problem?: string | null;
-  masked_key?: string | null;
-  status?: string | null;
-  type?: string | null;
-  expires_at?: string | null;
-  days_remaining?: number | null;
-  seats?: { used: number; max: number | null };
-  activations?: { used: number | null; max: number | null };
-  features?: string[];
-  instance_id?: string;
-  activated_at?: string | null;
-  last_heartbeat_at?: string | null;
-  last_valid_at?: string | null;
+  platform_slug?: string;
+  last_synced_at?: string | null;
+  seats?: { used: number; max: number; free: number };
+  licenses?: LicenseRecord[];
 }
 
 export interface AnalyticsSummary {

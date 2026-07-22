@@ -2,182 +2,190 @@
 
 namespace App\Services\License;
 
-use App\Exceptions\LicenseApiException;
-use App\Models\LicenseState;
-use App\Models\User;
-use Illuminate\Support\Facades\Log;
+use App\Models\Agent;
+use App\Models\License;
+use Illuminate\Support\Facades\DB;
 
+/**
+ * Licenses are a pool synced from the central platform, and one license
+ * activates one agent. Users without an agent profile (admins, supervisors)
+ * spend nothing.
+ */
 class LicenseService
 {
-    private ?LicenseState $cached = null;
-
-    private bool $loaded = false;
-
-    /** License enforcement only applies when the manager is configured. */
+    /** Enforcement only applies once the platform credentials are present. */
     public function configured(): bool
     {
-        return config('license.url') !== '' && config('license.key') !== '';
-    }
-
-    public function state(): ?LicenseState
-    {
-        if (! $this->loaded) {
-            $this->cached = LicenseState::first();
-            $this->loaded = true;
-        }
-
-        return $this->cached;
+        return config('license.url') !== ''
+            && (string) config('license.platform_id') !== ''
+            && (string) config('license.platform_access_token') !== '';
     }
 
     /**
-     * Stable installation id — deterministic (app key + hostname) and
-     * persisted with the state so an activation slot is never re-consumed.
+     * Pull the pool from the platform, then hand free licenses to agents that
+     * do not have one yet (oldest first) so enabling licensing never strands
+     * agents that already exist.
+     *
+     * @return array{synced: int, added: int, assigned: int}
      */
-    public function instanceId(): string
-    {
-        return $this->state()->instance_id
-            ?? hash('sha256', config('app.key').'|'.gethostname());
-    }
-
-    /**
-     * Full validate/license call — activates the instance slot and persists
-     * the returned license payload.
-     */
-    public function activate(): LicenseState
+    public function sync(): array
     {
         $client = app(LicenseClient::class);
 
-        $data = $client->validateLicense([
-            'license_key' => config('license.key'),
-            'platform_slug' => config('license.platform_slug'),
-            'instance_id' => $this->instanceId(),
-            'domain' => parse_url((string) config('app.url'), PHP_URL_HOST),
-            'ip_address' => gethostbyname((string) gethostname()),
-            'server_info' => PHP_OS_FAMILY.' / PHP '.PHP_VERSION,
-            'application_version' => '1.0.0',
-        ]);
+        // sync-licenses activates them on the platform; platformLicenses then
+        // supplies the detail the sync response omits.
+        $client->syncLicenses();
+        $records = $client->platformLicenses()['licenses'] ?? [];
 
-        $license = $data['license'] ?? [];
+        $added = 0;
 
-        $state = LicenseState::updateOrCreate(
-            ['instance_id' => $this->instanceId()],
-            [
-                'status' => $license['status'] ?? 'unknown',
-                'type' => $license['type'] ?? null,
-                'expires_at' => $license['expires_at'] ?? null,
-                'max_users' => $license['max_users'] ?? null,
-                'max_instances' => $license['max_instances'] ?? null,
-                'features' => $license['features'] ?? [],
-                'metadata' => $license['metadata'] ?? null,
-                'activated_at' => now(),
-                'last_heartbeat_at' => now(),
-                'last_valid_at' => now(),
-            ],
-        );
+        DB::transaction(function () use ($records, &$added) {
+            foreach ($records as $record) {
+                $id = $record['id'] ?? null;
 
-        $this->cached = $state;
-        $this->loaded = true;
+                if ($id === null) {
+                    continue;
+                }
 
-        return $state;
+                $existing = License::where('platform_license_id', $id)->first();
+                $added += $existing === null ? 1 : 0;
+
+                License::updateOrCreate(
+                    ['platform_license_id' => $id],
+                    [
+                        'license_key' => $record['license_key'] ?? '',
+                        'status' => $record['status'] ?? null,
+                        'type' => $record['type'] ?? null,
+                        'customer_company' => $record['customer_company'] ?? null,
+                        'issued_at' => $record['issued_at'] ?? null,
+                        'expires_at' => $record['expires_at'] ?? null,
+                        'activation_date' => $record['activation_date'] ?? null,
+                        'max_users' => $record['max_users'] ?? null,
+                        'max_instances' => $record['max_instances'] ?? null,
+                        'features' => $record['features'] ?? [],
+                        'metadata' => $record['metadata'] ?? null,
+                        'last_synced_at' => now(),
+                    ],
+                );
+            }
+        });
+
+        return [
+            'synced' => count($records),
+            'added' => $added,
+            'assigned' => $this->assignPendingAgents(),
+        ];
     }
 
     /**
-     * validate/check heartbeat. Unreachable managers leave the last known
-     * good state intact — isValid() applies the grace window.
+     * Give a license to every active agent that lacks one, oldest agent first.
+     * Stops when the pool runs dry — the shortfall shows on the admin screen.
      */
-    public function heartbeat(): void
-    {
-        $state = $this->state();
-
-        if ($state === null) {
-            $this->activate();
-
-            return;
-        }
-
-        try {
-            $data = app(LicenseClient::class)->check(config('license.key'), $this->instanceId());
-        } catch (LicenseApiException $exception) {
-            if ($exception->unreachable) {
-                Log::warning('License heartbeat: manager unreachable; keeping last known state.', [
-                    'error' => $exception->getMessage(),
-                ]);
-
-                return;
-            }
-
-            // The manager answered and rejected us — the license is invalid.
-            $state->update(['status' => 'invalid', 'last_heartbeat_at' => now()]);
-            $this->cached = $state->fresh();
-
-            return;
-        }
-
-        $valid = ($data['valid'] ?? false) === true;
-
-        $state->update([
-            'status' => $data['status'] ?? ($valid ? 'active' : 'invalid'),
-            'expires_at' => $data['expires_at'] ?? $state->expires_at,
-            'last_heartbeat_at' => now(),
-            ...($valid ? ['last_valid_at' => now()] : []),
-        ]);
-
-        $this->cached = $state->fresh();
-    }
-
-    public function deactivate(): void
-    {
-        app(LicenseClient::class)->deactivate(config('license.key'), $this->instanceId());
-
-        LicenseState::query()->delete();
-        $this->cached = null;
-        $this->loaded = true;
-    }
-
-    public function isValid(): bool
+    public function assignPendingAgents(): int
     {
         if (! $this->configured()) {
-            return true;
+            return 0;
         }
 
-        $state = $this->state();
+        $pending = Agent::query()
+            ->whereDoesntHave('license')
+            ->whereHas('user', fn ($query) => $query->where('is_active', true))
+            ->orderBy('id')
+            ->get();
 
-        if ($state === null || $state->status !== 'active') {
-            return false;
+        $assigned = 0;
+
+        foreach ($pending as $agent) {
+            if ($this->assign($agent) === null) {
+                break;
+            }
+
+            $assigned++;
         }
 
-        if ($state->expires_at !== null && $state->expires_at->isPast()) {
-            return false;
+        return $assigned;
+    }
+
+    /**
+     * Claim a free license for an agent. Returns the license, the one they
+     * already hold, or null when the pool is exhausted.
+     */
+    public function assign(Agent $agent): ?License
+    {
+        if (! $this->configured()) {
+            return null;
         }
 
-        $graceDeadline = ($state->last_valid_at ?? $state->activated_at)
-            ?->addHours(config('license.grace_hours', 72));
+        $held = License::where('assigned_agent_id', $agent->id)->first();
 
-        return $graceDeadline === null || $graceDeadline->isFuture();
+        if ($held !== null) {
+            return $held;
+        }
+
+        return DB::transaction(function () use ($agent) {
+            $license = License::query()->usable()->unassigned()
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->first();
+
+            $license?->forceFill([
+                'assigned_agent_id' => $agent->id,
+                'assigned_at' => now(),
+            ])->save();
+
+            return $license;
+        });
+    }
+
+    /** Return a license to the pool. Deactivating an agent does NOT do this. */
+    public function release(License $license): void
+    {
+        $license->forceFill(['assigned_agent_id' => null, 'assigned_at' => null])->save();
+    }
+
+    /** Usable licenses, whether or not they are spent. */
+    public function capacity(): int
+    {
+        return License::query()->usable()->count();
+    }
+
+    public function seatsUsed(): int
+    {
+        return License::query()->whereNotNull('assigned_agent_id')->count();
+    }
+
+    public function freeSeats(): int
+    {
+        return max(0, $this->capacity() - $this->seatsUsed());
+    }
+
+    /** Whether another agent could be activated right now. */
+    public function canActivateAgent(): bool
+    {
+        return ! $this->configured()
+            || License::query()->usable()->unassigned()->exists();
+    }
+
+    /**
+     * Unconfigured stays disabled-open. Otherwise we need at least one usable
+     * license. Licenses live in our database, so an unreachable platform never
+     * locks anyone out — statuses simply stop refreshing until the next sync.
+     */
+    public function isValid(): bool
+    {
+        return ! $this->configured() || $this->capacity() > 0;
     }
 
     /** Human-readable reason when isValid() is false; null when valid. */
     public function problem(): ?string
     {
-        if (! $this->configured() || $this->isValid()) {
+        if ($this->isValid()) {
             return null;
         }
 
-        $state = $this->state();
-
-        if ($state === null) {
-            return 'This installation has not been activated. Run license:activate or use the admin license screen.';
-        }
-
-        if ($state->expires_at !== null && $state->expires_at->isPast()) {
-            return 'The license expired on '.$state->expires_at->toDateString().'.';
-        }
-
-        if ($state->status !== 'active') {
-            return 'The license is '.($state->status ?? 'invalid').'.';
-        }
-
-        return 'The license could not be re-validated within the grace period.';
+        return License::query()->exists()
+            ? 'No license is active — every synced license is inactive or expired.'
+            : 'No licenses have been synced yet. Run license:sync or use the admin license screen.';
     }
 
     public function hasFeature(string $feature): bool
@@ -186,36 +194,12 @@ class LicenseService
             return true;
         }
 
-        return in_array($feature, $this->state()?->features ?? [], true);
+        return License::query()->usable()->get()
+            ->contains(fn (License $license) => in_array($feature, $license->features ?? [], true));
     }
 
-    public function seatsUsed(): int
+    public function lastSyncedAt(): ?string
     {
-        return User::where('is_active', true)->count();
-    }
-
-    public function maxUsers(): ?int
-    {
-        return $this->configured() ? $this->state()?->max_users : null;
-    }
-
-    public function canAddSeat(): bool
-    {
-        $max = $this->maxUsers();
-
-        return $max === null || $this->seatsUsed() < $max;
-    }
-
-    public function maskedKey(): ?string
-    {
-        $key = (string) config('license.key');
-
-        if ($key === '') {
-            return null;
-        }
-
-        return strlen($key) <= 8
-            ? str_repeat('•', strlen($key))
-            : substr($key, 0, 4).str_repeat('•', max(4, strlen($key) - 8)).substr($key, -4);
+        return License::query()->max('last_synced_at');
     }
 }

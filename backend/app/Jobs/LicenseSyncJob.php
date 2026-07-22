@@ -10,7 +10,12 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Support\Facades\Log;
 
-class LicenseHeartbeatJob implements ShouldQueue
+/**
+ * Keeps the local license pool in step with the platform: picks up licenses
+ * added there and refreshes statuses/expiries. Licenses are stored locally, so
+ * a failed sync never revokes access — it just leaves the pool as it was.
+ */
+class LicenseSyncJob implements ShouldQueue
 {
     use Dispatchable;
     use InteractsWithQueue;
@@ -23,12 +28,12 @@ class LicenseHeartbeatJob implements ShouldQueue
         }
 
         try {
-            $license->heartbeat();
+            $license->sync();
         } catch (LicenseApiException $exception) {
-            // First-ever activation attempt failing (heartbeat() activates
-            // when no state exists yet) — log, the grace/invalid logic in
-            // isValid() decides access.
-            Log::warning('License heartbeat failed.', ['error' => $exception->getMessage()]);
+            Log::warning('License sync failed; keeping the current pool.', [
+                'error' => $exception->getMessage(),
+                'unreachable' => $exception->unreachable,
+            ]);
         }
     }
 }

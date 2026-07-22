@@ -625,12 +625,15 @@ paths:
     get:
       tags: [Admin]
       summary: License status for the admin screen
-      description: Permission `license.manage`. `configured=false` means the license manager env is unset (installation runs unrestricted).
+      description: >-
+        Permission `license.manage`. Returns the synced license pool and how much of it is
+        spent — one license activates one agent. `configured=false` means the platform env is
+        unset and the installation runs unrestricted.
       operationId: adminLicense
       security: [{ bearerAuth: [] }]
       responses:
         '200':
-          description: License payload (status, expiry, seats, activations, features, heartbeat times, masked key)
+          description: License pool, seat usage and per-license assignment
           content:
             application/json:
               schema:
@@ -660,25 +663,53 @@ paths:
                       used: { type: integer }
                       max: { type: [integer, 'null'] }
 
-  /api/v1/admin/license/revalidate:
+  /api/v1/admin/license/sync:
     post:
       tags: [Admin]
-      summary: Re-run activation/validation now
-      operationId: adminLicenseRevalidate
+      summary: Sync the license pool from the platform
+      description: >-
+        Permission `license.manage`. Calls `admin/platforms/sync-licenses` (which activates
+        them on the platform) then `admin/platforms/licenses` for the detail the sync response
+        omits, upserts the pool locally, and hands free licenses to any active agent without
+        one, oldest first. Idempotent.
+      operationId: adminLicenseSync
       security: [{ bearerAuth: [] }]
       responses:
-        '200': { description: Refreshed license payload }
-        '502': { description: License manager rejected or unreachable }
+        '200':
+          description: Refreshed license pool — same shape as GET /admin/license
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/LicenseInfo' }
+        '422': { description: The license platform is not configured }
+        '502': { description: License platform rejected the request or is unreachable }
 
-  /api/v1/admin/license/deactivate:
+  /api/v1/admin/licenses/{licenseId}/release:
     post:
       tags: [Admin]
-      summary: Free this installation's activation slot
-      operationId: adminLicenseDeactivate
+      summary: Return a license to the pool
+      description: >-
+        Permission `license.manage`. Unbinds the license from its agent so another agent can
+        take it. Deactivating a user does **not** do this — the binding is deliberately kept.
+      operationId: adminLicenseRelease
       security: [{ bearerAuth: [] }]
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          schema: { type: integer }
       responses:
-        '200': { description: Deactivated }
-        '502': { description: License manager rejected or unreachable }
+        '200':
+          description: Refreshed license pool — same shape as GET /admin/license
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/LicenseInfo' }
+        '404': { $ref: '#/components/responses/NotFound' }
 
   /api/v1/admin/inboxes:
     get:
@@ -1707,33 +1738,50 @@ components:
 
     LicenseInfo:
       type: object
+      description: >-
+        The synced license pool. Only `configured` is present when the platform env is unset.
       properties:
         configured: { type: boolean }
-        activated: { type: boolean }
-        valid: { type: boolean }
+        valid:
+          type: boolean
+          description: At least one usable (active, unexpired) license exists locally.
         problem: { type: [string, 'null'] }
-        masked_key: { type: [string, 'null'] }
-        status: { type: [string, 'null'] }
-        type: { type: [string, 'null'] }
-        expires_at: { type: [string, 'null'], format: date-time }
-        days_remaining: { type: [integer, 'null'] }
+        platform_slug: { type: string }
+        last_synced_at: { type: [string, 'null'], format: date-time }
         seats:
           type: object
+          description: Agents licensed out of the usable pool.
           properties:
             used: { type: integer }
-            max: { type: [integer, 'null'] }
-        activations:
-          type: object
-          properties:
-            used: { type: [integer, 'null'] }
-            max: { type: [integer, 'null'] }
+            max: { type: integer }
+            free: { type: integer }
+        licenses:
+          type: array
+          items: { $ref: '#/components/schemas/LicenseRecord' }
+
+    LicenseRecord:
+      type: object
+      properties:
+        id: { type: integer, description: Local id — used by the release endpoint }
+        masked_key: { type: string, example: '0SEA•••••••••••7COL' }
+        status: { type: [string, 'null'], example: active }
+        type: { type: [string, 'null'], example: premium }
+        usable:
+          type: boolean
+          description: Active and unexpired, so it can hold an agent.
+        expires_at: { type: [string, 'null'], format: date-time }
+        days_remaining: { type: [integer, 'null'] }
         features:
           type: array
           items: { type: string }
-        instance_id: { type: [string, 'null'] }
-        activated_at: { type: [string, 'null'], format: date-time }
-        last_heartbeat_at: { type: [string, 'null'], format: date-time }
-        last_valid_at: { type: [string, 'null'], format: date-time }
+        assigned_agent:
+          oneOf:
+            - type: object
+              properties:
+                id: { type: integer }
+                display_name: { type: string }
+            - type: 'null'
+        assigned_at: { type: [string, 'null'], format: date-time }
 
     ConversationWebhookPayload:
       type: object

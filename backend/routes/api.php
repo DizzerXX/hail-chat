@@ -103,8 +103,8 @@ Route::prefix('v1')->group(function () {
 
         Route::middleware('permission:license.manage')->group(function () {
             Route::get('/license', [LicenseController::class, 'show']);
-            Route::post('/license/revalidate', [LicenseController::class, 'revalidate']);
-            Route::post('/license/deactivate', [LicenseController::class, 'deactivate']);
+            Route::post('/license/sync', [LicenseController::class, 'sync']);
+            Route::post('/licenses/{licenseRecord}/release', [LicenseController::class, 'release']);
         });
 
         Route::middleware('permission:faqs.manage')->group(function () {

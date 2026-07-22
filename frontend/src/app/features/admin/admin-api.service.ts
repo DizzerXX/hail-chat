@@ -171,12 +171,12 @@ export class AdminApiService {
     return this.http.get<{ data: SeatInfo }>(`${api}/license/seats`);
   }
 
-  licenseRevalidate(): Observable<{ data: LicenseInfo }> {
-    return this.http.post<{ data: LicenseInfo }>(`${api}/license/revalidate`, {});
+  licenseSync(): Observable<{ data: LicenseInfo }> {
+    return this.http.post<{ data: LicenseInfo }>(`${api}/license/sync`, {});
   }
 
-  licenseDeactivate(): Observable<unknown> {
-    return this.http.post(`${api}/license/deactivate`, {});
+  licenseRelease(id: number): Observable<{ data: LicenseInfo }> {
+    return this.http.post<{ data: LicenseInfo }>(`${api}/licenses/${id}/release`, {});
   }
 
   // Analytics
