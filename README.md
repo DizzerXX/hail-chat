@@ -135,12 +135,26 @@ Drop the embeddable widget ([backend/public/widget.js](backend/public/widget.js)
 JS, no dependencies) into any page:
 
 ```html
-<script src="https://your-tdechat-host/widget.js"
+<!-- Local development: Reverb is reached directly on 8080, no TLS. -->
+<script src="http://localhost:8000/widget.js"
         data-inbox="website"
         data-reverb-key="YOUR_REVERB_APP_KEY"
-        data-ws-host="your-tdechat-host"
+        data-ws-host="localhost"
         data-ws-port="8080"></script>
+
+<!-- Production behind nginx + TLS: port 443, and data-ws-tls is required. -->
+<script src="https://tdechat.example.com/widget.js"
+        data-inbox="website"
+        data-reverb-key="YOUR_REVERB_APP_KEY"
+        data-ws-host="tdechat.example.com"
+        data-ws-port="443"
+        data-ws-tls="true"></script>
 ```
+
+> Omitting `data-ws-tls="true"` on an HTTPS site is the easy mistake: the widget tries
+> `ws://…:8080`, the connection fails, and it quietly falls back to HTTP polling. Chat still
+> works, just with a delay instead of instant delivery — so check the browser console for a
+> failed websocket if replies feel sluggish.
 
 It renders a floating chat bubble with a pre-chat form (name + BM/EN language), talks to the
 public API, streams bot/agent replies and typing indicators over Reverb (with HTTP polling as
@@ -367,3 +381,236 @@ The REST API is specified in OpenAPI 3.1 at
 contract, covering the public widget API, auth, the agent inbox API, websocket channels and
 all four outbound webhook payloads. Swagger UI is served at **http://localhost:8000/docs**
 while `php artisan serve` is running (no composer package needed; the UI is a static page).
+
+## Deployment (Ubuntu server)
+
+Everything runs comfortably on one box: nginx serves the built Angular app and proxies to
+PHP-FPM and Reverb, with PostgreSQL alongside. Six processes in total — nginx, php-fpm,
+`reverb:start`, `queue:work`, `schedule:work`, and postgres.
+
+### Sizing
+
+| | Development | Production (starting point) |
+|---|---|---|
+| OS | Ubuntu 24.04 LTS | Ubuntu 24.04 LTS |
+| vCPU | 2 | 4 |
+| RAM | 4 GB | 8 GB |
+| Disk | 20 GB SSD | 80 GB SSD |
+
+A dev box wants 4 GB because the Angular production build peaks around 1.5–2 GB — by far the
+largest single consumer. Everything else idles in the hundreds of megabytes, so 2 GB is fine
+if you build the frontend elsewhere.
+
+Three things drive the production numbers, and only one of them is RAM:
+
+- **File descriptors cap your websockets, not memory.** Reverb keeps one persistent connection
+  per open widget and per agent tab in a single event loop, a few KB each. Ubuntu's default
+  1024 open-file limit caps you near a thousand sockets regardless of how much RAM you buy —
+  hence `LimitNOFILE` in the unit file below.
+- **Postgres carries more than your data.** `CACHE_STORE`, `QUEUE_CONNECTION` and
+  `SESSION_DRIVER` all default to `database`, so every queue worker polls it continuously and
+  every cache read is a query. It is the first component to feel load.
+- **Mitel polling is constant.** With `MITEL_ENABLED=true` the scheduler fires every 15s and
+  makes per-item HTTPS calls to MiCC. Cheap on CPU, but it needs `schedule:work` running as a
+  service — a crontab entry only fires once a minute and cannot drive a sub-minute cadence.
+
+> These are estimates from the architecture, not load-test results. Expect 4 vCPU / 8 GB to
+> handle low hundreds of concurrent chats. The scaling order is: move cache and queue to Redis
+> (below), then give Postgres its own host, then run multiple app servers with Reverb scaled
+> over Redis pub/sub.
+
+### Packages
+
+```bash
+sudo apt install -y nginx postgresql-16 \
+  php8.3-fpm php8.3-pgsql php8.3-mbstring php8.3-xml php8.3-curl php8.3-zip php8.3-intl \
+  redis-server        # optional today; see "Scaling" below
+```
+
+Composer 2 is needed to install backend dependencies. Node 20+ is needed **only** if you build
+the frontend on the server — building in CI and shipping the `dist` directory keeps Node off
+production entirely.
+
+### Host layout, and why it matters
+
+Serve the Angular app and the API from **one hostname**. The MiCC work-item `TargetUri` is
+built from `APP_URL` ([Mitel section](#mitel-micc-open-media)) even though `/embed/chat/{uuid}`
+is an Angular route, so a split host silently produces an embed URL that 404s. If you do split
+them, set `MITEL_AGENT_CHAT_URL` explicitly to the frontend host.
+
+### Build the frontend
+
+The shipped `src/environments/environment.ts` points at `localhost`, and the `production`
+build configuration has **no `fileReplacements`** — so a stock production build embeds
+localhost URLs. Add a production environment before building:
+
+```ts
+// frontend/src/environments/environment.production.ts
+export const environment = {
+  apiUrl: 'https://tdechat.example.com',
+  reverb: {
+    key: '<REVERB_APP_KEY from backend/.env>',
+    host: 'tdechat.example.com',
+    port: 443,
+    useTls: true,
+  },
+};
+```
+
+Then add the replacement to the `production` configuration in `angular.json`:
+
+```json
+"fileReplacements": [
+  { "replace": "src/environments/environment.ts",
+    "with": "src/environments/environment.production.ts" }
+]
+```
+
+```bash
+cd frontend && npm ci && npx ng build --configuration production
+# output: dist/frontend/browser  ← this is nginx's root
+```
+
+### Backend setup
+
+```bash
+cd backend
+composer install --no-dev --optimize-autoloader
+cp .env.example .env && php artisan key:generate
+php artisan migrate --force          # never --seed with DevSeeder on production
+php artisan config:cache && php artisan route:cache
+```
+
+Production `.env` essentials — `APP_URL` must be the public hostname, and the `REVERB_*`
+client values must describe what the *browser* connects to (port 443 over TLS, terminated by
+nginx), not Reverb's local listener:
+
+```dotenv
+APP_ENV=production
+APP_DEBUG=false
+APP_URL=https://tdechat.example.com
+
+DB_CONNECTION=pgsql
+DB_HOST=127.0.0.1
+DB_PORT=5432                  # a native install uses 5432; only the dev compose uses 5433
+
+BROADCAST_CONNECTION=reverb
+REVERB_HOST=tdechat.example.com
+REVERB_PORT=443
+REVERB_SCHEME=https
+```
+
+### nginx
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name tdechat.example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/tdechat.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/tdechat.example.com/privkey.pem;
+
+    root /var/www/tdechat/frontend;      # dist/frontend/browser
+    index index.html;
+    client_max_body_size 8m;
+
+    # Laravel owns the API, Swagger UI and the widget assets.
+    location ~ ^/(api|docs|widget\.js|widget-demo\.html|storage)(/|$) {
+        root /var/www/tdechat/backend/public;
+        try_files $uri /index.php?$query_string;
+    }
+
+    location ~ \.php$ {
+        root /var/www/tdechat/backend/public;
+        fastcgi_pass unix:/run/php/php8.3-fpm.sock;
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+    }
+
+    # Reverb. Without the Upgrade headers the websocket never establishes and
+    # the widget silently falls back to polling.
+    location /app/ {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "Upgrade";
+        proxy_set_header Host $host;
+        proxy_read_timeout 3600s;
+    }
+
+    # Angular routes (/agent, /admin, /embed/chat/…) are client-side.
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}
+```
+
+### systemd units
+
+`/etc/systemd/system/tdechat-reverb.service`:
+
+```ini
+[Unit]
+Description=TDEChat Reverb websocket server
+After=network.target postgresql.service
+
+[Service]
+User=www-data
+WorkingDirectory=/var/www/tdechat/backend
+ExecStart=/usr/bin/php artisan reverb:start --host=127.0.0.1 --port=8080
+Restart=always
+RestartSec=5
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target
+```
+
+`tdechat-queue.service` is the same with
+`ExecStart=/usr/bin/php artisan queue:work --sleep=1 --tries=3 --max-time=3600`, and
+`tdechat-scheduler.service` with `ExecStart=/usr/bin/php artisan schedule:work`. The scheduler
+is only required when `MITEL_ENABLED=true`; otherwise the usual
+`* * * * * php artisan schedule:run` crontab line is enough.
+
+```bash
+sudo systemctl enable --now tdechat-reverb tdechat-queue tdechat-scheduler
+```
+
+Restart the queue worker on every deploy (`systemctl restart tdechat-queue`) so it picks up
+new code — long-running workers hold the old classes in memory.
+
+### PostgreSQL
+
+Starting points for an 8 GB box, in `/etc/postgresql/16/main/postgresql.conf`:
+
+```conf
+shared_buffers = 2GB              # ~25% of RAM
+effective_cache_size = 6GB
+work_mem = 16MB
+maintenance_work_mem = 512MB
+```
+
+Back it up daily and keep the dump off the box:
+
+```bash
+pg_dump -Fc tdechat > /var/backups/tdechat-$(date +%F).dump
+```
+
+### Scaling
+
+The cheapest capacity win needs no code change: move cache and queue off Postgres onto the
+Redis you already installed.
+
+```dotenv
+CACHE_STORE=redis
+QUEUE_CONNECTION=redis
+SESSION_DRIVER=redis
+```
+
+### Post-deploy checklist
+
+- Change the seeded `admin@tdechat.test` password, or delete the account.
+- `php artisan mitel:check` if the Mitel integration is enabled — it validates config, takes a
+  token, and lists live queues.
+- Load `https://tdechat.example.com/widget-demo.html`, send a message, and confirm an agent
+  sees it appear without refreshing (proves nginx is proxying websockets correctly).
