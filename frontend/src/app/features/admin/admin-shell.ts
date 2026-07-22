@@ -1,8 +1,7 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
-import { MatMenuModule } from '@angular/material/menu';
-import { MatTooltipModule } from '@angular/material/tooltip';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { NavRail } from '../../core/nav-rail';
 import { AuthService } from '../../core/auth.service';
 
 interface NavItem {
@@ -14,21 +13,15 @@ interface NavItem {
 
 @Component({
   selector: 'app-admin-shell',
-  imports: [
-    RouterOutlet,
-    RouterLink,
-    RouterLinkActive,
-    MatIconModule,
-    MatMenuModule,
-    MatTooltipModule,
-  ],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, MatIconModule, NavRail],
   template: `
     <div class="shell">
+      <app-nav-rail />
+
       <aside class="sidebar">
-        <a routerLink="/admin" class="brand">
-          <span class="brand-mark"><mat-icon>space_dashboard</mat-icon></span>
-          <span class="brand-text">TDEChat<small>Admin</small></span>
-        </a>
+        <header class="pane-head">
+          <h2>Admin</h2>
+        </header>
 
         <nav class="nav">
           @for (item of visibleNav(); track item.path) {
@@ -38,25 +31,6 @@ interface NavItem {
             </a>
           }
         </nav>
-
-        <span class="spacer"></span>
-
-        <a routerLink="/agent" class="nav-item agent-link">
-          <mat-icon>headset_mic</mat-icon>
-          <span>Agent view</span>
-        </a>
-
-        <button class="user" [matMenuTriggerFor]="userMenu">
-          <span class="avatar">{{ initials() }}</span>
-          <span class="user-name">{{ auth.user()?.name }}</span>
-          <mat-icon class="more">expand_less</mat-icon>
-        </button>
-        <mat-menu #userMenu="matMenu">
-          <button mat-menu-item (click)="logout()">
-            <mat-icon>logout</mat-icon>
-            Sign out
-          </button>
-        </mat-menu>
       </aside>
 
       <main class="content">
@@ -77,54 +51,30 @@ interface NavItem {
       overflow: hidden;
     }
     .sidebar {
-      width: 240px;
+      width: 280px;
       flex-shrink: 0;
       display: flex;
       flex-direction: column;
-      padding: 16px 12px;
       background: var(--tde-panel);
       border-right: 1px solid var(--tde-border);
+      overflow: hidden;
     }
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 6px 8px 18px;
-      text-decoration: none;
-      color: var(--tde-ink);
-    }
-    .brand-mark {
-      display: grid;
-      place-items: center;
-      width: 38px;
-      height: 38px;
-      border-radius: 10px;
-      background: var(--tde-accent);
-      color: #fff;
+    .pane-head {
+      padding: 18px 20px 10px;
 
-      mat-icon {
-        font-size: 22px;
-        width: 22px;
-        height: 22px;
-      }
-    }
-    .brand-text {
-      display: flex;
-      flex-direction: column;
-      font-size: 16px;
-      font-weight: 600;
-      line-height: 1.1;
-
-      small {
-        font-size: 11px;
-        font-weight: 500;
-        color: var(--tde-muted);
+      h2 {
+        margin: 0;
+        font-size: 17px;
+        font-weight: 600;
+        color: var(--tde-ink);
       }
     }
     .nav {
       display: flex;
       flex-direction: column;
       gap: 2px;
+      padding: 4px 10px;
+      overflow-y: auto;
     }
     .nav-item {
       display: flex;
@@ -151,66 +101,15 @@ interface NavItem {
         color: #fff;
       }
     }
-    .agent-link {
-      color: var(--tde-accent);
-      margin-bottom: 6px;
-
-      &:hover {
-        background: var(--tde-accent-soft);
-        color: var(--tde-accent);
-      }
-    }
-    .user {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      width: 100%;
-      border: 0;
-      cursor: pointer;
-      padding: 8px;
-      border-radius: 10px;
-      background: var(--tde-bubble);
-      color: var(--tde-ink);
-      text-align: left;
-
-      &:hover {
-        background: #eef1f6;
-      }
-    }
-    .avatar {
-      display: grid;
-      place-items: center;
-      width: 32px;
-      height: 32px;
-      flex-shrink: 0;
-      border-radius: 50%;
-      background: #39445a;
-      color: #fff;
-      font-size: 13px;
-      font-weight: 500;
-    }
-    .user-name {
-      flex: 1;
-      min-width: 0;
-      font-size: 13px;
-      font-weight: 500;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .more {
-      color: var(--tde-muted);
-      font-size: 20px;
-      width: 20px;
-      height: 20px;
-    }
-    .spacer {
-      flex: 1;
-    }
     .content {
       flex: 1;
       min-width: 0;
       overflow-y: auto;
+    }
+    @media (max-width: 820px) {
+      .sidebar {
+        width: 220px;
+      }
     }
   `,
 })
@@ -228,20 +127,7 @@ export class AdminShell {
     { path: 'license', label: 'License', icon: 'key', permission: 'license.manage' },
   ];
 
-  protected readonly initials = computed(() => {
-    const name = this.auth.user()?.name ?? '?';
-    return name
-      .split(/\s+/)
-      .slice(0, 2)
-      .map((part) => part.charAt(0).toUpperCase())
-      .join('');
-  });
-
   protected visibleNav(): NavItem[] {
     return this.nav.filter((item) => this.auth.hasPermission(item.permission));
-  }
-
-  protected logout(): void {
-    void this.auth.logout();
   }
 }
