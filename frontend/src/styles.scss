@@ -9,6 +9,67 @@ html {
       density: 0,
     )
   );
+
+  /*
+   * Component token overrides pull Material's inputs, selects, chips and
+   * button toggles onto the workspace palette below. These are the supported
+   * M3 override mixins — preferred over targeting Material's internal
+   * selectors, which tie on specificity and break on version bumps.
+   */
+  @include mat.form-field-overrides(
+    (
+      outlined-container-shape: 10px,
+      outlined-outline-color: #dde3ec,
+      outlined-hover-outline-color: #c3cddb,
+      outlined-focus-outline-color: var(--tde-accent),
+      outlined-focus-outline-width: 2px,
+      outlined-label-text-color: var(--tde-muted),
+      outlined-hover-label-text-color: var(--tde-muted),
+      outlined-focus-label-text-color: var(--tde-accent),
+      outlined-input-text-color: var(--tde-ink),
+      outlined-input-text-placeholder-color: var(--tde-muted),
+      outlined-caret-color: var(--tde-accent),
+    )
+  );
+
+  @include mat.select-overrides(
+    (
+      enabled-trigger-text-color: var(--tde-ink),
+      placeholder-text-color: var(--tde-muted),
+      enabled-arrow-color: var(--tde-muted),
+      focused-arrow-color: var(--tde-accent),
+      panel-background-color: var(--tde-panel),
+    )
+  );
+
+  @include mat.chips-overrides(
+    (
+      container-shape-radius: 8px,
+      container-height: 26px,
+      outline-width: 0,
+      flat-selected-outline-width: 0,
+      elevated-container-color: var(--tde-bubble),
+      label-text-color: var(--tde-ink),
+      label-text-size: 12px,
+      label-text-weight: 500,
+      elevated-selected-container-color: var(--tde-accent-soft),
+      selected-label-text-color: var(--tde-accent),
+    )
+  );
+
+  @include mat.button-toggle-overrides(
+    (
+      shape: 10px,
+      height: 38px,
+      background-color: var(--tde-panel),
+      text-color: var(--tde-muted),
+      divider-color: var(--tde-border),
+      selected-state-background-color: var(--tde-accent-soft),
+      selected-state-text-color: var(--tde-accent),
+      label-text-size: 13px,
+      label-text-weight: 500,
+    )
+  );
 }
 
 :root {
@@ -122,6 +183,16 @@ table.mat-mdc-table {
   /* Toggles carry no subscript space of their own, so they need their own. */
   mat-slide-toggle {
     margin: 4px 0;
+  }
+
+  /* Stretched by the column layout, so split the width between the options
+     instead of leaving dead space at the group's trailing edge. */
+  mat-button-toggle-group {
+    width: 100%;
+
+    mat-button-toggle {
+      flex: 1;
+    }
   }
 }
 
