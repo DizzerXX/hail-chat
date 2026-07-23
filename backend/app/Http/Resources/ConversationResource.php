@@ -25,6 +25,7 @@ class ConversationResource extends JsonResource
                 'id' => $this->inbox->id,
                 'slug' => $this->inbox->slug,
                 'name' => $this->inbox->name,
+                'channel_type' => $this->inbox->channel_type,
                 // Agent-facing inbox config; never exposed on the public widget API.
                 ...($request->user() !== null
                     ? ['cms_url' => $this->inbox->channel_config['cms_url'] ?? null]

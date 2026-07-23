@@ -73,7 +73,7 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
                 <mat-icon>alt_route</mat-icon>
               </button>
             }
-            @if (isOpen() && auth.hasPermission('conversations.close')) {
+            @if (isOpen() && auth.hasPermission('conversations.close') && !hideClose()) {
               <button matIconButton matTooltip="Close conversation" (click)="close()">
                 <mat-icon>task_alt</mat-icon>
               </button>
@@ -591,6 +591,15 @@ export class Chat implements OnInit, OnDestroy {
    * take part in the conversation.
    */
   protected readonly isAgent = computed(() => this.auth.user()?.agent != null);
+
+  /**
+   * In the Ignite embed for a Mitel inbox, resolution happens in Ignite — the
+   * agent resolves the MiCC case there, and TDEChat must not offer its own
+   * Close, which would only close TDEChat's record and confuse the two.
+   */
+  protected readonly hideClose = computed(
+    () => this.embedded() && this.conversation()?.inbox?.channel_type === 'mitel_openmedia',
+  );
 
   protected readonly canSend = computed(() => {
     const conversation = this.conversation();

@@ -123,8 +123,10 @@ class MitelProviderTest extends TestCase
         app(MitelOpenMediaProvider::class)->createWorkItem($this->makeMitelConversation());
     }
 
-    public function test_complete_puts_action_complete_and_closes_locally(): void
+    public function test_complete_closes_locally_but_never_touches_micc(): void
     {
+        // The agent resolves the MiCC case manually in Ignite, so TDEChat must
+        // not PUT Complete — even for an active item with a work-item id.
         Http::fake(['micc.test/*' => Http::response(['ok' => true])]);
 
         $conversation = $this->makeMitelConversation([
@@ -137,18 +139,6 @@ class MitelProviderTest extends TestCase
         $this->assertSame(ConversationStatus::Closed, $conversation->fresh()->status);
         $this->assertNotNull($conversation->fresh()->closed_at);
 
-        Http::assertSent(fn (Request $request) => $request->url() === 'https://micc.test/miccsdk/api/v1/openmedia/wi-77'
-            && $request->method() === 'PUT'
-            && $request->data() === ['Action' => 0]);
-    }
-
-    public function test_complete_without_external_id_closes_locally_without_http(): void
-    {
-        $conversation = $this->makeMitelConversation(['status' => ConversationStatus::Active]);
-
-        app(MitelOpenMediaProvider::class)->completeWorkItem($conversation);
-
-        $this->assertSame(ConversationStatus::Closed, $conversation->fresh()->status);
         Http::assertNothingSent();
     }
 

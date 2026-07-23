@@ -233,9 +233,11 @@ historical OData `$search` recovers the final state (`Ended`/`Acd` → closed +
 `conversation.closed` webhook, otherwise abandoned). Freshly created items get a routing
 grace (`MITEL_ROUTING_GRACE`, default 60s) because MiCC takes ~10s to route them, during
 which they exist nowhere queryable. Every transition broadcasts `conversation.updated`.
-Closing while queued/offered credits MiCC with an abandon; closing after ACD marks the
-item handled. Live responses use camelCase keys and string state names — the client accepts
-both those and the swagger's PascalCase/integers.
+**TDEChat never completes a MiCC work item.** On Mitel inboxes the agent resolves the case
+in Ignite, and the poller reflects that resolution back — so a visitor ending the chat closes
+TDEChat's own record (and fires `conversation.closed`) but leaves the agent's Ignite queue
+untouched for them to resolve manually. Live responses use camelCase keys and string state
+names — the client accepts both those and the swagger's PascalCase/integers.
 
 Configuration (`backend/config/mitel.php`, all via env — never hardcoded):
 
@@ -338,8 +340,10 @@ place of the composer, while an ordinary agent — who may not read another agen
 — gets a plain "This conversation is being handled by another agent." notice.
 
 Auto-claiming happens **only** on this route — opening a conversation from the normal
-workspace never silently reassigns it. The Close button is kept in the embed, so resolving
-there still completes the MiCC work item and opens the inbox's CMS URL if one is set.
+workspace never silently reassigns it. The embed **hides the Close button on Mitel inboxes**,
+because the agent resolves the case in Ignite — TDEChat must not offer a competing "close"
+that would only touch its own record. (On standalone inboxes the embed keeps Close, which
+also opens the inbox's CMS URL if one is set.)
 
 An inbox can optionally point at an external CMS/ticketing system: set **CMS URL** in the
 inbox dialog (stored as `channel_config.cms_url`, validated as an http(s) URL). When set,

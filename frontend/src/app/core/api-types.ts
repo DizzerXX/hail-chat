@@ -30,7 +30,13 @@ export interface Conversation {
   status: ConversationStatus;
   language: string;
   visitor: { name: string | null; email: string | null; phone: string | null };
-  inbox?: { id: number; slug: string; name: string; cms_url?: string | null };
+  inbox?: {
+    id: number;
+    slug: string;
+    name: string;
+    channel_type?: 'standalone' | 'mitel_openmedia';
+    cms_url?: string | null;
+  };
   assigned_agent?: { id: number; display_name: string } | null;
   team?: { id: number; name: string } | null;
   meta: Record<string, unknown> | null;

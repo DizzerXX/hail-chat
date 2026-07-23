@@ -66,10 +66,11 @@ class MitelOpenMediaProvider implements PollableProviderInterface, QueueDirector
 
     public function completeWorkItem(Conversation $conversation): void
     {
-        if ($conversation->external_work_item_id !== null) {
-            $this->client->putAction($conversation->external_work_item_id, MitelWorkItemAction::Complete);
-        }
-
+        // Deliberately does NOT complete the MiCC work item. On Mitel inboxes the
+        // agent resolves the case manually in Ignite; the poller reflects that
+        // resolution back into TDEChat. Auto-completing here (e.g. when the
+        // visitor ends the chat) would close the agent's Ignite queue out from
+        // under them. TDEChat still records its own conversation as closed.
         $conversation->status = ConversationStatus::Closed;
         $conversation->closed_at = now();
         $conversation->save();
