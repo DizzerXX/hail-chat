@@ -50,7 +50,7 @@ return [
         'notification-6.mp3',
         'notification-7.mp3',
         'notification-8.mp3',
-        'notification-9.mp3',
+        'notification-9.wav',
     ],
 
     // Fixed alert played to the agent on a customer-idle warning (not selectable).

@@ -14,7 +14,7 @@ listed in `backend/config/chat.php` under `notification_sounds`:
 - notification-6.mp3
 - notification-7.mp3
 - notification-8.mp3
-- notification-9.mp3
+- notification-9.wav
 
 Fixed customer-idle warning alert (not selectable):
 
