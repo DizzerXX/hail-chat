@@ -1,5 +1,6 @@
 <?php
 
+use App\Jobs\IdleSweepJob;
 use App\Jobs\LicenseSyncJob;
 use App\Jobs\PollOpenMediaWorkItems;
 use Illuminate\Foundation\Inspiring;
@@ -20,6 +21,10 @@ Artisan::command('inspire', function () {
 if (config('license.url') !== '' && (string) config('license.platform_id') !== '') {
     Schedule::job(new LicenseSyncJob())->hourly();
 }
+
+// Idle handling for standalone conversations: warn/close silent customers and
+// nudge idle agents. Runs every minute; the job itself honours idle_enabled.
+Schedule::job(new IdleSweepJob())->everyMinute()->withoutOverlapping();
 
 if (config('mitel.enabled')) {
     $poll = Schedule::job(new PollOpenMediaWorkItems())->withoutOverlapping();

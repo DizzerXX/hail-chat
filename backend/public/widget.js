@@ -41,7 +41,7 @@
   // ---------- styles ----------
   const css = `
   .tdec-btn{position:fixed;right:20px;bottom:20px;width:56px;height:56px;border-radius:50%;
-    background:#2a78d6;color:#fff;border:none;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.25);
+    background:var(--tdec-accent,#2a78d6);color:#fff;border:none;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.25);
     font-size:24px;z-index:2147483000;display:flex;align-items:center;justify-content:center}
   .tdec-btn:hover{background:#1c5cab}
   .tdec-panel{position:fixed;right:20px;bottom:88px;width:360px;max-width:calc(100vw - 40px);
@@ -49,12 +49,12 @@
     box-shadow:0 12px 40px rgba(0,0,0,.28);display:none;flex-direction:column;z-index:2147483000;
     font-family:system-ui,-apple-system,'Segoe UI',sans-serif;font-size:14px;color:#1c1b1f}
   .tdec-panel.open{display:flex}
-  .tdec-head{background:#2a78d6;color:#fff;padding:14px 16px}
+  .tdec-head{background:var(--tdec-accent,#2a78d6);color:#fff;padding:14px 16px}
   .tdec-head h3{margin:0;font-size:15px;font-weight:600}
   .tdec-status{font-size:12px;opacity:.85;margin-top:2px}
   .tdec-msgs{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:8px;background:#f7f7f5}
   .tdec-msg{max-width:80%;padding:8px 12px;border-radius:12px;white-space:pre-wrap;word-break:break-word;line-height:1.35}
-  .tdec-msg.visitor{align-self:flex-end;background:#2a78d6;color:#fff;border-bottom-right-radius:4px}
+  .tdec-msg.visitor{align-self:flex-end;background:var(--tdec-accent,#2a78d6);color:#fff;border-bottom-right-radius:4px}
   .tdec-msg.agent,.tdec-msg.bot{align-self:flex-start;background:#fff;border:1px solid #e1e0d9;border-bottom-left-radius:4px}
   .tdec-msg.bot{border-style:dashed}
   .tdec-msg.system{align-self:center;background:none;color:#898781;font-size:12px;padding:2px}
@@ -65,14 +65,14 @@
   .tdec-typing.on{display:block}
   .tdec-foot{border-top:1px solid #e1e0d9;padding:10px;display:flex;gap:8px;background:#fff}
   .tdec-input{flex:1;border:1px solid #c3c2b7;border-radius:8px;padding:9px 12px;font:inherit;resize:none;max-height:90px}
-  .tdec-send{background:#2a78d6;color:#fff;border:none;border-radius:8px;padding:0 14px;cursor:pointer;font-size:16px}
+  .tdec-send{background:var(--tdec-accent,#2a78d6);color:#fff;border:none;border-radius:8px;padding:0 14px;cursor:pointer;font-size:16px}
   .tdec-send:disabled{opacity:.4;cursor:default}
   .tdec-bar{display:flex;gap:8px;padding:8px 10px;background:#fff;border-top:1px solid #e1e0d9}
-  .tdec-link{background:none;border:none;color:#2a78d6;cursor:pointer;font-size:12px;padding:4px}
+  .tdec-link{background:none;border:none;color:var(--tdec-accent,#2a78d6);cursor:pointer;font-size:12px;padding:4px}
   .tdec-pre{padding:18px;display:flex;flex-direction:column;gap:10px;background:#f7f7f5;flex:1}
   .tdec-pre label{font-size:12px;color:#52514e}
   .tdec-pre input,.tdec-pre select{border:1px solid #c3c2b7;border-radius:8px;padding:9px 12px;font:inherit;width:100%;box-sizing:border-box}
-  .tdec-pre .tdec-start{background:#2a78d6;color:#fff;border:none;border-radius:8px;padding:11px;cursor:pointer;font:inherit;margin-top:4px}
+  .tdec-pre .tdec-start{background:var(--tdec-accent,#2a78d6);color:#fff;border:none;border-radius:8px;padding:11px;cursor:pointer;font:inherit;margin-top:4px}
   `;
 
   // ---------- DOM ----------
@@ -151,12 +151,28 @@
   refs.escalate.addEventListener('click', escalate);
   refs.end.addEventListener('click', endChat);
 
+  loadTheme();
+
   const savedUuid = localStorage.getItem(storageKey);
   if (savedUuid) {
     resume(savedUuid);
   }
 
   // ---------- flows ----------
+  async function loadTheme() {
+    try {
+      const response = await fetch(config.api + '/api/v1/public/app-config', {
+        headers: { Accept: 'application/json' },
+      });
+      if (!response.ok) return;
+      const body = await response.json();
+      const color = body && body.data && body.data.bubble_color;
+      if (color) document.documentElement.style.setProperty('--tdec-accent', color);
+    } catch (e) {
+      /* keep the default accent */
+    }
+  }
+
   function toggle(show) {
     open = show;
     panel.classList.toggle('open', show);

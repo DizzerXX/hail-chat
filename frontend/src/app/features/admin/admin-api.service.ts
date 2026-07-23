@@ -7,6 +7,7 @@ import {
   AdminUser,
   AgentDirectoryEntry,
   AnalyticsSummary,
+  ChatSettings,
   FaqGroup,
   FaqTranslation,
   LicenseInfo,
@@ -176,6 +177,15 @@ export class AdminApiService {
 
   licenseRelease(id: number): Observable<{ data: LicenseInfo }> {
     return this.http.post<{ data: LicenseInfo }>(`${api}/licenses/${id}/release`, {});
+  }
+
+  // Chat settings
+  chatSettings(): Observable<{ data: ChatSettings }> {
+    return this.http.get<{ data: ChatSettings }>(`${api}/chat-settings`);
+  }
+
+  saveChatSettings(payload: Partial<ChatSettings>): Observable<{ data: ChatSettings }> {
+    return this.http.put<{ data: ChatSettings }>(`${api}/chat-settings`, payload);
   }
 
   // Analytics

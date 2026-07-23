@@ -27,6 +27,7 @@ class RolePermissionSeeder extends Seeder
         'messages.send' => 'Send messages in conversations',
         'analytics.view' => 'View dashboards and reports',
         'license.manage' => 'View and manage the installation license',
+        'settings.manage' => 'View and edit chat settings',
     ];
 
     /**

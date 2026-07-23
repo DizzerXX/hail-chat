@@ -20,7 +20,7 @@ info:
     |---------|------|--------|
     | `conversation.{uuid}` | public | `conversation.updated`, `message.sent`, `message.translated`, `agent.typing` |
     | `private-inbox.{inboxId}` | private | `conversation.created`, `conversation.updated`, `message.sent`, `message.translated` |
-    | `private-agents.{agentId}` | private | `conversation.updated` (when assigned) |
+    | `private-agents.{agentId}` | private | `conversation.updated` (when assigned), `agent.notified` (idle prompts) |
 
     Private channels authenticate via `POST /api/broadcasting/auth` (bearer token).
 
@@ -111,6 +111,25 @@ paths:
                     type: array
                     items: { $ref: '#/components/schemas/Faq' }
         '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/v1/public/app-config:
+    get:
+      tags: [Public]
+      summary: Widget theme config
+      description: Unauthenticated. Minimal theme values the embeddable widget reads on load.
+      operationId: publicAppConfig
+      responses:
+        '200':
+          description: Theme
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      bubble_color: { type: string, example: '#2f80ed' }
 
   /api/v1/public/conversations/{conversationUuid}:
     get:
@@ -710,6 +729,44 @@ paths:
                 properties:
                   data: { $ref: '#/components/schemas/LicenseInfo' }
         '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/v1/admin/chat-settings:
+    get:
+      tags: [Admin]
+      summary: Read chat settings
+      description: Permission `settings.manage`. Idle timers, bubble colour, notification sound and warning text, plus the selectable sound options.
+      operationId: adminChatSettings
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Settings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/ChatSettings' }
+    put:
+      tags: [Admin]
+      summary: Update chat settings
+      description: Permission `settings.manage`. Warning thresholds must increase (1st < 2nd < auto-close); sound must be one of the offered options.
+      operationId: updateChatSettings
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChatSettings' }
+      responses:
+        '200':
+          description: Updated settings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/ChatSettings' }
+        '422': { $ref: '#/components/responses/ValidationError' }
 
   /api/v1/admin/inboxes:
     get:
@@ -1732,6 +1789,30 @@ components:
           oneOf:
             - $ref: '#/components/schemas/Agent'
             - type: 'null'
+
+    ChatSettings:
+      type: object
+      properties:
+        idle_enabled: { type: boolean }
+        customer_warn1_minutes: { type: integer, example: 5 }
+        customer_warn2_minutes: { type: integer, example: 8 }
+        customer_close_minutes: { type: integer, example: 10 }
+        agent_idle_minutes: { type: integer, example: 2 }
+        bubble_color: { type: string, example: '#2f80ed' }
+        notification_sound: { type: string, example: 'notification-1.mp3' }
+        warn1_ms: { type: string }
+        warn1_en: { type: string }
+        warn2_ms: { type: string }
+        warn2_en: { type: string }
+        closed_ms: { type: string }
+        closed_en: { type: string }
+        available_sounds:
+          type: array
+          items: { type: string }
+          description: Read-only — the selectable notification sounds (GET only).
+        warning_sound:
+          type: string
+          description: Read-only — the fixed customer-idle alert (GET only).
 
     LicenseInfo:
       type: object

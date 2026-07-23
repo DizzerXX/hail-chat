@@ -86,6 +86,8 @@ html {
   --tde-amber: #f2a33c;
   --tde-red: #ef5350;
   --tde-shadow: 0 1px 3px rgba(24, 39, 75, 0.06);
+  /* Agent message bubble; overridden at runtime from Chat Settings. */
+  --tde-agent-bubble: var(--tde-accent);
 }
 
 html,

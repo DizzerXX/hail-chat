@@ -25,6 +25,7 @@ import { Conversation, Message, PublicFaq } from '../../core/api-types';
 import { AppConfigService } from '../../core/app-config.service';
 import { AuthService } from '../../core/auth.service';
 import { EchoService } from '../../core/echo.service';
+import { NotificationService } from '../../core/notification.service';
 import { AgentApiService } from './agent-api.service';
 import { RerouteDialog, RerouteTarget } from './reroute-dialog';
 
@@ -372,7 +373,7 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
       }
     }
     .bubble.agent {
-      background: var(--tde-accent);
+      background: var(--tde-agent-bubble);
       color: #fff;
 
       .head {
@@ -554,6 +555,7 @@ export class Chat implements OnInit, OnDestroy {
   protected readonly appConfig = inject(AppConfigService);
   private readonly api = inject(AgentApiService);
   private readonly echoService = inject(EchoService);
+  private readonly notifications = inject(NotificationService);
   private readonly route = inject(ActivatedRoute);
   private readonly dialog = inject(MatDialog);
   private readonly snackBar = inject(MatSnackBar);
@@ -664,6 +666,8 @@ export class Chat implements OnInit, OnDestroy {
 
   private async switchTo(uuid: string): Promise<void> {
     this.stopTyping();
+    // Opening a conversation acknowledges any idle prompts.
+    this.notifications.clear();
     if (this.uuid !== '') {
       this.echoService.echo.leave(`conversation.${this.uuid}`);
     }

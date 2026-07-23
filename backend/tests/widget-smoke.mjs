@@ -86,6 +86,7 @@ function makeSandbox({ storage = {}, responses }) {
       createElement: (tag) => new FakeNode(tag),
       head: new FakeNode('head'),
       body,
+      documentElement: { style: { props: {}, setProperty(k, v) { this.props[k] = v; } } },
     },
     location: { href: 'http://localhost:8010/widget-demo.html', hostname: 'localhost' },
     localStorage: {
@@ -94,6 +95,11 @@ function makeSandbox({ storage = {}, responses }) {
       removeItem: (k) => delete storage[k],
     },
     fetch: async (url, options = {}) => {
+      // The widget fetches public theme config on init; answer it out-of-band
+      // so scenarios don't have to account for it in their response queues.
+      if (String(url).includes('/public/app-config')) {
+        return { ok: true, status: 200, json: async () => ({ data: { bubble_color: '#2f80ed' } }) };
+      }
       const route = responses.shift();
       if (!route) throw new Error('unexpected fetch: ' + url);
       sandbox.lastFetch = { url, options };
@@ -146,7 +152,7 @@ const agentMessage = { id: 3, sender_type: 'agent', agent: { id: 1, display_name
 
 // ---------- scenario 1: fresh start, bot reply, ws events, end chat ----------
 {
-  const { panel, timeouts, sockets, storage } = makeSandbox({
+  const { sandbox, panel, timeouts, sockets, storage } = makeSandbox({
     responses: [
       { status: 201, body: { data: conversation('bot', [visitorMessage, botMessage]) } }, // start
       { status: 201, body: { message: { id: 4, sender_type: 'visitor', body: 'lagi' }, bot_reply: null, status: 'awaiting_acceptance' } }, // send
@@ -164,6 +170,13 @@ const agentMessage = { id: 3, sender_type: 'agent', agent: { id: 1, display_name
     typing: panel.querySelector('.tdec-typing'),
     end: panel.querySelector('.tdec-end'),
   };
+
+  // Theme fetched from the public app-config on init.
+  await new Promise((r) => setTimeout(r, 0));
+  check(
+    sandbox.document.documentElement.style.props['--tdec-accent'] === '#2f80ed',
+    'applies the configured bubble colour',
+  );
 
   refs.first.value = 'hello';
   await refs.start.fire('click');

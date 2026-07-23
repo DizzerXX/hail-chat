@@ -16,6 +16,8 @@ use App\Http\Controllers\Api\V1\Agent\ConversationController as AgentConversatio
 use App\Http\Controllers\Api\V1\Agent\InboxController as AgentInboxController;
 use App\Http\Controllers\Api\V1\Agent\TranslationController;
 use App\Http\Controllers\Api\V1\Auth\AuthController;
+use App\Http\Controllers\Api\V1\Admin\ChatSettingsController;
+use App\Http\Controllers\Api\V1\Public\AppConfigController as PublicAppConfigController;
 use App\Http\Controllers\Api\V1\Public\ConversationController as PublicConversationController;
 use App\Http\Controllers\Api\V1\Public\FaqController as PublicFaqController;
 use Illuminate\Support\Facades\Route;
@@ -26,6 +28,7 @@ Route::prefix('v1')->group(function () {
         Route::post('/inboxes/{inbox:slug}/conversations', [PublicConversationController::class, 'store'])
             ->middleware('throttle:chat-start');
         Route::get('/inboxes/{inbox:slug}/faqs', [PublicFaqController::class, 'index']);
+        Route::get('/app-config', [PublicAppConfigController::class, 'show']);
         Route::get('/conversations/{conversation}', [PublicConversationController::class, 'show']);
         Route::post('/conversations/{conversation}/messages', [PublicConversationController::class, 'message']);
         Route::post('/conversations/{conversation}/escalate', [PublicConversationController::class, 'escalate']);
@@ -105,6 +108,11 @@ Route::prefix('v1')->group(function () {
             Route::get('/license', [LicenseController::class, 'show']);
             Route::post('/license/sync', [LicenseController::class, 'sync']);
             Route::post('/licenses/{licenseRecord}/release', [LicenseController::class, 'release']);
+        });
+
+        Route::middleware('permission:settings.manage')->group(function () {
+            Route::get('/chat-settings', [ChatSettingsController::class, 'show']);
+            Route::put('/chat-settings', [ChatSettingsController::class, 'update']);
         });
 
         Route::middleware('permission:faqs.manage')->group(function () {

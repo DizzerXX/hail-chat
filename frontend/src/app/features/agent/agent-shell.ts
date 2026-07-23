@@ -1,6 +1,8 @@
-import { Component } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
+import { AppConfigService } from '../../core/app-config.service';
 import { NavRail } from '../../core/nav-rail';
+import { NotificationService } from '../../core/notification.service';
 import { ConversationList } from './conversation-list';
 
 @Component({
@@ -54,4 +56,17 @@ import { ConversationList } from './conversation-list';
     }
   `,
 })
-export class AgentShell {}
+export class AgentShell implements OnInit, OnDestroy {
+  private readonly notifications = inject(NotificationService);
+  private readonly appConfig = inject(AppConfigService);
+
+  async ngOnInit(): Promise<void> {
+    // Loads the theme (bubble colour) and the sound choices the notifications need.
+    await this.appConfig.load();
+    this.notifications.start();
+  }
+
+  ngOnDestroy(): void {
+    this.notifications.stop();
+  }
+}

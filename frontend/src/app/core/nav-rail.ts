@@ -6,6 +6,7 @@ import { RouterLink, RouterLinkActive } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { AgentStatus } from './api-types';
 import { AuthService } from './auth.service';
+import { NotificationService } from './notification.service';
 import { AgentApiService } from '../features/agent/agent-api.service';
 
 /**
@@ -31,6 +32,9 @@ import { AgentApiService } from '../features/agent/agent-api.service';
         matTooltipPosition="right"
       >
         <mat-icon>chat_bubble</mat-icon>
+        @if (notifications.unread(); as unread) {
+          <span class="badge">{{ unread > 9 ? '9+' : unread }}</span>
+        }
       </a>
       @if (canSeeAdmin()) {
         <a
@@ -134,6 +138,21 @@ import { AgentApiService } from '../features/agent/agent-api.service';
         }
       }
     }
+    .badge {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      min-width: 16px;
+      height: 16px;
+      padding: 0 3px;
+      border-radius: 8px;
+      background: var(--tde-red);
+      color: #fff;
+      font-size: 10px;
+      font-weight: 600;
+      line-height: 16px;
+      text-align: center;
+    }
     .avatar-btn {
       position: relative;
       border: 0;
@@ -197,6 +216,7 @@ import { AgentApiService } from '../features/agent/agent-api.service';
 })
 export class NavRail {
     protected readonly auth = inject(AuthService);
+    protected readonly notifications = inject(NotificationService);
     private readonly api = inject(AgentApiService);
 
     protected readonly statusOptions: AgentStatus[] = ['available', 'busy', 'away', 'offline'];

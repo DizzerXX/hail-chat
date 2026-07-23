@@ -186,6 +186,35 @@ export interface MitelQueue {
 export interface AppConfig {
   translation: { enabled: boolean; method: 'manual' | 'auto' | null };
   languages: string[];
+  bubble_color: string;
+  notification_sound: string;
+  warning_sound: string;
+}
+
+export interface ChatSettings {
+  idle_enabled: boolean;
+  customer_warn1_minutes: number;
+  customer_warn2_minutes: number;
+  customer_close_minutes: number;
+  agent_idle_minutes: number;
+  bubble_color: string;
+  notification_sound: string;
+  warn1_ms: string;
+  warn1_en: string;
+  warn2_ms: string;
+  warn2_en: string;
+  closed_ms: string;
+  closed_en: string;
+  available_sounds: string[];
+  warning_sound: string;
+}
+
+export interface AgentNotification {
+  type: 'agent_idle' | 'customer_idle';
+  conversation_uuid: string;
+  title: string;
+  body: string;
+  sound: 'warning' | 'notification';
 }
 
 export interface SeatInfo {

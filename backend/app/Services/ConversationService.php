@@ -228,6 +228,44 @@ class ConversationService
         return $conversation;
     }
 
+    /**
+     * Auto-send a visitor-visible idle warning (as a bot message). Used by the
+     * idle sweep; the text is already localised to the conversation language.
+     */
+    public function sendIdleWarning(Conversation $conversation, string $text): Message
+    {
+        return $this->appendMessage($conversation, SenderType::Bot, $text, null, ['idle_warning' => true]);
+    }
+
+    /**
+     * Close a conversation the visitor abandoned. Records it as `abandoned`
+     * (distinct from an agent-resolved close) after showing the visitor a final
+     * message, and fires the `conversation.closed` webhook with reason `idle`.
+     */
+    public function expireForInactivity(Conversation $conversation, string $closingText): Conversation
+    {
+        if (! $conversation->status->isOpen()) {
+            return $conversation;
+        }
+
+        $this->appendMessage($conversation, SenderType::Bot, $closingText, null, ['idle_closed' => true]);
+
+        $conversation->forceFill([
+            'status' => ConversationStatus::Abandoned,
+            'closed_at' => now(),
+        ])->save();
+
+        $this->webhooks->dispatch(
+            WebhookEvent::ConversationClosed,
+            ['conversation' => $this->payload($conversation), 'closed_by' => 'system', 'reason' => 'idle'],
+            $conversation->inbox,
+        );
+
+        broadcast(new ConversationUpdated($conversation));
+
+        return $conversation;
+    }
+
     public function reroute(Conversation $conversation, ?Team $team, ?Agent $agent): Conversation
     {
         abort_unless(in_array($conversation->status, [

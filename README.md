@@ -314,6 +314,32 @@ and rerouting *to* a busy agent is refused with the same 409.
 settings, so TDEChat never refuses a work item MiCC has already ACD'd — otherwise a chat could
 strand in the Ignite embed with no way to open it.
 
+### Idle handling & chat settings
+
+**Admin → Chat settings** (`settings.manage` permission) configures conversation idle behavior
+and the chat theme. A once-a-minute sweep (`schedule:work`; run `php artisan chat:idle-sweep`
+to trigger manually) watches `active` conversations on **standalone inboxes** — Mitel is exempt,
+since MiCC has its own idle timers. Who is "idle" is decided by the last real (visitor/agent)
+message; the auto-sent notices are bot messages and never reset the clock.
+
+- **Customer idle** (waiting on the visitor): auto-sends a 1st then 2nd warning (visitor-visible,
+  in their language) at the configured minutes, notifying the assigned agent each time with the
+  fixed **warning** sound; at the auto-close threshold the conversation is marked **abandoned**
+  and fires `conversation.closed` (`reason: idle`). Defaults: 5 / 8 / 10 minutes.
+- **Agent idle** (an unanswered visitor message): notifies the agent — a rail badge, the
+  selected **notification** sound, and a desktop notification — repeating every interval until
+  they reply. Default: 2 minutes.
+
+Notifications ride the agent's private channel as `agent.notified`; the dashboard turns them
+into the badge/sound/desktop alert. **Sound files** live in `frontend/public/sounds/` and are
+supplied by the operator — the selectable set is listed in `backend/config/chat.php`
+(`notification_sounds`), plus one fixed `warning.mp3`; a missing file simply plays nothing.
+
+The same screen sets the **chat bubble color**, applied to both the agent dashboard (a
+`--tde-agent-bubble` CSS var) and the visitor widget (fetched from the public
+`GET /api/v1/public/app-config`). All idle behavior can be switched off with the **Enable idle
+handling** toggle.
+
 ### Embedded chat window (MiCC Ignite)
 
 `/embed/chat/{uuid}` renders **only** the chat window — no icon rail, no conversation list —
