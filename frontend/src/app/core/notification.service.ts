@@ -18,6 +18,9 @@ export class NotificationService {
   /** Unread idle prompts since the agent last opened a conversation. */
   readonly unread = signal(0);
 
+  /** The most recent prompt, for surfaces that show it inline (the embed banner). */
+  readonly latest = signal<AgentNotification | null>(null);
+
   private agentId: number | null = null;
 
   start(): void {
@@ -49,8 +52,13 @@ export class NotificationService {
     this.unread.set(0);
   }
 
+  dismiss(): void {
+    this.latest.set(null);
+  }
+
   private handle(payload: AgentNotification): void {
     this.unread.update((n) => n + 1);
+    this.latest.set(payload);
     this.play(payload.sound);
     this.desktop(payload);
   }

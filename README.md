@@ -318,22 +318,27 @@ strand in the Ignite embed with no way to open it.
 
 **Admin → Chat settings** (`settings.manage` permission) configures conversation idle behavior
 and the chat theme. A once-a-minute sweep (`schedule:work`; run `php artisan chat:idle-sweep`
-to trigger manually) watches `active` conversations on **standalone inboxes** — Mitel is exempt,
-since MiCC has its own idle timers. Who is "idle" is decided by the last real (visitor/agent)
-message; the auto-sent notices are bot messages and never reset the clock.
+to trigger manually) watches all `active` conversations. Who is "idle" is decided by the last
+real (visitor/agent) message; the auto-sent notices are bot messages and never reset the clock.
 
 - **Customer idle** (waiting on the visitor): auto-sends a 1st then 2nd warning (visitor-visible,
   in their language) at the configured minutes, notifying the assigned agent each time with the
   fixed **warning** sound; at the auto-close threshold the conversation is marked **abandoned**
   and fires `conversation.closed` (`reason: idle`). Defaults: 5 / 8 / 10 minutes.
-- **Agent idle** (an unanswered visitor message): notifies the agent — a rail badge, the
-  selected **notification** sound, and a desktop notification — repeating every interval until
-  they reply. Default: 2 minutes.
+- **Agent idle** (an unanswered visitor message): notifies the agent — a badge, the selected
+  **notification** sound, and a desktop notification — repeating every interval until they
+  reply. Default: 2 minutes.
 
-Notifications ride the agent's private channel as `agent.notified`; the dashboard turns them
-into the badge/sound/desktop alert. **Sound files** live in `frontend/public/sounds/` and are
-supplied by the operator — the selectable set is listed in `backend/config/chat.php`
-(`notification_sounds`), plus one fixed `warning.mp3`; a missing file simply plays nothing.
+**Mitel inboxes get agent alerts only.** MiCC owns the case lifecycle, so on a Mitel conversation
+the sweep notifies the agent (sound + desktop + banner) but never messages the visitor and never
+auto-closes — the agent resolves in Ignite. Standalone inboxes get the full flow above.
+
+Notifications ride the agent's private channel as `agent.notified`. On the dashboard they surface
+as a rail badge + sound + desktop notification; in the **Ignite embed** (which has no rail) they
+also show as a dismissible banner inside the chat panel, so agents who only ever see the embed
+still get idle prompts. **Sound files** live in `frontend/public/sounds/` and are supplied by the
+operator — the selectable set is listed in `backend/config/chat.php` (`notification_sounds`),
+plus one fixed `warning.mp3`; a missing file simply plays nothing.
 
 The same screen sets the **chat bubble color**, applied to both the agent dashboard (a
 `--tde-agent-bubble` CSS var) and the visitor widget (fetched from the public

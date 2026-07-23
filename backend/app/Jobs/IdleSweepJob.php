@@ -40,9 +40,12 @@ class IdleSweepJob implements ShouldQueue
 
         $now = CarbonImmutable::now();
 
+        // All active conversations — the per-channel branch decides what fires:
+        // standalone gets the full flow (warn visitor + auto-close), Mitel gets
+        // agent alerts only (MiCC owns the case, so no visitor messages and no
+        // auto-close), but both nudge the agent.
         Conversation::query()
             ->where('status', ConversationStatus::Active)
-            ->whereHas('inbox', fn ($query) => $query->where('channel_type', ChannelType::Standalone))
             ->with(['inbox', 'assignedAgent'])
             ->each(fn (Conversation $conversation) => $this->sweep($conversation, $settings, $now, $conversations));
     }
@@ -74,9 +77,11 @@ class IdleSweepJob implements ShouldQueue
             ? $previous
             : ['anchor' => $anchor];
 
+        $isMitel = $conversation->inbox->channel_type === ChannelType::MitelOpenMedia;
+
         $state = $agentsTurn
             ? $this->handleAgentIdle($conversation, $settings, $idle, $state)
-            : $this->handleCustomerIdle($conversation, $settings, $idle, $state, $conversations);
+            : $this->handleCustomerIdle($conversation, $settings, $idle, $state, $conversations, $isMitel);
 
         // Persist once — including a reset, so a reply clears prior warnings.
         if ($state !== $previous) {
@@ -90,8 +95,10 @@ class IdleSweepJob implements ShouldQueue
         int $idle,
         array $state,
         ConversationService $conversations,
+        bool $isMitel,
     ): array {
-        if ($idle >= $settings->customer_close_minutes) {
+        // Auto-close is standalone-only; on Mitel the agent resolves in Ignite.
+        if (! $isMitel && $idle >= $settings->customer_close_minutes) {
             $conversations->expireForInactivity(
                 $conversation,
                 $settings->text('closed', $conversation->language),
@@ -101,10 +108,10 @@ class IdleSweepJob implements ShouldQueue
         }
 
         if ($idle >= $settings->customer_warn2_minutes && ! ($state['warn2'] ?? false)) {
-            $this->warnCustomer($conversation, $settings, 'warn2', $conversations);
+            $this->warnCustomer($conversation, $settings, 'warn2', $conversations, $isMitel);
             $state['warn2'] = true;
         } elseif ($idle >= $settings->customer_warn1_minutes && ! ($state['warn1'] ?? false)) {
-            $this->warnCustomer($conversation, $settings, 'warn1', $conversations);
+            $this->warnCustomer($conversation, $settings, 'warn1', $conversations, $isMitel);
             $state['warn1'] = true;
         }
 
@@ -116,8 +123,12 @@ class IdleSweepJob implements ShouldQueue
         ChatSettings $settings,
         string $stage,
         ConversationService $conversations,
+        bool $isMitel,
     ): void {
-        $conversations->sendIdleWarning($conversation, $settings->text($stage, $conversation->language));
+        // The visitor-facing warning is standalone-only; Mitel just alerts the agent.
+        if (! $isMitel) {
+            $conversations->sendIdleWarning($conversation, $settings->text($stage, $conversation->language));
+        }
 
         $this->notifyAgent(
             $conversation,

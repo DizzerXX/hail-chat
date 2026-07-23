@@ -1,4 +1,6 @@
-import { Component } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject } from '@angular/core';
+import { AppConfigService } from '../../core/app-config.service';
+import { NotificationService } from '../../core/notification.service';
 import { Chat } from './chat';
 
 /**
@@ -7,7 +9,9 @@ import { Chat } from './chat';
  * lands straight in the conversation they just accepted there.
  *
  * Exists as a wrapper because Chat's host is `flex: 1` and needs a flex parent;
- * the agent shell normally provides one.
+ * the agent shell normally provides one. It also starts the notification
+ * listener here (the full dashboard does it in AgentShell), so idle prompts
+ * reach agents who only ever see the embed.
  */
 @Component({
   selector: 'app-embed-chat',
@@ -22,4 +26,16 @@ import { Chat } from './chat';
     }
   `,
 })
-export class EmbedChat {}
+export class EmbedChat implements OnInit, OnDestroy {
+  private readonly notifications = inject(NotificationService);
+  private readonly appConfig = inject(AppConfigService);
+
+  async ngOnInit(): Promise<void> {
+    await this.appConfig.load();
+    this.notifications.start();
+  }
+
+  ngOnDestroy(): void {
+    this.notifications.stop();
+  }
+}

@@ -127,19 +127,36 @@ class IdleSweepTest extends TestCase
         $this->assertArrayNotHasKey('warn1', $meta, 'a reply must reset the customer-idle flags');
     }
 
-    public function test_mitel_conversations_are_never_swept(): void
+    public function test_mitel_customer_idle_alerts_the_agent_but_never_messages_the_visitor_or_closes(): void
     {
         Event::fake([AgentNotified::class]);
         $conversation = $this->conversation(ChannelType::MitelOpenMedia);
+        // Agent spoke last 15 min ago → customer idle, past every threshold.
         $this->message($conversation, SenderType::Visitor, 20);
         $this->message($conversation, SenderType::Agent, 15);
 
         $this->sweep();
 
+        // The agent is nudged...
+        Event::assertDispatched(AgentNotified::class, fn ($e) => $e->type === 'customer_idle' && $e->sound === 'warning');
+        // ...but MiCC owns the case: no visitor warning, and never auto-closed.
         $this->assertSame(ConversationStatus::Active, $conversation->fresh()->status);
         $this->assertSame(0, Message::where('conversation_id', $conversation->id)
             ->where('sender_type', 'bot')->count());
-        Event::assertNotDispatched(AgentNotified::class);
+    }
+
+    public function test_mitel_agent_idle_nudges_the_agent(): void
+    {
+        Event::fake([AgentNotified::class]);
+        $conversation = $this->conversation(ChannelType::MitelOpenMedia);
+        // Visitor spoke last → agent's turn.
+        $this->message($conversation, SenderType::Agent, 9);
+        $this->message($conversation, SenderType::Visitor, 5);
+
+        $this->sweep();
+
+        Event::assertDispatched(AgentNotified::class, fn ($e) => $e->type === 'agent_idle');
+        $this->assertSame(ConversationStatus::Active, $conversation->fresh()->status);
     }
 
     public function test_disabled_idle_does_nothing(): void

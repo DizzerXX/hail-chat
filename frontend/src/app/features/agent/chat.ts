@@ -81,6 +81,19 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
             }
           </header>
 
+          @if (idleBanner(); as note) {
+            <div class="idle-banner" [class.warn]="note.sound === 'warning'">
+              <mat-icon>{{ note.sound === 'warning' ? 'notifications_active' : 'schedule' }}</mat-icon>
+              <div class="idle-text">
+                <strong>{{ note.title }}</strong>
+                <span>{{ note.body }}</span>
+              </div>
+              <button matIconButton (click)="notifications.dismiss()" aria-label="Dismiss">
+                <mat-icon>close</mat-icon>
+              </button>
+            </div>
+          }
+
           @if (busy()) {
             <mat-progress-bar mode="indeterminate" />
           }
@@ -277,6 +290,37 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
       gap: 8px;
       font-size: 12px;
       color: var(--tde-muted);
+    }
+    .idle-banner {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--tde-border);
+      background: var(--tde-accent-soft);
+      color: var(--tde-accent);
+
+      &.warn {
+        background: #fdf1de;
+        color: #c07d1c;
+      }
+      .idle-text {
+        display: flex;
+        flex-direction: column;
+        line-height: 1.3;
+
+        strong {
+          font-size: 13px;
+        }
+        span {
+          font-size: 12.5px;
+          opacity: 0.85;
+        }
+      }
+      button {
+        margin-left: auto;
+        color: inherit;
+      }
     }
     .status-pill {
       padding: 1px 8px;
@@ -595,7 +639,7 @@ export class Chat implements OnInit, OnDestroy {
   protected readonly appConfig = inject(AppConfigService);
   private readonly api = inject(AgentApiService);
   private readonly echoService = inject(EchoService);
-  private readonly notifications = inject(NotificationService);
+  protected readonly notifications = inject(NotificationService);
   private readonly route = inject(ActivatedRoute);
   private readonly dialog = inject(MatDialog);
   private readonly snackBar = inject(MatSnackBar);
@@ -643,6 +687,15 @@ export class Chat implements OnInit, OnDestroy {
   protected readonly hideClose = computed(
     () => this.embedded() && this.conversation()?.inbox?.channel_type === 'mitel_openmedia',
   );
+
+  /**
+   * The embed has no nav-rail badge, so idle prompts for the conversation on
+   * screen surface as a dismissible banner here instead.
+   */
+  protected readonly idleBanner = computed(() => {
+    const note = this.notifications.latest();
+    return this.embedded() && note?.conversation_uuid === this.conversation()?.uuid ? note : null;
+  });
 
   protected readonly canSend = computed(() => {
     const conversation = this.conversation();
@@ -738,6 +791,7 @@ export class Chat implements OnInit, OnDestroy {
     this.stopTyping();
     // Opening a conversation acknowledges any idle prompts.
     this.notifications.clear();
+    this.notifications.dismiss();
     if (this.uuid !== '') {
       this.echoService.echo.leave(`conversation.${this.uuid}`);
     }
@@ -832,6 +886,8 @@ export class Chat implements OnInit, OnDestroy {
 
     this.draft = '';
     this.stopTyping();
+    // Replying resolves the idle prompt.
+    this.notifications.dismiss();
 
     try {
       const response = await firstValueFrom(this.api.send(this.uuid, body));
