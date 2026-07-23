@@ -88,6 +88,9 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
                 <strong>{{ note.title }}</strong>
                 <span>{{ note.body }}</span>
               </div>
+              @if (followUpText(); as text) {
+                <button matButton class="follow-up" (click)="sendFollowUp(text)">Send follow-up</button>
+              }
               <button matIconButton (click)="notifications.dismiss()" aria-label="Dismiss">
                 <mat-icon>close</mat-icon>
               </button>
@@ -305,6 +308,8 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
         color: #c07d1c;
       }
       .idle-text {
+        flex: 1;
+        min-width: 0;
         display: flex;
         flex-direction: column;
         line-height: 1.3;
@@ -318,8 +323,13 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
         }
       }
       button {
-        margin-left: auto;
         color: inherit;
+      }
+      .follow-up {
+        flex-shrink: 0;
+        background: rgba(255, 255, 255, 0.65);
+        font-size: 12.5px;
+        font-weight: 500;
       }
     }
     .status-pill {
@@ -697,6 +707,15 @@ export class Chat implements OnInit, OnDestroy {
     return this.embedded() && note?.conversation_uuid === this.conversation()?.uuid ? note : null;
   });
 
+  /**
+   * Mitel gets no auto-message, so the customer-idle banner offers the agent a
+   * one-click follow-up (the suggested "still there?" text) when they can send.
+   */
+  protected readonly followUpText = computed(() => {
+    const note = this.idleBanner();
+    return note?.type === 'customer_idle' && note.follow_up && this.canSend() ? note.follow_up : null;
+  });
+
   protected readonly canSend = computed(() => {
     const conversation = this.conversation();
     return (
@@ -897,6 +916,23 @@ export class Chat implements OnInit, OnDestroy {
     } catch {
       this.draft = body;
       this.snackBar.open('Message failed to send.', 'Dismiss', { duration: 4000 });
+    }
+  }
+
+  /** Send the suggested idle follow-up straight to the visitor, then dismiss. */
+  protected async sendFollowUp(text: string): Promise<void> {
+    if (!this.canSend()) {
+      return;
+    }
+    this.notifications.dismiss();
+
+    try {
+      const response = await firstValueFrom(this.api.send(this.uuid, text));
+      if (this.messages().every((message) => message.id !== response.data.id)) {
+        this.messages.update((messages) => [...messages, response.data]);
+      }
+    } catch {
+      this.snackBar.open('Follow-up failed to send.', 'Dismiss', { duration: 4000 });
     }
   }
 

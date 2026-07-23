@@ -125,9 +125,11 @@ class IdleSweepJob implements ShouldQueue
         ConversationService $conversations,
         bool $isMitel,
     ): void {
+        $text = $settings->text($stage, $conversation->language);
+
         // The visitor-facing warning is standalone-only; Mitel just alerts the agent.
         if (! $isMitel) {
-            $conversations->sendIdleWarning($conversation, $settings->text($stage, $conversation->language));
+            $conversations->sendIdleWarning($conversation, $text);
         }
 
         $this->notifyAgent(
@@ -136,6 +138,9 @@ class IdleSweepJob implements ShouldQueue
             'Customer is idle',
             trim(($conversation->visitor_name ?: 'The visitor').' has gone quiet — a follow-up may help.'),
             'warning',
+            // Offer the same message as a one-click follow-up (used on Mitel, where
+            // nothing was auto-sent).
+            $isMitel ? $text : null,
         );
     }
 
@@ -166,13 +171,19 @@ class IdleSweepJob implements ShouldQueue
         return $state;
     }
 
-    private function notifyAgent(Conversation $conversation, string $type, string $title, string $body, string $sound): void
-    {
+    private function notifyAgent(
+        Conversation $conversation,
+        string $type,
+        string $title,
+        string $body,
+        string $sound,
+        ?string $followUp = null,
+    ): void {
         if ($conversation->assignedAgent === null) {
             return;
         }
 
-        event(new AgentNotified($conversation->assignedAgent, $conversation, $type, $title, $body, $sound));
+        event(new AgentNotified($conversation->assignedAgent, $conversation, $type, $title, $body, $sound, $followUp));
     }
 
     private function persistIdleState(Conversation $conversation, array $state): void

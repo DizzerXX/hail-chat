@@ -331,7 +331,9 @@ real (visitor/agent) message; the auto-sent notices are bot messages and never r
 
 **Mitel inboxes get agent alerts only.** MiCC owns the case lifecycle, so on a Mitel conversation
 the sweep notifies the agent (sound + desktop + banner) but never messages the visitor and never
-auto-closes — the agent resolves in Ignite. Standalone inboxes get the full flow above.
+auto-closes — the agent resolves in Ignite. Standalone inboxes get the full flow above. Because
+nothing is auto-sent, the customer-idle banner in the embed carries a **Send follow-up** button
+that fires the suggested "still there?" text to the visitor (as an agent message) in one click.
 
 Notifications ride the agent's private channel as `agent.notified`. On the dashboard they surface
 as a rail badge + sound + desktop notification; in the **Ignite embed** (which has no rail) they

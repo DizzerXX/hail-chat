@@ -137,8 +137,11 @@ class IdleSweepTest extends TestCase
 
         $this->sweep();
 
-        // The agent is nudged...
-        Event::assertDispatched(AgentNotified::class, fn ($e) => $e->type === 'customer_idle' && $e->sound === 'warning');
+        // The agent is nudged, and offered the "still there?" text as a one-click follow-up
+        // (15 min idle → the 2nd-warning text)...
+        Event::assertDispatched(AgentNotified::class, fn ($e) => $e->type === 'customer_idle'
+            && $e->sound === 'warning'
+            && $e->followUp === ChatSettings::current()->text('warn2', 'en'));
         // ...but MiCC owns the case: no visitor warning, and never auto-closed.
         $this->assertSame(ConversationStatus::Active, $conversation->fresh()->status);
         $this->assertSame(0, Message::where('conversation_id', $conversation->id)

@@ -29,6 +29,7 @@ class AgentNotified implements ShouldBroadcastNow
         public string $title,
         public string $body,
         public string $sound,
+        public ?string $followUp = null,
     ) {
     }
 
@@ -53,6 +54,9 @@ class AgentNotified implements ShouldBroadcastNow
             'title' => $this->title,
             'body' => $this->body,
             'sound' => $this->sound,
+            // A suggested visitor follow-up (customer-idle only); the embed offers
+            // it as a one-click send, since Mitel gets no auto-message.
+            'follow_up' => $this->followUp,
         ];
     }
 }

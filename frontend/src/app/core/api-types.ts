@@ -215,6 +215,7 @@ export interface AgentNotification {
   title: string;
   body: string;
   sound: 'warning' | 'notification';
+  follow_up: string | null;
 }
 
 export interface SeatInfo {
