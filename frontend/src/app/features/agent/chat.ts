@@ -198,7 +198,7 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
             <span class="timer-label">{{ isOpen() ? 'Duration' : 'Total time' }}</span>
           </div>
 
-          <div class="visitor">
+          <div class="visitor-card">
             <span class="avatar detail-avatar">{{ visitorInitial() }}</span>
             <div>
               <strong>{{ conversation.visitor.name || 'Anonymous visitor' }}</strong>
@@ -557,7 +557,7 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
         color: var(--tde-muted);
       }
     }
-    .visitor {
+    .visitor-card {
       display: flex;
       align-items: center;
       gap: 12px;
