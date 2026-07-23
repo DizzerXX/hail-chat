@@ -179,6 +179,12 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
         <aside class="details">
           <h3>Details</h3>
 
+          <div class="timer" [class.ended]="!isOpen()">
+            <mat-icon>{{ isOpen() ? 'timer' : 'timer_off' }}</mat-icon>
+            <span class="value">{{ elapsed() }}</span>
+            <span class="timer-label">{{ isOpen() ? 'Duration' : 'Total time' }}</span>
+          </div>
+
           <div class="visitor">
             <span class="avatar detail-avatar">{{ visitorInitial() }}</span>
             <div>
@@ -470,6 +476,40 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
         font-weight: 600;
       }
     }
+    .timer {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 16px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: var(--tde-accent-soft);
+      color: var(--tde-accent);
+
+      mat-icon {
+        font-size: 20px;
+        width: 20px;
+        height: 20px;
+      }
+      .value {
+        font-size: 20px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        line-height: 1;
+      }
+      .timer-label {
+        margin-left: auto;
+        font-size: 11px;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+        opacity: 0.8;
+      }
+      &.ended {
+        background: var(--tde-bubble);
+        color: var(--tde-muted);
+      }
+    }
     .visitor {
       display: flex;
       align-items: center;
@@ -581,6 +621,7 @@ export class Chat implements OnInit, OnDestroy {
   private uuid = '';
   private typingTimer: ReturnType<typeof setTimeout> | null = null;
   private typingActive = false;
+  private clock: ReturnType<typeof setInterval> | null = null;
 
   protected readonly isOpen = computed(() => {
     const status = this.conversation()?.status;
@@ -616,6 +657,31 @@ export class Chat implements OnInit, OnDestroy {
   protected readonly visitorInitial = computed(() =>
     (this.conversation()?.visitor.name || 'A').charAt(0).toUpperCase(),
   );
+
+  /** Ticks every second so the details-card timer stays live while open. */
+  private readonly now = signal(Date.now());
+
+  /**
+   * Elapsed time since the conversation started, counting up while it is open
+   * and frozen at its closed time once it ends.
+   */
+  protected readonly elapsed = computed(() => {
+    const conversation = this.conversation();
+    if (conversation === null) {
+      return '';
+    }
+
+    const start = new Date(conversation.created_at).getTime();
+    const end = conversation.closed_at ? new Date(conversation.closed_at).getTime() : this.now();
+    const total = Math.max(0, Math.floor((end - start) / 1000));
+
+    const h = Math.floor(total / 3600);
+    const m = Math.floor((total % 3600) / 60);
+    const s = total % 60;
+    const pad = (n: number) => n.toString().padStart(2, '0');
+
+    return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+  });
 
   protected readonly composerPlaceholder = computed(() => {
     const conversation = this.conversation();
@@ -656,9 +722,13 @@ export class Chat implements OnInit, OnDestroy {
     });
 
     void this.appConfig.load();
+    this.clock = setInterval(() => this.now.set(Date.now()), 1000);
   }
 
   ngOnDestroy(): void {
+    if (this.clock !== null) {
+      clearInterval(this.clock);
+    }
     if (this.uuid !== '') {
       this.echoService.echo.leave(`conversation.${this.uuid}`);
     }
