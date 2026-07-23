@@ -452,10 +452,18 @@ Three things drive the production numbers, and only one of them is RAM:
 ### Packages
 
 ```bash
-sudo apt install -y nginx postgresql-16 \
-  php8.3-fpm php8.3-pgsql php8.3-mbstring php8.3-xml php8.3-curl php8.3-zip php8.3-intl \
-  redis-server        # optional today; see "Scaling" below
+# The committed composer.lock resolves to Symfony 8 components, which require PHP 8.4.
+# Ubuntu 24.04 only ships 8.3, so add the ondrej PPA:
+sudo add-apt-repository -y ppa:ondrej/php && sudo apt update
+
+sudo apt install -y nginx postgresql redis-server \
+  php8.4-fpm php8.4-pgsql php8.4-mbstring php8.4-xml php8.4-curl php8.4-zip php8.4-intl php8.4-bcmath
+sudo update-alternatives --set php /usr/bin/php8.4   # make the CLI 8.4
 ```
+
+> Don't try to force PHP 8.3 with `composer update` — it trips Composer's security-advisory
+> block on Laravel 11 (the fixes only exist in Laravel 12; staying on 11 is deliberate) and
+> deploys untested dependency versions. Install 8.4 so `composer install` matches the lock.
 
 Composer 2 is needed to install backend dependencies. Node 20+ is needed **only** if you build
 the frontend on the server — building in CI and shipping the `dist` directory keeps Node off
@@ -511,9 +519,12 @@ php artisan migrate --force          # never --seed with DevSeeder on production
 php artisan config:cache && php artisan route:cache
 ```
 
-Production `.env` essentials — `APP_URL` must be the public hostname, and the `REVERB_*`
-client values must describe what the *browser* connects to (port 443 over TLS, terminated by
-nginx), not Reverb's local listener:
+Production `.env` essentials. **`REVERB_HOST` here is the backend's *publish* target, so it
+must point at the local Reverb listener — not the public domain.** Laravel POSTs broadcast
+events (typing, new messages) to `REVERB_HOST`; sending them out through the public
+domain/proxy makes every broadcasting call fail with a 500 and kills realtime. The *browser*
+connects to the public host over TLS, but that is configured separately in the frontend build
+(`environment.ts`), not here.
 
 ```dotenv
 APP_ENV=production
@@ -525,10 +536,16 @@ DB_HOST=127.0.0.1
 DB_PORT=5432                  # a native install uses 5432; only the dev compose uses 5433
 
 BROADCAST_CONNECTION=reverb
-REVERB_HOST=tdechat.example.com
-REVERB_PORT=443
-REVERB_SCHEME=https
+REVERB_HOST=127.0.0.1         # local publish target — NOT the public domain
+REVERB_PORT=8080
+REVERB_SCHEME=http
+REVERB_SERVER_HOST=127.0.0.1
+REVERB_SERVER_PORT=8080
 ```
+
+The browser side lives in `frontend/src/environments/environment.ts` (step above): `host` =
+the public domain, `port: 443`, `useTls: true`. Those two configs are independent — the
+backend talks to Reverb locally, the browser talks to it through nginx/your proxy over `wss`.
 
 ### nginx
 
@@ -543,6 +560,7 @@ server {
     root /var/www/tdechat/frontend;      # dist/frontend/browser
     index index.html;
     client_max_body_size 8m;
+    charset utf-8;                       # serve widget.js et al as UTF-8
 
     # Laravel owns the API, Swagger UI and the widget assets.
     location ~ ^/(api|docs|widget\.js|widget-demo\.html|storage)(/|$) {
@@ -552,7 +570,7 @@ server {
 
     location ~ \.php$ {
         root /var/www/tdechat/backend/public;
-        fastcgi_pass unix:/run/php/php8.3-fpm.sock;
+        fastcgi_pass unix:/run/php/php8.4-fpm.sock;
         include fastcgi_params;
         fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
     }
@@ -599,8 +617,8 @@ WantedBy=multi-user.target
 `tdechat-queue.service` is the same with
 `ExecStart=/usr/bin/php artisan queue:work --sleep=1 --tries=3 --max-time=3600`, and
 `tdechat-scheduler.service` with `ExecStart=/usr/bin/php artisan schedule:work`. The scheduler
-is only required when `MITEL_ENABLED=true`; otherwise the usual
-`* * * * * php artisan schedule:run` crontab line is enough.
+runs the **hourly license sync** and (when `MITEL_ENABLED=true`) the sub-minute MiCC polling,
+so keep it running whenever either licensing or Mitel is configured.
 
 ```bash
 sudo systemctl enable --now tdechat-reverb tdechat-queue tdechat-scheduler

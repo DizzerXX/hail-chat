@@ -80,7 +80,7 @@
   style.textContent = css;
   document.head.appendChild(style);
 
-  const button = element('button', 'tdec-btn', '💬');
+  const button = element('button', 'tdec-btn', '\uD83D\uDCAC');
   button.setAttribute('aria-label', 'Open chat');
 
   const panel = element('div', 'tdec-panel');
@@ -100,20 +100,20 @@
         </select>
       </label>
       <label>How can we help?
-        <input type="text" class="tdec-first" placeholder="Taip mesej anda…" />
+        <input type="text" class="tdec-first" placeholder="Taip mesej anda\u2026" />
       </label>
       <button class="tdec-start">Start chat</button>
     </div>
     <div class="tdec-msgs" style="display:none"></div>
-    <div class="tdec-typing">Agent is typing…</div>
+    <div class="tdec-typing">Agent is typing\u2026</div>
     <div class="tdec-bar" style="display:none">
       <button class="tdec-link tdec-escalate">Talk to a human</button>
       <span style="flex:1"></span>
       <button class="tdec-link tdec-end">End chat</button>
     </div>
     <div class="tdec-foot" style="display:none">
-      <textarea class="tdec-input" rows="1" placeholder="Type a message…"></textarea>
-      <button class="tdec-send" aria-label="Send">➤</button>
+      <textarea class="tdec-input" rows="1" placeholder="Type a message\u2026"></textarea>
+      <button class="tdec-send" aria-label="Send">\u27A4</button>
     </div>
   `;
 
@@ -200,7 +200,7 @@
       // Transient failure (backend/db down): keep the stored conversation
       // and keep retrying until the server comes back.
       show('chat');
-      refs.status.textContent = 'Connection problem — retrying…';
+      refs.status.textContent = 'Connection problem \u2014 retrying\u2026';
       refs.input.disabled = true;
       refs.send.disabled = true;
       setTimeout(() => resume(uuid), 5000);
@@ -269,9 +269,9 @@
 
     const agent = conversation && conversation.assigned_agent;
     const labels = {
-      pending: 'Connecting…',
-      bot: 'Chatbot — ask anything',
-      awaiting_acceptance: 'Waiting for an agent…',
+      pending: 'Connecting\u2026',
+      bot: 'Chatbot \u2014 ask anything',
+      awaiting_acceptance: 'Waiting for an agent\u2026',
       active: agent ? 'Chatting with ' + agent.display_name : 'Agent connected',
       closed: 'Conversation ended',
       abandoned: 'Conversation ended',
@@ -447,7 +447,7 @@
       return null;
     }
 
-    refs.status.textContent = 'Connection problem — retrying…';
+    refs.status.textContent = 'Connection problem \u2014 retrying\u2026';
     return null;
   }
 
