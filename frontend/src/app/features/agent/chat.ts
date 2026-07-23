@@ -121,20 +121,17 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
 
                   <div class="bubble" [class]="message.sender_type">
                     <div class="head">
-                      <span class="name">{{ senderLabel(message) }}</span>
-                      <span class="time">
-                        {{ message.created_at | date: 'h:mm a' }}
-                        @if (canTranslate(message)) {
-                          <button
-                            class="translate-btn"
-                            (click)="translateMessage(message)"
-                            matTooltip="Translate"
-                            aria-label="Translate message"
-                          >
-                            <mat-icon>translate</mat-icon>
-                          </button>
-                        }
-                      </span>
+                      <span class="time">{{ message.created_at | date: 'h:mm a' }}</span>
+                      @if (canTranslate(message)) {
+                        <button
+                          class="translate-btn"
+                          (click)="translateMessage(message)"
+                          matTooltip="Translate"
+                          aria-label="Translate message"
+                        >
+                          <mat-icon>translate</mat-icon>
+                        </button>
+                      }
                     </div>
                     <div class="body">{{ message.body }}</div>
                     @for (entry of translationsOf(message); track entry.lang) {
@@ -413,16 +410,12 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
       .head {
         display: flex;
         align-items: center;
-        justify-content: space-between;
-        gap: 28px;
-        margin-bottom: 4px;
-        font-size: 12px;
+        gap: 6px;
+        margin-bottom: 3px;
+        font-size: 11px;
         color: var(--tde-muted);
       }
       .time {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
         white-space: nowrap;
       }
       .body {
