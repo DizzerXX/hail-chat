@@ -235,7 +235,12 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
             }
           </dl>
 
-          @if (conversation.inbox?.cms_url; as cmsUrl) {
+          @if (cmsRedirectUrl(); as cmsUrl) {
+            <button matButton="filled" class="cms-redirect" (click)="openCms(cmsUrl)">
+              <mat-icon>arrow_forward</mat-icon>
+              Open CMS
+            </button>
+          } @else if (conversation.inbox?.cms_url; as cmsUrl) {
             <a class="cms-link" [href]="cmsUrl" target="_blank" rel="noopener">
               <mat-icon>open_in_new</mat-icon>
               Open CMS
@@ -604,6 +609,10 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
         height: 16px;
       }
     }
+    .cms-redirect {
+      width: 100%;
+      margin-top: 18px;
+    }
     .load-error {
       flex: 1;
       display: grid;
@@ -689,6 +698,15 @@ export class Chat implements OnInit, OnDestroy {
    */
   protected readonly hideClose = computed(
     () => this.embedded() && this.conversation()?.inbox?.channel_type === 'mitel_openmedia',
+  );
+
+  /**
+   * In the embed, once the conversation has ended (resolved in Ignite or
+   * abandoned), offer a button that navigates the embed tab to the inbox's CMS
+   * URL — so the agent can log the case where the chat used to be.
+   */
+  protected readonly cmsRedirectUrl = computed(() =>
+    this.embedded() && !this.isOpen() ? (this.conversation()?.inbox?.cms_url ?? null) : null,
   );
 
   /**
@@ -865,6 +883,11 @@ export class Chat implements OnInit, OnDestroy {
 
   protected async accept(): Promise<void> {
     await this.action(() => firstValueFrom(this.api.accept(this.uuid)), 'Conversation accepted');
+  }
+
+  /** Navigate the embed tab to the CMS (the chat has ended). */
+  protected openCms(url: string): void {
+    window.location.assign(url);
   }
 
   protected async close(): Promise<void> {

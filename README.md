@@ -379,10 +379,16 @@ that would only touch its own record. (On standalone inboxes the embed keeps Clo
 also opens the inbox's CMS URL if one is set.)
 
 An inbox can optionally point at an external CMS/ticketing system: set **CMS URL** in the
-inbox dialog (stored as `channel_config.cms_url`, validated as an http(s) URL). When set,
-the agent dashboard opens that URL in a new tab right after an agent closes a conversation
-in that inbox — handy for logging the interaction in a ticketing system. The URL is only
-exposed on authenticated agent responses, never on the public widget API.
+inbox dialog (stored as `channel_config.cms_url`, validated as an http(s) URL). When set:
+
+- On the **dashboard**, closing a conversation opens the URL in a new tab, and the details
+  card shows an **Open CMS** link (new tab) — handy for logging the interaction.
+- In the **Ignite embed** (where resolution happens in MiCC, not via a TDEChat button), once
+  the conversation has ended — resolved or abandoned — the details card shows an **Open CMS**
+  button that **navigates the embed tab** to the URL, so the agent lands on the CMS to log the
+  case where the chat used to be.
+
+The URL is only exposed on authenticated agent responses, never on the public widget API.
 
 The management REST API behind the admin screens lives under `/api/v1/admin/*`, gated by
 the per-area RBAC permissions (`inboxes.manage`, `faqs.manage`, …) and fully specified in
