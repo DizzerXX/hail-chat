@@ -16,7 +16,7 @@ does not change, only the work-item provider behind it.
 | Backend    | Laravel 11 (PHP 8.3+), PostgreSQL 16, Redis 7 |
 | Websockets | Laravel Reverb (Pusher protocol) |
 | Auth       | Laravel Sanctum (bearer tokens) + custom lightweight RBAC |
-| Queue      | Laravel queue workers (database driver by default; Redis available) |
+| Queue      | Laravel queue workers (Redis driver; cache and sessions on Redis too) |
 | Frontend   | Angular 18+ standalone components (Phase 4) |
 
 Repository layout: [backend/](backend/) (Laravel API + engine), `frontend/` (Angular, arrives
@@ -498,17 +498,19 @@ Three things drive the production numbers, and only one of them is RAM:
   per open widget and per agent tab in a single event loop, a few KB each. Ubuntu's default
   1024 open-file limit caps you near a thousand sockets regardless of how much RAM you buy —
   hence `LimitNOFILE` in the unit file below.
-- **Postgres carries more than your data.** `CACHE_STORE`, `QUEUE_CONNECTION` and
-  `SESSION_DRIVER` all default to `database`, so every queue worker polls it continuously and
-  every cache read is a query. It is the first component to feel load.
+- **Keep Postgres for data only.** `CACHE_STORE`, `QUEUE_CONNECTION` and `SESSION_DRIVER`
+  default to **`redis`**, so cache reads, queue polling and sessions never touch Postgres — cache
+  on Redis DB 1, queue and sessions on DB 0, so `cache:clear` can't drop queued jobs. Reverting
+  any of them to `database` puts that load straight back on Postgres, which is then the first
+  component to feel it.
 - **Mitel polling is constant.** With `MITEL_ENABLED=true` the scheduler fires every 15s and
   makes per-item HTTPS calls to MiCC. Cheap on CPU, but it needs `schedule:work` running as a
   service — a crontab entry only fires once a minute and cannot drive a sub-minute cadence.
 
 > These are estimates from the architecture, not load-test results. Expect 4 vCPU / 8 GB to
-> handle low hundreds of concurrent chats. The scaling order is: move cache and queue to Redis
-> (below), then give Postgres its own host, then run multiple app servers with Reverb scaled
-> over Redis pub/sub.
+> handle low hundreds of concurrent chats. Cache and queue already run on Redis (the default);
+> the remaining scaling order is: give Postgres its own host (below), then run multiple app
+> servers with Reverb scaled over Redis pub/sub.
 
 ### Packages
 
@@ -707,14 +709,11 @@ pg_dump -Fc tdechat > /var/backups/tdechat-$(date +%F).dump
 
 ### Scaling
 
-The cheapest capacity win needs no code change: move cache and queue off Postgres onto the
-Redis you already installed.
-
-```dotenv
-CACHE_STORE=redis
-QUEUE_CONNECTION=redis
-SESSION_DRIVER=redis
-```
+Cache, queue and sessions **run on Redis by default** (`CACHE_STORE`, `QUEUE_CONNECTION`,
+`SESSION_DRIVER` = `redis` in `.env`), so Postgres carries only data. Just make sure
+`redis-server` is running and the `queue:work` worker is pointed at Redis (it follows
+`QUEUE_CONNECTION`; restart the worker after changing it). Cache lives on Redis DB 1 and queue
+on DB 0, so flushing the cache never touches queued jobs.
 
 ### Post-deploy checklist
 
