@@ -707,6 +707,58 @@ Back it up daily and keep the dump off the box:
 pg_dump -Fc tdechat > /var/backups/tdechat-$(date +%F).dump
 ```
 
+#### High availability & point-in-time recovery
+
+TDEChat **owns every conversation and message in Postgres** — there is no external chat store to
+fall back on, and since cache/queue/sessions moved to Redis, Postgres is now the one stateful
+component whose loss loses data. A daily `pg_dump` is a last resort (up to 24h of data gone, and
+a long restore), not availability. For anything beyond a single dev box, pick one:
+
+**Option A — managed Postgres (recommended).** RDS / Cloud SQL / DigitalOcean Managed Postgres
+give you a synchronous standby, automatic failover, and continuous PITR out of the box. Point
+`DB_HOST` at the managed endpoint and you're done — no replication to operate yourself.
+
+**Option B — self-managed streaming replication + WAL archiving.** Run a hot standby and archive
+WAL so you can both fail over and recover to any point in time.
+
+On the **primary** (`postgresql.conf`), then restart:
+
+```conf
+wal_level = replica
+max_wal_senders = 10
+archive_mode = on
+archive_command = 'test ! -f /var/backups/wal/%f && cp %p /var/backups/wal/%f'   # ship WAL off-box
+```
+
+Create a replication role and allow the standby in `pg_hba.conf`:
+
+```bash
+sudo -u postgres psql -c "CREATE ROLE replicator WITH REPLICATION LOGIN PASSWORD '…';"
+# pg_hba.conf:  host  replication  replicator  <standby-ip>/32  scram-sha-256
+```
+
+Build the **standby** from a base backup, then start it:
+
+```bash
+sudo -u postgres pg_basebackup -h <primary-ip> -U replicator -D /var/lib/postgresql/16/main \
+  -Fp -Xs -R -P            # -R writes standby.signal + primary_conninfo
+sudo systemctl start postgresql
+```
+
+**Failover:** promote the standby, then repoint the app and restart the workers (long-running
+`reverb`/`queue`/`scheduler` units cache the old connection):
+
+```bash
+sudo -u postgres pg_ctl promote -D /var/lib/postgresql/16/main   # or SELECT pg_promote();
+# set DB_HOST=<new-primary> in backend/.env, then:
+sudo systemctl restart tdechat-reverb tdechat-queue tdechat-scheduler php8.4-fpm
+```
+
+For **hands-off failover** put Patroni + a VIP/HAProxy (or PgBouncer) in front so `DB_HOST` never
+changes. Chat traffic is write-heavy and read-your-writes sensitive, so keep a **single primary**
+— use the replica for failover and PITR, not read-splitting (reserve any read replica for
+analytics-only queries via Laravel's read/write connections).
+
 ### Scaling
 
 Cache, queue and sessions **run on Redis by default** (`CACHE_STORE`, `QUEUE_CONNECTION`,
