@@ -13,6 +13,8 @@ export interface AgentProfile {
   display_name: string;
   status: AgentStatus;
   last_active_at: string | null;
+  /** False when this agent's license seat has lapsed (strict enforcement). */
+  licensed: boolean;
 }
 
 export type AgentStatus = 'available' | 'busy' | 'away' | 'offline';

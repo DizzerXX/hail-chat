@@ -42,8 +42,10 @@ Route::prefix('v1')->group(function () {
         Route::post('/auth/logout', [AuthController::class, 'logout']);
     });
 
-    // Agent inbox API
-    Route::prefix('agent')->middleware('auth:sanctum')->group(function () {
+    // Agent inbox API. seat.valid strictly enforces one-license-per-agent:
+    // an agent whose seat has lapsed is blocked here and logged out by the
+    // dashboard. It passes non-agents and unconfigured installs.
+    Route::prefix('agent')->middleware(['auth:sanctum', 'seat.valid'])->group(function () {
         Route::get('/app-config', [AppConfigController::class, 'show']);
         Route::post('/translate', [TranslationController::class, 'draft'])
             ->middleware('permission:messages.send');

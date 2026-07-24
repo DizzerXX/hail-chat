@@ -46,6 +46,18 @@ class Agent extends Model
         return $this->hasOne(License::class, 'assigned_agent_id');
     }
 
+    /**
+     * Whether this agent holds a license that is usable right now (active and
+     * unexpired). Used for strict per-seat enforcement — an agent whose seat
+     * has lapsed is blocked from agent work and logged out.
+     */
+    public function hasUsableLicense(): bool
+    {
+        $license = $this->relationLoaded('license') ? $this->license : $this->license()->first();
+
+        return $license !== null && $license->isUsable();
+    }
+
     public function conversations(): HasMany
     {
         return $this->hasMany(Conversation::class, 'assigned_agent_id');

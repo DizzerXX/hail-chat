@@ -450,11 +450,20 @@ supervisors — consume nothing.
 
 A license **stays bound** to its agent when that user is deactivated; only an explicit
 **Release** on the admin screen returns it to the pool (removing the agent profile entirely
-also frees it). With no usable license at all, gated routes return a clean 403 with
-`code: license_invalid`, though the license screen itself stays reachable. Because the pool
-lives in the local database, an unreachable platform never locks anyone out — statuses simply
-stop refreshing until the next successful sync. Feature gates read the union of features
-across usable licenses: `license()->hasFeature('x')`.
+also frees it). With no usable license at all, the **user-management** module returns a clean
+403 with `code: license_invalid` (installation-level), though the license screen itself stays
+reachable so an admin can fix it. Because the pool lives in the local database, an unreachable
+platform never locks anyone out — statuses simply stop refreshing until the next successful
+sync. Feature gates read the union of features across usable licenses: `license()->hasFeature('x')`.
+
+**Strict per-seat enforcement.** Beyond provisioning, the whole `/agent` API is gated by
+`seat.valid`: an agent whose **own** assigned license has lapsed (expired or no longer active),
+or who holds none while licensing is enforced, is refused with `403 code: seat_expired` —
+distinct from the installation-level `license_invalid` so the two never collide. The dashboard
+treats `seat_expired` as a **forced logout** (clears the token, shows a notice, returns to
+login); `/auth/me` also reports `agent.licensed` so the seat state is visible without an action.
+Non-agents (admins/supervisors) spend no seat and are never blocked, and an unconfigured
+platform stays disabled-open.
 
 ## API documentation
 
