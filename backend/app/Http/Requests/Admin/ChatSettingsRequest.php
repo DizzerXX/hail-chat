@@ -31,6 +31,20 @@ class ChatSettingsRequest extends FormRequest
             'warn2_en' => ['required', 'string', 'max:1000'],
             'closed_ms' => ['required', 'string', 'max:1000'],
             'closed_en' => ['required', 'string', 'max:1000'],
+
+            // Widget branding. Icons accept an emoji or an image URL. Subtitle
+            // and header icon may be blank (hidden); the rest need a value.
+            'widget_title' => ['required', 'string', 'max:120'],
+            'widget_subtitle' => ['nullable', 'string', 'max:120'],
+            'widget_header_icon' => ['nullable', 'string', 'max:255'],
+            'widget_launcher_icon' => ['required', 'string', 'max:255'],
+            'widget_bot_name' => ['required', 'string', 'max:60'],
+            'widget_name_label' => ['required', 'string', 'max:120'],
+            'widget_language_label' => ['required', 'string', 'max:120'],
+            'widget_message_label' => ['required', 'string', 'max:120'],
+            'widget_greeting_placeholder' => ['required', 'string', 'max:200'],
+            'widget_start_label' => ['required', 'string', 'max:60'],
+            'widget_input_placeholder' => ['required', 'string', 'max:120'],
         ];
     }
 

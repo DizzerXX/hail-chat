@@ -238,6 +238,18 @@ export interface ChatSettings {
   closed_en: string;
   available_sounds: string[];
   warning_sound: string;
+  // Widget branding
+  widget_title: string;
+  widget_subtitle: string;
+  widget_header_icon: string;
+  widget_launcher_icon: string;
+  widget_bot_name: string;
+  widget_name_label: string;
+  widget_language_label: string;
+  widget_message_label: string;
+  widget_greeting_placeholder: string;
+  widget_start_label: string;
+  widget_input_placeholder: string;
 }
 
 export interface AgentNotification {

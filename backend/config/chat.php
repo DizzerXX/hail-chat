@@ -27,6 +27,20 @@ return [
         'bubble_color' => '#2f80ed',
         'notification_sound' => 'notification-1.mp3',
 
+        // Widget branding (admin-editable, global, sent to the widget via
+        // /public/app-config). Icons accept an emoji or an image URL.
+        'widget_title' => 'Chat with us',
+        'widget_subtitle' => 'TDEChat',
+        'widget_header_icon' => '',
+        'widget_launcher_icon' => '💬',
+        'widget_bot_name' => 'Bot',
+        'widget_name_label' => 'Your name (optional)',
+        'widget_language_label' => 'Language',
+        'widget_message_label' => 'How can we help?',
+        'widget_greeting_placeholder' => 'Taip mesej anda…',
+        'widget_start_label' => 'Start chat',
+        'widget_input_placeholder' => 'Type a message…',
+
         // Auto-sent, visitor-visible warnings (localised by conversation language).
         'warn1_ms' => 'Adakah anda masih di sana? Balas untuk meneruskan perbualan.',
         'warn1_en' => 'Are you still there? Reply to keep the conversation going.',

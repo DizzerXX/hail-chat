@@ -14,6 +14,21 @@ class ChatSettings extends Model
 
     protected $guarded = [];
 
+    /** Widget branding fields — admin-editable, surfaced to the widget via app-config. */
+    public const BRANDING = [
+        'widget_title',
+        'widget_subtitle',
+        'widget_header_icon',
+        'widget_launcher_icon',
+        'widget_bot_name',
+        'widget_name_label',
+        'widget_language_label',
+        'widget_message_label',
+        'widget_greeting_placeholder',
+        'widget_start_label',
+        'widget_input_placeholder',
+    ];
+
     protected function casts(): array
     {
         return [

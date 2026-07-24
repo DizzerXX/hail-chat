@@ -14,8 +14,11 @@ class AppConfigController extends Controller
      */
     public function show(): JsonResponse
     {
+        $settings = ChatSettings::current();
+
         return response()->json(['data' => [
-            'bubble_color' => ChatSettings::current()->bubble_color,
+            'bubble_color' => $settings->bubble_color,
+            'widget' => $settings->only(ChatSettings::BRANDING),
         ]]);
     }
 }

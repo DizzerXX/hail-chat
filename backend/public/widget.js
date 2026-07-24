@@ -37,6 +37,7 @@
   let pollTimer = null;
   let typingTimer = null;
   let open = false;
+  let botName = 'Bot'; // overridden by admin branding (app-config)
 
   // ---------- styles ----------
   const css = `
@@ -49,8 +50,11 @@
     box-shadow:0 12px 40px rgba(0,0,0,.28);display:none;flex-direction:column;z-index:2147483000;
     font-family:system-ui,-apple-system,'Segoe UI',sans-serif;font-size:14px;color:#1c1b1f}
   .tdec-panel.open{display:flex}
-  .tdec-head{background:var(--tdec-accent,#2a78d6);color:#fff;padding:14px 16px}
+  .tdec-head{background:var(--tdec-accent,#2a78d6);color:#fff;padding:14px 16px;display:flex;align-items:center;gap:10px}
   .tdec-head h3{margin:0;font-size:15px;font-weight:600}
+  .tdec-head-icon{font-size:22px;line-height:1;display:flex;align-items:center}
+  .tdec-head-icon img{width:28px;height:28px;border-radius:6px;object-fit:cover;display:block}
+  .tdec-btn img{width:26px;height:26px;border-radius:6px;object-fit:cover;display:block}
   .tdec-status{font-size:12px;opacity:.85;margin-top:2px}
   .tdec-msgs{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:8px;background:#f7f7f5}
   .tdec-msg{max-width:80%;padding:8px 12px;border-radius:12px;white-space:pre-wrap;word-break:break-word;line-height:1.35}
@@ -94,20 +98,23 @@
   const panel = element('div', 'tdec-panel');
   panel.innerHTML = `
     <div class="tdec-head">
-      <h3>Chat with us</h3>
-      <div class="tdec-status">TDEChat</div>
+      <span class="tdec-head-icon" style="display:none"></span>
+      <div class="tdec-head-text">
+        <h3 class="tdec-title">Chat with us</h3>
+        <div class="tdec-status">TDEChat</div>
+      </div>
     </div>
     <div class="tdec-pre">
-      <label>Your name (optional)
+      <label><span class="tdec-name-label">Your name (optional)</span>
         <input type="text" class="tdec-name" autocomplete="name" />
       </label>
-      <label>Language
+      <label><span class="tdec-lang-label">Language</span>
         <select class="tdec-lang">
           <option value="ms">Bahasa Malaysia</option>
           <option value="en">English</option>
         </select>
       </label>
-      <label>How can we help?
+      <label><span class="tdec-msg-label">How can we help?</span>
         <input type="text" class="tdec-first" placeholder="Taip mesej anda\u2026" />
       </label>
       <button class="tdec-start">Start chat</button>
@@ -181,10 +188,63 @@
       });
       if (!response.ok) return;
       const body = await response.json();
-      const color = body && body.data && body.data.bubble_color;
-      if (color) document.documentElement.style.setProperty('--tdec-accent', color);
+      const data = (body && body.data) || {};
+      if (data.bubble_color) document.documentElement.style.setProperty('--tdec-accent', data.bubble_color);
+      applyBranding(data.widget);
     } catch (e) {
-      /* keep the default accent */
+      /* keep the default accent + hardcoded copy */
+    }
+  }
+
+  // Apply admin-configured branding over the built-in defaults. Runs once
+  // app-config resolves; anything blank/absent keeps the default already shown.
+  function applyBranding(w) {
+    if (!w) return;
+
+    const setText = (selector, value) => {
+      const el = panel.querySelector(selector);
+      if (el && value) el.textContent = value;
+    };
+    setText('.tdec-title', w.widget_title);
+    setText('.tdec-name-label', w.widget_name_label);
+    setText('.tdec-lang-label', w.widget_language_label);
+    setText('.tdec-msg-label', w.widget_message_label);
+    setText('.tdec-start', w.widget_start_label);
+
+    // Subtitle may be intentionally blank - hide it when empty.
+    const subtitle = panel.querySelector('.tdec-status');
+    if (subtitle && w.widget_subtitle !== undefined) {
+      subtitle.textContent = w.widget_subtitle || '';
+      subtitle.style.display = w.widget_subtitle ? '' : 'none';
+    }
+
+    if (w.widget_greeting_placeholder) refs.first.setAttribute('placeholder', w.widget_greeting_placeholder);
+    if (w.widget_input_placeholder) refs.input.setAttribute('placeholder', w.widget_input_placeholder);
+    if (w.widget_bot_name) botName = w.widget_bot_name;
+
+    applyIcon(button, w.widget_launcher_icon);
+    const headIcon = panel.querySelector('.tdec-head-icon');
+    if (headIcon) {
+      if (w.widget_header_icon) {
+        applyIcon(headIcon, w.widget_header_icon);
+        headIcon.style.display = '';
+      } else {
+        headIcon.style.display = 'none';
+      }
+    }
+  }
+
+  // An icon value is either an image URL (rendered as <img>) or an emoji/text.
+  function applyIcon(el, value) {
+    if (!el || !value) return;
+    if (/^https?:\/\//.test(value)) {
+      el.textContent = '';
+      const img = document.createElement('img');
+      img.src = value;
+      img.alt = '';
+      el.appendChild(img);
+    } else {
+      el.textContent = value;
     }
   }
 
@@ -372,7 +432,7 @@
       const sender = element(
         'div',
         'tdec-sender',
-        message.sender_type === 'bot' ? 'Bot' : (message.agent && message.agent.display_name) || 'Agent',
+        message.sender_type === 'bot' ? botName : (message.agent && message.agent.display_name) || 'Agent',
       );
       refs.msgs.appendChild(sender);
     }

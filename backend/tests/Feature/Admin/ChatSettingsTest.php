@@ -36,6 +36,17 @@ class ChatSettingsTest extends TestCase
             'warn1_ms' => 'a', 'warn1_en' => 'a',
             'warn2_ms' => 'b', 'warn2_en' => 'b',
             'closed_ms' => 'c', 'closed_en' => 'c',
+            'widget_title' => 'Chat with us',
+            'widget_subtitle' => 'TDEChat',
+            'widget_header_icon' => '',
+            'widget_launcher_icon' => '💬',
+            'widget_bot_name' => 'Bot',
+            'widget_name_label' => 'Your name (optional)',
+            'widget_language_label' => 'Language',
+            'widget_message_label' => 'How can we help?',
+            'widget_greeting_placeholder' => 'Taip mesej anda',
+            'widget_start_label' => 'Start chat',
+            'widget_input_placeholder' => 'Type a message',
         ], $overrides);
     }
 
@@ -87,14 +98,36 @@ class ChatSettingsTest extends TestCase
         $this->getJson('/api/v1/admin/chat-settings')->assertStatus(403);
     }
 
-    public function test_public_app_config_exposes_only_the_bubble_color(): void
+    public function test_public_app_config_exposes_color_and_widget_branding(): void
     {
-        ChatSettings::current()->update(['bubble_color' => '#123456']);
+        ChatSettings::current()->update([
+            'bubble_color' => '#123456',
+            'widget_title' => 'Talk to Sales',
+            'widget_bot_name' => 'Aida',
+        ]);
         ChatSettings::forgetCurrent();
 
         $this->getJson('/api/v1/public/app-config')
             ->assertOk()
             ->assertJsonPath('data.bubble_color', '#123456')
-            ->assertJsonMissingPath('data.notification_sound');
+            ->assertJsonPath('data.widget.widget_title', 'Talk to Sales')
+            ->assertJsonPath('data.widget.widget_bot_name', 'Aida')
+            // Admin-only fields must not leak to the public config.
+            ->assertJsonMissingPath('data.notification_sound')
+            ->assertJsonMissingPath('data.widget.warn1_en');
+    }
+
+    public function test_widget_branding_persists_and_the_title_is_required(): void
+    {
+        $this->putJson('/api/v1/admin/chat-settings', $this->payload([
+            'widget_title' => 'Sokongan',
+            'widget_launcher_icon' => '🛎️',
+        ]))->assertOk()->assertJsonPath('data.widget_title', 'Sokongan');
+
+        ChatSettings::forgetCurrent();
+        $this->assertSame('Sokongan', ChatSettings::current()->widget_title);
+
+        $this->putJson('/api/v1/admin/chat-settings', $this->payload(['widget_title' => '']))
+            ->assertUnprocessable()->assertJsonValidationErrors('widget_title');
     }
 }

@@ -73,6 +73,59 @@ import { AdminApiService } from './admin-api.service';
 
         <mat-card appearance="outlined" class="section">
           <mat-card-header>
+            <mat-card-title>Widget branding</mat-card-title>
+            <mat-card-subtitle>Shown in the embeddable chat widget (icons accept an emoji or an image URL)</mat-card-subtitle>
+          </mat-card-header>
+          <mat-card-content class="grid">
+            <mat-form-field appearance="outline">
+              <mat-label>Header title</mat-label>
+              <input matInput [(ngModel)]="s.widget_title" />
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Header subtitle</mat-label>
+              <input matInput [(ngModel)]="s.widget_subtitle" />
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Header icon (emoji or image URL)</mat-label>
+              <input matInput [(ngModel)]="s.widget_header_icon" />
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Launcher icon (emoji or image URL)</mat-label>
+              <input matInput [(ngModel)]="s.widget_launcher_icon" />
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Bot name</mat-label>
+              <input matInput [(ngModel)]="s.widget_bot_name" />
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Name field label</mat-label>
+              <input matInput [(ngModel)]="s.widget_name_label" />
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Language field label</mat-label>
+              <input matInput [(ngModel)]="s.widget_language_label" />
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Message field label</mat-label>
+              <input matInput [(ngModel)]="s.widget_message_label" />
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Greeting placeholder</mat-label>
+              <input matInput [(ngModel)]="s.widget_greeting_placeholder" />
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Start button label</mat-label>
+              <input matInput [(ngModel)]="s.widget_start_label" />
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Composer placeholder</mat-label>
+              <input matInput [(ngModel)]="s.widget_input_placeholder" />
+            </mat-form-field>
+          </mat-card-content>
+        </mat-card>
+
+        <mat-card appearance="outlined" class="section">
+          <mat-card-header>
             <mat-card-title>Idle handling</mat-card-title>
             <mat-card-subtitle>Standalone inboxes only — Mitel/Ignite manages its own timers</mat-card-subtitle>
           </mat-card-header>

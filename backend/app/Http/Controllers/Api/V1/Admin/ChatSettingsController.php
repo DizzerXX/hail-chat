@@ -38,6 +38,7 @@ class ChatSettingsController extends Controller
                 'warn1_ms', 'warn1_en',
                 'warn2_ms', 'warn2_en',
                 'closed_ms', 'closed_en',
+                ...ChatSettings::BRANDING,
             ]),
             // Options the settings screen renders the sound picker from.
             'available_sounds' => config('chat.notification_sounds'),

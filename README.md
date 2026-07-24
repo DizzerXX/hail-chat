@@ -161,6 +161,12 @@ public API, streams bot/agent replies and typing indicators over Reverb (with HT
 a fallback), offers "Talk to a human" escalation, and resumes the conversation across page
 reloads via localStorage. A demo host page ships at `/widget-demo.html`.
 
+**Branding is admin-configurable** (no embed changes): **Admin → Chat settings → Widget
+branding** sets the header title/subtitle, launcher and header icons (an emoji *or* an image
+URL), the bot name, and the pre-chat labels/placeholders. The widget reads them from
+`/public/app-config` (alongside `bubble_color`) and falls back to built-in defaults if the
+call fails. Settings are global (one set across all embeds).
+
 Prefer driving the API directly? It needs no authentication — the conversation UUID returned
 on start is the capability that authorizes all later calls for that conversation:
 
