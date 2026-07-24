@@ -13,7 +13,7 @@ does not change, only the work-item provider behind it.
 
 | Layer      | Technology |
 |------------|------------|
-| Backend    | Laravel 11 (PHP 8.3+), PostgreSQL 16, Redis 7 |
+| Backend    | Laravel 12 (PHP 8.4+), PostgreSQL 16, Redis 7 |
 | Websockets | Laravel Reverb (Pusher protocol) |
 | Auth       | Laravel Sanctum (bearer tokens) + custom lightweight RBAC |
 | Queue      | Laravel queue workers (Redis driver; cache and sessions on Redis too) |
@@ -35,7 +35,7 @@ in Phase 4), [docker-compose.yml](docker-compose.yml) (Postgres + Redis for loca
 
 ### Prerequisites
 
-- PHP 8.3+ with `pdo_pgsql` (`php -m | grep pdo_pgsql`)
+- PHP 8.4+ with `pdo_pgsql` (`php -m | grep pdo_pgsql`)
 - Composer 2
 - Docker (runs PostgreSQL and Redis; nothing else is containerised)
 - Node 20+ (only needed from Phase 4 onward)
@@ -559,9 +559,9 @@ sudo apt install -y nginx postgresql redis-server \
 sudo update-alternatives --set php /usr/bin/php8.4   # make the CLI 8.4
 ```
 
-> Don't try to force PHP 8.3 with `composer update` — it trips Composer's security-advisory
-> block on Laravel 11 (the fixes only exist in Laravel 12; staying on 11 is deliberate) and
-> deploys untested dependency versions. Install 8.4 so `composer install` matches the lock.
+> The committed lock resolves to Laravel 12 on Symfony 8, which requires PHP **8.4**. Don't
+> downgrade to 8.3 — `composer install` would fail the platform check and any `composer update`
+> would deploy untested dependency versions. Install 8.4 so `composer install` matches the lock.
 
 Composer 2 is needed to install backend dependencies. Node 20+ is needed **only** if you build
 the frontend on the server — building in CI and shipping the `dist` directory keeps Node off
