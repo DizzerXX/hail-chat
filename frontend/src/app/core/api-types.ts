@@ -49,12 +49,22 @@ export interface Conversation {
   messages?: Message[];
 }
 
+export interface Attachment {
+  id: number;
+  name: string;
+  mime_type: string;
+  size: number;
+  is_image: boolean;
+  url: string;
+}
+
 export interface Message {
   id: number;
   sender_type: 'visitor' | 'agent' | 'bot' | 'system';
   agent?: { id: number; display_name: string } | null;
   body: string;
   meta: Record<string, unknown> | null;
+  attachments?: Attachment[];
   created_at: string;
 }
 

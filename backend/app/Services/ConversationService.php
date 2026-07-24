@@ -18,7 +18,9 @@ use App\Models\Team;
 use App\Services\Faq\FaqMatcher;
 use App\Services\WorkItems\WorkItemProviderResolver;
 use App\Services\Webhooks\WebhookDispatcher;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class ConversationService
 {
@@ -88,6 +90,19 @@ class ConversationService
         }
 
         return $message;
+    }
+
+    /**
+     * A visitor attachment (with an optional caption). Attachments are for
+     * human conversations, so the bot never responds to them.
+     *
+     * @param  list<UploadedFile>  $files
+     */
+    public function visitorAttachment(Conversation $conversation, ?string $body, array $files): Message
+    {
+        abort_unless($conversation->status->isOpen(), 409, 'This conversation is closed.');
+
+        return $this->appendMessage($conversation, SenderType::Visitor, $body ?? '', null, null, $files);
     }
 
     /**
@@ -207,6 +222,27 @@ class ConversationService
         }
 
         return $this->appendMessage($conversation, SenderType::Agent, $body, $agent);
+    }
+
+    /**
+     * An agent attachment (with an optional caption), mirroring the guards on
+     * agentMessage().
+     *
+     * @param  list<UploadedFile>  $files
+     */
+    public function agentAttachment(Conversation $conversation, Agent $agent, ?string $body, array $files): Message
+    {
+        abort_unless(
+            $conversation->status === ConversationStatus::Active,
+            409,
+            'Messages can only be sent in active conversations.',
+        );
+
+        if ($conversation->assigned_agent_id !== $agent->id && ! $agent->user->hasPermission('conversations.assign')) {
+            abort(403, 'This conversation is assigned to another agent.');
+        }
+
+        return $this->appendMessage($conversation, SenderType::Agent, $body ?? '', $agent, null, $files);
     }
 
     public function close(Conversation $conversation, string $closedBy): Conversation
@@ -331,12 +367,16 @@ class ConversationService
         }
     }
 
+    /**
+     * @param  list<UploadedFile>  $files
+     */
     private function appendMessage(
         Conversation $conversation,
         SenderType $senderType,
         string $body,
         ?Agent $agent = null,
         ?array $meta = null,
+        array $files = [],
     ): Message {
         $message = $conversation->messages()->create([
             'sender_type' => $senderType,
@@ -344,6 +384,26 @@ class ConversationService
             'body' => $body,
             'meta' => $meta,
         ]);
+
+        // Store any files and attach them BEFORE broadcasting, so the realtime
+        // payload and the transcript both carry the attachments.
+        foreach ($files as $file) {
+            $disk = (string) config('attachments.disk');
+            $path = $file->store('attachments/'.$conversation->uuid, $disk);
+
+            $message->attachments()->create([
+                'uuid' => (string) Str::uuid(),
+                'disk' => $disk,
+                'path' => $path,
+                'name' => $file->getClientOriginalName(),
+                'mime_type' => $file->getMimeType() ?? $file->getClientMimeType(),
+                'size' => $file->getSize(),
+            ]);
+        }
+
+        if ($files !== []) {
+            $message->load('attachments');
+        }
 
         $conversation->forceFill(['last_activity_at' => now()])->save();
 

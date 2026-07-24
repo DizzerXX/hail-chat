@@ -394,6 +394,21 @@ The management REST API behind the admin screens lives under `/api/v1/admin/*`, 
 the per-area RBAC permissions (`inboxes.manage`, `faqs.manage`, …) and fully specified in
 the OpenAPI document below.
 
+## Attachments
+
+Visitors and agents can attach files to a message (with an optional caption). Uploads go to
+`POST {…}/conversations/{uuid}/attachments` (public for the widget, `/agent/…` for the
+dashboard — the latter under `messages.send` + `seat.valid`), and are stored privately on the
+`local` disk under `attachments/{conversation-uuid}/`.
+
+Each attachment gets an **unguessable uuid** and is served **inline** from
+`GET /api/v1/public/attachments/{uuid}` — the uuid is the download capability, matching the
+conversation-uuid trust model, so the same URL renders in the widget and the dashboard via
+`<img src>`. Images show inline; other files render as a download chip. Allowed types and the
+size cap live in [config/attachments.php](backend/config/attachments.php) (`ATTACHMENTS_MAX_KB`,
+default images + PDF, 10 MB). Attachments ride the existing `message.sent` broadcast, so they
+appear in real time on both sides.
+
 ## AI translation (BM ↔ EN)
 
 Optional, env-controlled message translation via an **external SeaLLM/Ollama server**:

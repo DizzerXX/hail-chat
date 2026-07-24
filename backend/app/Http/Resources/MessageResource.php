@@ -21,6 +21,7 @@ class MessageResource extends JsonResource
             ]),
             'body' => $this->body,
             'meta' => $this->meta,
+            'attachments' => AttachmentResource::collection($this->whenLoaded('attachments', fn () => $this->attachments, collect())),
             'created_at' => $this->created_at,
         ];
     }

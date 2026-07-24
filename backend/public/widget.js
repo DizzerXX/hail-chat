@@ -67,6 +67,14 @@
   .tdec-input{flex:1;border:1px solid #c3c2b7;border-radius:8px;padding:9px 12px;font:inherit;resize:none;max-height:90px}
   .tdec-send{background:var(--tdec-accent,#2a78d6);color:#fff;border:none;border-radius:8px;padding:0 14px;cursor:pointer;font-size:16px}
   .tdec-send:disabled{opacity:.4;cursor:default}
+  .tdec-attach{background:none;border:none;cursor:pointer;font-size:17px;padding:0 4px;opacity:.65}
+  .tdec-attach:hover{opacity:1}
+  .tdec-att-img{display:block;margin-top:6px}
+  .tdec-att-img img{max-width:200px;max-height:200px;border-radius:8px;display:block}
+  .tdec-att-file{display:inline-flex;align-items:center;gap:6px;margin-top:6px;padding:7px 9px;
+    border-radius:8px;background:rgba(0,0,0,.06);text-decoration:none;color:inherit;font-size:12.5px}
+  .tdec-msg.visitor .tdec-att-file{background:rgba(255,255,255,.2)}
+  .tdec-att-file .tdec-att-size{opacity:.7;font-size:11px}
   .tdec-bar{display:flex;gap:8px;padding:8px 10px;background:#fff;border-top:1px solid #e1e0d9}
   .tdec-link{background:none;border:none;color:var(--tdec-accent,#2a78d6);cursor:pointer;font-size:12px;padding:4px}
   .tdec-pre{padding:18px;display:flex;flex-direction:column;gap:10px;background:#f7f7f5;flex:1}
@@ -112,6 +120,9 @@
       <button class="tdec-link tdec-end">End chat</button>
     </div>
     <div class="tdec-foot" style="display:none">
+      <button class="tdec-attach" aria-label="Attach a file">\uD83D\uDCCE</button>
+      <input class="tdec-file" type="file"
+        accept="image/jpeg,image/png,image/gif,image/webp,application/pdf" style="display:none" />
       <textarea class="tdec-input" rows="1" placeholder="Type a message\u2026"></textarea>
       <button class="tdec-send" aria-label="Send">\u27A4</button>
     </div>
@@ -128,6 +139,8 @@
     foot: panel.querySelector('.tdec-foot'),
     input: panel.querySelector('.tdec-input'),
     send: panel.querySelector('.tdec-send'),
+    attach: panel.querySelector('.tdec-attach'),
+    file: panel.querySelector('.tdec-file'),
     name: panel.querySelector('.tdec-name'),
     lang: panel.querySelector('.tdec-lang'),
     first: panel.querySelector('.tdec-first'),
@@ -150,6 +163,8 @@
   });
   refs.escalate.addEventListener('click', escalate);
   refs.end.addEventListener('click', endChat);
+  refs.attach.addEventListener('click', () => refs.file.click());
+  refs.file.addEventListener('change', uploadFile);
 
   loadTheme();
 
@@ -253,6 +268,54 @@
     updateStatus(response.status);
   }
 
+  async function uploadFile(e) {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = ''; // let the same file be re-picked later
+    if (!file || !conversation) return;
+
+    // Multipart, so let the browser set the boundary - can't use api().
+    const form = new FormData();
+    form.append('file', file);
+    try {
+      const response = await fetch(
+        config.api + '/api/v1/public/conversations/' + conversation.uuid + '/attachments',
+        { method: 'POST', headers: { Accept: 'application/json' }, body: form },
+      );
+      if (response.status >= 200 && response.status < 300) {
+        const data = await response.json();
+        render(data.message);
+      } else if (response.status === 422) {
+        const data = await response.json().catch(() => null);
+        refs.status.textContent = (data && data.message) || 'That file is not allowed.';
+      } else {
+        refs.status.textContent = 'Upload problem \u2014 try again.';
+      }
+    } catch (err) {
+      refs.status.textContent = 'Upload problem \u2014 try again.';
+    }
+  }
+
+  function renderAttachment(att) {
+    if (att.is_image) {
+      const link = element('a', 'tdec-att-img');
+      link.href = att.url;
+      link.target = '_blank';
+      link.rel = 'noopener';
+      const img = document.createElement('img');
+      img.src = att.url;
+      img.alt = att.name;
+      img.loading = 'lazy';
+      link.appendChild(img);
+      return link;
+    }
+    const link = element('a', 'tdec-att-file');
+    link.href = att.url;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.appendChild(element('span', 'tdec-att-name', att.name));
+    return link;
+  }
+
   async function escalate() {
     if (!conversation) return;
     const response = await api('POST', `/api/v1/public/conversations/${conversation.uuid}/escalate`);
@@ -315,6 +378,9 @@
     }
 
     const bubble = element('div', 'tdec-msg ' + message.sender_type, message.body);
+    (message.attachments || []).forEach(function (att) {
+      bubble.appendChild(renderAttachment(att));
+    });
     refs.msgs.appendChild(bubble);
     messageNodes.set(message.id, { bubble: bubble, senderType: message.sender_type });
 

@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\V1\Agent\TranslationController;
 use App\Http\Controllers\Api\V1\Auth\AuthController;
 use App\Http\Controllers\Api\V1\Admin\ChatSettingsController;
 use App\Http\Controllers\Api\V1\Public\AppConfigController as PublicAppConfigController;
+use App\Http\Controllers\Api\V1\Public\AttachmentController as PublicAttachmentController;
 use App\Http\Controllers\Api\V1\Public\ConversationController as PublicConversationController;
 use App\Http\Controllers\Api\V1\Public\FaqController as PublicFaqController;
 use Illuminate\Support\Facades\Route;
@@ -31,8 +32,11 @@ Route::prefix('v1')->group(function () {
         Route::get('/app-config', [PublicAppConfigController::class, 'show']);
         Route::get('/conversations/{conversation}', [PublicConversationController::class, 'show']);
         Route::post('/conversations/{conversation}/messages', [PublicConversationController::class, 'message']);
+        Route::post('/conversations/{conversation}/attachments', [PublicConversationController::class, 'attachment']);
         Route::post('/conversations/{conversation}/escalate', [PublicConversationController::class, 'escalate']);
         Route::post('/conversations/{conversation}/close', [PublicConversationController::class, 'close']);
+        // uuid is the download capability, so this stays public (used in <img src>).
+        Route::get('/attachments/{attachment}', [PublicAttachmentController::class, 'show']);
     });
 
     // Authentication
@@ -67,6 +71,8 @@ Route::prefix('v1')->group(function () {
         Route::post('/conversations/{conversation}/close', [AgentConversationController::class, 'close'])
             ->middleware('permission:conversations.close');
         Route::post('/conversations/{conversation}/messages', [AgentConversationController::class, 'message'])
+            ->middleware('permission:messages.send');
+        Route::post('/conversations/{conversation}/attachments', [AgentConversationController::class, 'attachment'])
             ->middleware('permission:messages.send');
         Route::post('/conversations/{conversation}/reroute', [AgentConversationController::class, 'reroute'])
             ->middleware('permission:conversations.assign');

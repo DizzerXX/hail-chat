@@ -62,6 +62,15 @@ export class AgentApiService {
     });
   }
 
+  uploadAttachment(uuid: string, file: File): Observable<{ data: Message }> {
+    const form = new FormData();
+    form.append('file', file);
+    return this.http.post<{ data: Message }>(
+      `${api}/agent/conversations/${uuid}/attachments`,
+      form,
+    );
+  }
+
   reroute(uuid: string, target: { team_id?: number; agent_id?: number }): Observable<{ data: Conversation }> {
     return this.http.post<{ data: Conversation }>(
       `${api}/agent/conversations/${uuid}/reroute`,

@@ -6,6 +6,7 @@ use App\Enums\SenderType;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\SendMessageRequest;
 use App\Http\Requests\StartConversationRequest;
+use App\Http\Requests\StoreAttachmentRequest;
 use App\Http\Resources\ConversationResource;
 use App\Http\Resources\MessageResource;
 use App\Models\Conversation;
@@ -35,7 +36,7 @@ class ConversationController extends Controller
     public function show(Conversation $conversation): ConversationResource
     {
         return ConversationResource::make(
-            $conversation->load(['inbox', 'assignedAgent', 'team', 'messages.agent'])
+            $conversation->load(['inbox', 'assignedAgent', 'team', 'messages.agent', 'messages.attachments'])
         );
     }
 
@@ -54,6 +55,19 @@ class ConversationController extends Controller
             'message' => MessageResource::make($message)->resolve(),
             'bot_reply' => $botReply === null ? null : MessageResource::make($botReply)->resolve(),
             'status' => $conversation->status,
+        ], 201);
+    }
+
+    public function attachment(StoreAttachmentRequest $request, Conversation $conversation): JsonResponse
+    {
+        $message = $this->conversations->visitorAttachment(
+            $conversation,
+            $request->validated('body'),
+            [$request->file('file')],
+        );
+
+        return response()->json([
+            'message' => MessageResource::make($message)->resolve(),
         ], 201);
     }
 

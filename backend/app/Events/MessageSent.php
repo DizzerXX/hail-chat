@@ -43,7 +43,7 @@ class MessageSent implements ShouldBroadcast
     {
         return [
             'conversation' => $this->message->conversation->uuid,
-            'message' => MessageResource::make($this->message->loadMissing('agent'))->resolve(),
+            'message' => MessageResource::make($this->message->loadMissing('agent', 'attachments'))->resolve(),
         ];
     }
 }

@@ -7,6 +7,7 @@ use App\Events\AgentTyping;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\RerouteConversationRequest;
 use App\Http\Requests\SendMessageRequest;
+use App\Http\Requests\StoreAttachmentRequest;
 use App\Http\Requests\TypingRequest;
 use App\Http\Resources\ConversationResource;
 use App\Http\Resources\MessageResource;
@@ -63,7 +64,7 @@ class ConversationController extends Controller
         $this->authorizeView($request, $conversation);
 
         return ConversationResource::make(
-            $conversation->load(['inbox', 'assignedAgent', 'team', 'messages.agent'])
+            $conversation->load(['inbox', 'assignedAgent', 'team', 'messages.agent', 'messages.attachments'])
         );
     }
 
@@ -101,6 +102,18 @@ class ConversationController extends Controller
         );
 
         return MessageResource::make($message->load('agent'))->response()->setStatusCode(201);
+    }
+
+    public function attachment(StoreAttachmentRequest $request, Conversation $conversation): JsonResponse
+    {
+        $message = $this->conversations->agentAttachment(
+            $conversation,
+            $this->requireAgent($request),
+            $request->validated('body'),
+            [$request->file('file')],
+        );
+
+        return MessageResource::make($message->load('agent', 'attachments'))->response()->setStatusCode(201);
     }
 
     public function reroute(RerouteConversationRequest $request, Conversation $conversation): ConversationResource

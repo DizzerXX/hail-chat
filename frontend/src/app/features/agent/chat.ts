@@ -133,7 +133,22 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
                         </button>
                       }
                     </div>
-                    <div class="body">{{ message.body }}</div>
+                    @if (message.body) {
+                      <div class="body">{{ message.body }}</div>
+                    }
+                    @for (att of message.attachments ?? []; track att.id) {
+                      @if (att.is_image) {
+                        <a class="att-image" [href]="att.url" target="_blank" rel="noopener">
+                          <img [src]="att.url" [alt]="att.name" loading="lazy" />
+                        </a>
+                      } @else {
+                        <a class="att-file" [href]="att.url" target="_blank" rel="noopener">
+                          <mat-icon>description</mat-icon>
+                          <span class="att-name">{{ att.name }}</span>
+                          <span class="att-size">{{ formatSize(att.size) }}</span>
+                        </a>
+                      }
+                    }
                     @for (entry of translationsOf(message); track entry.lang) {
                       <div class="translation">{{ entry.lang.toUpperCase() }} · {{ entry.text }}</div>
                     }
@@ -163,6 +178,23 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
                 <button mat-menu-item disabled>No FAQ entries for this language</button>
               }
             </mat-menu>
+
+            <button
+              matIconButton
+              (click)="fileInput.click()"
+              matTooltip="Attach a file"
+              aria-label="Attach a file"
+              [disabled]="!canSend() || uploading()"
+            >
+              <mat-icon>attach_file</mat-icon>
+            </button>
+            <input
+              #fileInput
+              type="file"
+              hidden
+              accept="image/jpeg,image/png,image/gif,image/webp,application/pdf"
+              (change)="onFilePicked($event)"
+            />
 
             <textarea
               rows="1"
@@ -459,6 +491,42 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
       font-style: italic;
       color: var(--tde-muted);
     }
+    .att-image {
+      display: block;
+      margin-top: 6px;
+
+      img {
+        max-width: 240px;
+        max-height: 240px;
+        border-radius: 8px;
+        display: block;
+      }
+    }
+    .att-file {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 6px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: rgba(24, 39, 75, 0.06);
+      color: inherit;
+      text-decoration: none;
+      font-size: 12.5px;
+
+      mat-icon {
+        font-size: 18px;
+        width: 18px;
+        height: 18px;
+      }
+      .att-size {
+        opacity: 0.7;
+        font-size: 11px;
+      }
+    }
+    .bubble.agent .att-file {
+      background: rgba(255, 255, 255, 0.18);
+    }
     .translate-btn {
       border: 0;
       padding: 0;
@@ -670,6 +738,7 @@ export class Chat implements OnInit, OnDestroy {
   protected readonly messages = signal<Message[]>([]);
   protected readonly faqs = signal<PublicFaq[]>([]);
   protected readonly busy = signal(false);
+  protected readonly uploading = signal(false);
   protected readonly loadError = signal<string | null>(null);
 
   protected draft = '';
@@ -1005,6 +1074,41 @@ export class Chat implements OnInit, OnDestroy {
     } catch {
       this.snackBar.open('Follow-up failed to send.', 'Dismiss', { duration: 4000 });
     }
+  }
+
+  protected async onFilePicked(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = ''; // let the same file be re-picked later
+    if (file === undefined || !this.canSend()) {
+      return;
+    }
+
+    this.uploading.set(true);
+    this.notifications.dismiss();
+    try {
+      const response = await firstValueFrom(this.api.uploadAttachment(this.uuid, file));
+      if (this.messages().every((message) => message.id !== response.data.id)) {
+        this.messages.update((messages) => [...messages, response.data]);
+      }
+    } catch (error) {
+      const body = (error as { error?: { message?: string; errors?: Record<string, string[]> } })
+        .error;
+      const text = body?.errors?.['file']?.[0] ?? body?.message ?? 'Upload failed.';
+      this.snackBar.open(text, 'Dismiss', { duration: 4000 });
+    } finally {
+      this.uploading.set(false);
+    }
+  }
+
+  protected formatSize(bytes: number): string {
+    if (bytes < 1024) {
+      return `${bytes} B`;
+    }
+    if (bytes < 1024 * 1024) {
+      return `${Math.round(bytes / 1024)} KB`;
+    }
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
 
   protected onEnter(event: Event): void {
