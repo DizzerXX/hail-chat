@@ -11,6 +11,7 @@ use App\Events\ConversationUpdated;
 use App\Events\MessageSent;
 use App\Http\Resources\ConversationResource;
 use App\Models\Agent;
+use App\Models\Contact;
 use App\Models\Conversation;
 use App\Models\Inbox;
 use App\Models\Message;
@@ -38,7 +39,16 @@ class ConversationService
     public function start(Inbox $inbox, array $visitor, string $messageBody): Conversation
     {
         [$conversation, $firstMessage] = DB::transaction(function () use ($inbox, $visitor, $messageBody) {
+            // Match (or create) the contact so a returning visitor's prior chats
+            // are linked and surfaced to agents.
+            $contact = Contact::resolveFor([
+                'name' => $visitor['visitor_name'] ?? null,
+                'email' => $visitor['visitor_email'] ?? null,
+                'phone' => $visitor['visitor_phone'] ?? null,
+            ]);
+
             $conversation = $inbox->conversations()->create([
+                'contact_id' => $contact?->id,
                 'status' => ConversationStatus::Pending,
                 'language' => $visitor['language'] ?? config('tdechat.default_language'),
                 'visitor_name' => $visitor['visitor_name'] ?? null,
@@ -245,6 +255,22 @@ class ConversationService
         return $this->appendMessage($conversation, SenderType::Agent, $body ?? '', $agent, null, $files);
     }
 
+    /**
+     * An agent-only internal note. Stored as a Note message that is kept off the
+     * public channel and out of the visitor transcript, and does not count as
+     * conversation activity.
+     */
+    public function agentNote(Conversation $conversation, Agent $agent, string $body): Message
+    {
+        abort_unless($conversation->status->isOpen(), 409, 'Notes can only be added to open conversations.');
+
+        if ($conversation->assigned_agent_id !== $agent->id && ! $agent->user->hasPermission('conversations.assign')) {
+            abort(403, 'This conversation is assigned to another agent.');
+        }
+
+        return $this->appendMessage($conversation, SenderType::Note, $body, $agent, null, [], false);
+    }
+
     public function close(Conversation $conversation, string $closedBy): Conversation
     {
         abort_unless($conversation->status->isOpen(), 409, 'This conversation is already closed.');
@@ -377,6 +403,7 @@ class ConversationService
         ?Agent $agent = null,
         ?array $meta = null,
         array $files = [],
+        bool $bumpActivity = true,
     ): Message {
         $message = $conversation->messages()->create([
             'sender_type' => $senderType,
@@ -405,7 +432,11 @@ class ConversationService
             $message->load('attachments');
         }
 
-        $conversation->forceFill(['last_activity_at' => now()])->save();
+        // Internal notes don't count as conversation activity (they must not
+        // reorder queues or reset idle timers), so skip the activity bump.
+        if ($bumpActivity) {
+            $conversation->forceFill(['last_activity_at' => now()])->save();
+        }
 
         broadcast(new MessageSent($message));
         $this->maybeAutoTranslate($message);

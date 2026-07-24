@@ -7,6 +7,7 @@ import {
   AdminUser,
   AgentDirectoryEntry,
   AnalyticsSummary,
+  CannedResponse,
   ChatSettings,
   FaqGroup,
   FaqTranslation,
@@ -20,6 +21,8 @@ import {
   Webhook,
   WebhookDelivery,
 } from '../../core/api-types';
+
+export type CannedResponsePayload = Pick<CannedResponse, 'title' | 'body' | 'language' | 'is_active'>;
 
 const api = `${environment.apiUrl}/api/v1/admin`;
 
@@ -106,6 +109,20 @@ export class AdminApiService {
   }
 
   // FAQ groups
+  cannedResponses(): Observable<{ data: CannedResponse[] }> {
+    return this.http.get<{ data: CannedResponse[] }>(`${api}/canned-responses`);
+  }
+
+  saveCannedResponse(payload: CannedResponsePayload, id?: number): Observable<{ data: CannedResponse }> {
+    return id === undefined
+      ? this.http.post<{ data: CannedResponse }>(`${api}/canned-responses`, payload)
+      : this.http.put<{ data: CannedResponse }>(`${api}/canned-responses/${id}`, payload);
+  }
+
+  deleteCannedResponse(id: number): Observable<unknown> {
+    return this.http.delete(`${api}/canned-responses/${id}`);
+  }
+
   faqGroups(search?: string): Observable<{ data: FaqGroup[] }> {
     return this.http.get<{ data: FaqGroup[] }>(`${api}/faqs`, {
       params: search ? { search } : {},

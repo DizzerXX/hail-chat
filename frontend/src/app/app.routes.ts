@@ -63,6 +63,12 @@ export const routes: Routes = [
         loadComponent: () => import('./features/admin/faqs').then((m) => m.Faqs),
       },
       {
+        path: 'canned-responses',
+        canActivate: [permissionGuard('canned_responses.manage')],
+        loadComponent: () =>
+          import('./features/admin/canned-responses').then((m) => m.CannedResponses),
+      },
+      {
         path: 'webhooks',
         canActivate: [permissionGuard('webhooks.manage')],
         loadComponent: () => import('./features/admin/webhooks').then((m) => m.Webhooks),

@@ -116,6 +116,49 @@ class ConversationController extends Controller
         return MessageResource::make($message->load('agent', 'attachments'))->response()->setStatusCode(201);
     }
 
+    public function history(Request $request, Conversation $conversation): JsonResponse
+    {
+        $this->authorizeView($request, $conversation);
+
+        $prior = $conversation->contact_id === null ? collect() : Conversation::query()
+            ->where('contact_id', $conversation->contact_id)
+            ->whereKeyNot($conversation->id)
+            ->with('inbox')
+            ->orderByDesc('created_at')
+            ->limit(20)
+            ->get()
+            ->map(fn (Conversation $c) => [
+                'uuid' => $c->uuid,
+                'status' => $c->status,
+                'inbox' => $c->inbox?->name,
+                'created_at' => $c->created_at,
+                'closed_at' => $c->closed_at,
+            ]);
+
+        $contact = $conversation->contact()->first();
+
+        return response()->json(['data' => [
+            'contact' => $contact === null ? null : [
+                'id' => $contact->id,
+                'name' => $contact->name,
+                'email' => $contact->email,
+                'phone' => $contact->phone,
+            ],
+            'conversations' => $prior->values(),
+        ]]);
+    }
+
+    public function note(SendMessageRequest $request, Conversation $conversation): JsonResponse
+    {
+        $message = $this->conversations->agentNote(
+            $conversation,
+            $this->requireAgent($request),
+            $request->validated('body'),
+        );
+
+        return MessageResource::make($message->load('agent'))->response()->setStatusCode(201);
+    }
+
     public function reroute(RerouteConversationRequest $request, Conversation $conversation): ConversationResource
     {
         $team = $request->filled('team_id') ? Team::findOrFail($request->validated('team_id')) : null;

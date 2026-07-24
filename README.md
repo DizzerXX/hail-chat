@@ -409,6 +409,26 @@ size cap live in [config/attachments.php](backend/config/attachments.php) (`ATTA
 default images + PDF, 10 MB). Attachments ride the existing `message.sent` broadcast, so they
 appear in real time on both sides.
 
+## Agent tooling: canned responses, internal notes, contacts
+
+**Canned responses** are an admin-managed, org-wide quick-reply library
+([config-free](backend/app/Models/CannedResponse.php); permission
+`canned_responses.manage`). Admins curate them under **Admin → Canned responses**; agents
+insert one into the composer from the `post_add` menu, filtered to the conversation's language
+(plus any-language entries).
+
+**Internal notes** are agent-only annotations on a conversation (`sender_type: note`). They are
+kept off the public conversation channel — `MessageSent` broadcasts a note **only** on the
+private `conversation-notes.{uuid}` channel, and the public transcript filters notes out — so a
+visitor can never see one, even over raw websockets. Notes don't count as conversation activity
+(no `last_activity` bump, no idle reset). Agents toggle note mode in the composer; notes render
+as a distinct amber block, in real time for any agent/supervisor viewing the conversation.
+
+**Contacts** link conversations by the visitor's **email (else phone)**: `start()` finds or
+creates a `Contact`, links the conversation, and backfills a missing name. The chat details
+panel shows **Previous conversations** for the same contact via
+`GET /agent/conversations/{uuid}/history`.
+
 ## AI translation (BM ↔ EN)
 
 Optional, env-controlled message translation via an **external SeaLLM/Ollama server**:

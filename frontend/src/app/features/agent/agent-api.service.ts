@@ -5,6 +5,8 @@ import { environment } from '../../../environments/environment';
 import {
   AgentProfile,
   AgentStatus,
+  CannedResponse,
+  ContactHistory,
   Conversation,
   ConversationStatus,
   InboxSummary,
@@ -69,6 +71,20 @@ export class AgentApiService {
       `${api}/agent/conversations/${uuid}/attachments`,
       form,
     );
+  }
+
+  note(uuid: string, body: string): Observable<{ data: Message }> {
+    return this.http.post<{ data: Message }>(`${api}/agent/conversations/${uuid}/notes`, { body });
+  }
+
+  history(uuid: string): Observable<{ data: ContactHistory }> {
+    return this.http.get<{ data: ContactHistory }>(`${api}/agent/conversations/${uuid}/history`);
+  }
+
+  cannedResponses(language: string): Observable<{ data: CannedResponse[] }> {
+    return this.http.get<{ data: CannedResponse[] }>(`${api}/agent/canned-responses`, {
+      params: { language },
+    });
   }
 
   reroute(uuid: string, target: { team_id?: number; agent_id?: number }): Observable<{ data: Conversation }> {

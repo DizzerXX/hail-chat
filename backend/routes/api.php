@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\V1\Admin\AgentDirectoryController;
 use App\Http\Controllers\Api\V1\Admin\AnalyticsController;
+use App\Http\Controllers\Api\V1\Admin\CannedResponseController as AdminCannedResponseController;
 use App\Http\Controllers\Api\V1\Admin\FaqGroupController;
 use App\Http\Controllers\Api\V1\Admin\InboxController as AdminInboxController;
 use App\Http\Controllers\Api\V1\Admin\LicenseController;
@@ -12,6 +13,7 @@ use App\Http\Controllers\Api\V1\Admin\UserController;
 use App\Http\Controllers\Api\V1\Admin\WebhookController;
 use App\Http\Controllers\Api\V1\Agent\AgentStatusController;
 use App\Http\Controllers\Api\V1\Agent\AppConfigController;
+use App\Http\Controllers\Api\V1\Agent\CannedResponseController as AgentCannedResponseController;
 use App\Http\Controllers\Api\V1\Agent\ConversationController as AgentConversationController;
 use App\Http\Controllers\Api\V1\Agent\InboxController as AgentInboxController;
 use App\Http\Controllers\Api\V1\Agent\TranslationController;
@@ -62,6 +64,8 @@ Route::prefix('v1')->group(function () {
             ->middleware('permission:conversations.view_own');
         Route::get('/conversations/{conversation}', [AgentConversationController::class, 'show'])
             ->middleware('permission:conversations.view_own');
+        Route::get('/conversations/{conversation}/history', [AgentConversationController::class, 'history'])
+            ->middleware('permission:conversations.view_own');
         Route::post('/conversations/{conversation}/accept', [AgentConversationController::class, 'accept'])
             ->middleware('permission:conversations.accept');
         // Used by the embedded chat window (MiCC Ignite) to take ownership of a
@@ -74,9 +78,13 @@ Route::prefix('v1')->group(function () {
             ->middleware('permission:messages.send');
         Route::post('/conversations/{conversation}/attachments', [AgentConversationController::class, 'attachment'])
             ->middleware('permission:messages.send');
+        Route::post('/conversations/{conversation}/notes', [AgentConversationController::class, 'note'])
+            ->middleware('permission:messages.send');
         Route::post('/conversations/{conversation}/reroute', [AgentConversationController::class, 'reroute'])
             ->middleware('permission:conversations.assign');
         Route::post('/conversations/{conversation}/typing', [AgentConversationController::class, 'typing'])
+            ->middleware('permission:messages.send');
+        Route::get('/canned-responses', [AgentCannedResponseController::class, 'index'])
             ->middleware('permission:messages.send');
         Route::put('/status', [AgentStatusController::class, 'update']);
     });
@@ -128,6 +136,13 @@ Route::prefix('v1')->group(function () {
             Route::post('/faqs', [FaqGroupController::class, 'store']);
             Route::put('/faqs/{translationGroup}', [FaqGroupController::class, 'update']);
             Route::delete('/faqs/{translationGroup}', [FaqGroupController::class, 'destroy']);
+        });
+
+        Route::middleware('permission:canned_responses.manage')->group(function () {
+            Route::get('/canned-responses', [AdminCannedResponseController::class, 'index']);
+            Route::post('/canned-responses', [AdminCannedResponseController::class, 'store']);
+            Route::put('/canned-responses/{cannedResponse}', [AdminCannedResponseController::class, 'update']);
+            Route::delete('/canned-responses/{cannedResponse}', [AdminCannedResponseController::class, 'destroy']);
         });
 
         Route::middleware('permission:webhooks.manage')->group(function () {

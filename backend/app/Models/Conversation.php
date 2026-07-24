@@ -16,6 +16,7 @@ class Conversation extends Model
 
     protected $fillable = [
         'inbox_id',
+        'contact_id',
         'status',
         'language',
         'visitor_name',
@@ -57,6 +58,11 @@ class Conversation extends Model
     public function inbox(): BelongsTo
     {
         return $this->belongsTo(Inbox::class);
+    }
+
+    public function contact(): BelongsTo
+    {
+        return $this->belongsTo(Contact::class);
     }
 
     public function assignedAgent(): BelongsTo

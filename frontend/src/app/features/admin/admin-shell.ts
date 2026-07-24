@@ -122,6 +122,7 @@ export class AdminShell {
     { path: 'teams', label: 'Teams', icon: 'groups', permission: 'teams.manage' },
     { path: 'users', label: 'Users & Agents', icon: 'badge', permission: 'agents.manage' },
     { path: 'faqs', label: 'FAQ CMS', icon: 'quiz', permission: 'faqs.manage' },
+    { path: 'canned-responses', label: 'Canned responses', icon: 'post_add', permission: 'canned_responses.manage' },
     { path: 'webhooks', label: 'Webhooks', icon: 'webhook', permission: 'webhooks.manage' },
     { path: 'routing', label: 'Routing rules', icon: 'alt_route', permission: 'routing.manage' },
     { path: 'chat-settings', label: 'Chat settings', icon: 'tune', permission: 'settings.manage' },

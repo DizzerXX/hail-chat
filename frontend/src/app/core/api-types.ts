@@ -60,7 +60,7 @@ export interface Attachment {
 
 export interface Message {
   id: number;
-  sender_type: 'visitor' | 'agent' | 'bot' | 'system';
+  sender_type: 'visitor' | 'agent' | 'bot' | 'system' | 'note';
   agent?: { id: number; display_name: string } | null;
   body: string;
   meta: Record<string, unknown> | null;
@@ -80,6 +80,25 @@ export interface PublicFaq {
   language: string;
   question: string;
   answer: string;
+}
+
+export interface CannedResponse {
+  id: number;
+  title: string;
+  body: string;
+  language: string | null;
+  is_active: boolean;
+}
+
+export interface ContactHistory {
+  contact: { id: number; name: string | null; email: string | null; phone: string | null } | null;
+  conversations: {
+    uuid: string;
+    status: ConversationStatus;
+    inbox: string | null;
+    created_at: string;
+    closed_at: string | null;
+  }[];
 }
 
 export interface Paginated<T> {

@@ -19,9 +19,9 @@ import { MatMenuModule } from '@angular/material/menu';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
-import { Conversation, Message, PublicFaq } from '../../core/api-types';
+import { CannedResponse, ContactHistory, Conversation, Message, PublicFaq } from '../../core/api-types';
 import { AppConfigService } from '../../core/app-config.service';
 import { AuthService } from '../../core/auth.service';
 import { EchoService } from '../../core/echo.service';
@@ -41,6 +41,7 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
     MatProgressBarModule,
     MatSnackBarModule,
     MatTooltipModule,
+    RouterLink,
   ],
   template: `
     @if (loadError(); as message) {
@@ -105,6 +106,15 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
             @for (message of messages(); track message.id) {
               @if (message.sender_type === 'system') {
                 <div class="system">{{ message.body }}</div>
+              } @else if (message.sender_type === 'note') {
+                <div class="note-msg">
+                  <div class="note-head">
+                    <mat-icon>sticky_note_2</mat-icon>
+                    Internal note · {{ message.agent?.display_name }} ·
+                    {{ message.created_at | date: 'h:mm a' }}
+                  </div>
+                  <div class="note-body">{{ message.body }}</div>
+                </div>
               } @else {
                 <div class="row" [class.own]="message.sender_type === 'agent'">
                   <span
@@ -158,7 +168,7 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
             }
           </main>
 
-          <footer>
+          <footer [class.note-mode]="noteMode()">
             <button
               matIconButton
               [matMenuTriggerFor]="quickReplies"
@@ -181,6 +191,26 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
 
             <button
               matIconButton
+              [matMenuTriggerFor]="cannedMenu"
+              (click)="loadCanned()"
+              matTooltip="Canned responses"
+              aria-label="Canned responses"
+              [disabled]="!canSend()"
+            >
+              <mat-icon>post_add</mat-icon>
+            </button>
+            <mat-menu #cannedMenu="matMenu" class="quick-replies">
+              @for (canned of cannedResponses(); track canned.id) {
+                <button mat-menu-item (click)="useCanned(canned)">
+                  <span class="faq-question">{{ canned.title }}</span>
+                </button>
+              } @empty {
+                <button mat-menu-item disabled>No canned responses</button>
+              }
+            </mat-menu>
+
+            <button
+              matIconButton
               (click)="fileInput.click()"
               matTooltip="Attach a file"
               aria-label="Attach a file"
@@ -196,16 +226,27 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
               (change)="onFilePicked($event)"
             />
 
+            <button
+              matIconButton
+              (click)="noteMode.set(!noteMode())"
+              [matTooltip]="noteMode() ? 'Switch to reply' : 'Add an internal note'"
+              aria-label="Toggle internal note"
+              [class.note-active]="noteMode()"
+              [disabled]="!canSend()"
+            >
+              <mat-icon>{{ noteMode() ? 'chat' : 'sticky_note_2' }}</mat-icon>
+            </button>
+
             <textarea
               rows="1"
-              placeholder="{{ composerPlaceholder() }}"
+              placeholder="{{ noteMode() ? 'Internal note — the visitor will not see this' : composerPlaceholder() }}"
               [(ngModel)]="draft"
               (ngModelChange)="onTyping()"
               (keydown.enter)="onEnter($event)"
               [disabled]="!canSend()"
             ></textarea>
 
-            @if (appConfig.translation().enabled) {
+            @if (appConfig.translation().enabled && !noteMode()) {
               <button
                 matIconButton
                 (click)="translateDraft()"
@@ -217,7 +258,9 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
               </button>
             }
 
-            <button class="send" (click)="send()" [disabled]="!canSend() || !draft.trim()">SEND</button>
+            <button class="send" (click)="send()" [disabled]="!canSend() || !draft.trim()">
+              {{ noteMode() ? 'NOTE' : 'SEND' }}
+            </button>
           </footer>
         </section>
 
@@ -277,6 +320,20 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
               <mat-icon>open_in_new</mat-icon>
               Open CMS
             </a>
+          }
+
+          @if (history()?.conversations?.length) {
+            <div class="history">
+              <h4>Previous conversations ({{ history()!.conversations.length }})</h4>
+              @for (past of history()!.conversations; track past.uuid) {
+                <a class="history-item" [routerLink]="['/agent/chat', past.uuid]">
+                  <span class="hist-inbox">{{ past.inbox }}</span>
+                  <span class="hist-meta">
+                    {{ past.created_at | date: 'MMM d, y' }} · {{ statusLabel(past.status) }}
+                  </span>
+                </a>
+              }
+            </div>
           }
         </aside>
       </div>
@@ -483,6 +540,37 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
       font-size: 12px;
       color: var(--tde-muted);
     }
+    .note-msg {
+      align-self: stretch;
+      background: #fdf6e3;
+      border: 1px solid #f0e2b6;
+      border-left: 3px solid #d9a441;
+      border-radius: 8px;
+      padding: 8px 12px;
+
+      .note-head {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 11px;
+        font-weight: 600;
+        color: #a9791d;
+        margin-bottom: 3px;
+
+        mat-icon {
+          font-size: 15px;
+          width: 15px;
+          height: 15px;
+        }
+      }
+      .note-body {
+        font-size: 13px;
+        line-height: 1.45;
+        white-space: pre-wrap;
+        word-break: break-word;
+        color: #6b5410;
+      }
+    }
     .translation {
       margin-top: 6px;
       padding-top: 6px;
@@ -548,6 +636,13 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
       padding: 12px 14px;
       border-top: 1px solid var(--tde-border);
 
+      &.note-mode {
+        background: #fdf6e3;
+      }
+      .note-active {
+        color: #d9a441;
+      }
+
       textarea {
         flex: 1;
         resize: none;
@@ -579,6 +674,44 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
       &:disabled {
         background: #c3d4ef;
         cursor: default;
+      }
+    }
+    footer.note-mode .send {
+      background: #d9a441;
+    }
+    .history {
+      margin-top: 20px;
+      border-top: 1px solid var(--tde-border);
+      padding-top: 14px;
+
+      h4 {
+        margin: 0 0 8px;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+        color: var(--tde-muted);
+      }
+    }
+    .history-item {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+      padding: 7px 9px;
+      border-radius: 8px;
+      text-decoration: none;
+      color: var(--tde-ink);
+
+      &:hover {
+        background: var(--tde-bubble);
+      }
+      .hist-inbox {
+        font-size: 12.5px;
+        font-weight: 500;
+      }
+      .hist-meta {
+        font-size: 11px;
+        color: var(--tde-muted);
       }
     }
     .details {
@@ -737,6 +870,9 @@ export class Chat implements OnInit, OnDestroy {
   protected readonly conversation = signal<Conversation | null>(null);
   protected readonly messages = signal<Message[]>([]);
   protected readonly faqs = signal<PublicFaq[]>([]);
+  protected readonly cannedResponses = signal<CannedResponse[]>([]);
+  protected readonly noteMode = signal(false);
+  protected readonly history = signal<ContactHistory | null>(null);
   protected readonly busy = signal(false);
   protected readonly uploading = signal(false);
   protected readonly loadError = signal<string | null>(null);
@@ -900,9 +1036,7 @@ export class Chat implements OnInit, OnDestroy {
       clearInterval(this.clock);
     }
     this.stopPolling();
-    if (this.uuid !== '') {
-      this.echoService.echo.leave(`conversation.${this.uuid}`);
-    }
+    this.leaveChannels();
   }
 
   private startPolling(): void {
@@ -946,14 +1080,15 @@ export class Chat implements OnInit, OnDestroy {
     // Opening a conversation acknowledges any idle prompts.
     this.notifications.clear();
     this.notifications.dismiss();
-    if (this.uuid !== '') {
-      this.echoService.echo.leave(`conversation.${this.uuid}`);
-    }
+    this.leaveChannels();
 
     this.uuid = uuid;
     this.conversation.set(null);
     this.messages.set([]);
     this.faqs.set([]);
+    this.cannedResponses.set([]);
+    this.history.set(null);
+    this.noteMode.set(false);
     this.draft = '';
 
     if (this.embedded() && this.isAgent()) {
@@ -963,6 +1098,11 @@ export class Chat implements OnInit, OnDestroy {
     }
 
     await this.refresh();
+
+    // Prior conversations for the same contact (best-effort).
+    void firstValueFrom(this.api.history(uuid))
+      .then((response) => this.history.set(response.data))
+      .catch(() => this.history.set(null));
 
     this.echoService.echo
       .channel(`conversation.${this.uuid}`)
@@ -982,6 +1122,23 @@ export class Chat implements OnInit, OnDestroy {
           current === null ? current : { ...current, ...payload.conversation },
         );
       });
+
+    // Internal notes ride a private per-conversation channel so they reach
+    // agents in real time without ever touching the visitor's public channel.
+    this.echoService.echo
+      .private(`conversation-notes.${this.uuid}`)
+      .listen('.message.sent', (payload: { message: Message }) => {
+        if (this.messages().every((message) => message.id !== payload.message.id)) {
+          this.messages.update((messages) => [...messages, payload.message]);
+        }
+      });
+  }
+
+  private leaveChannels(): void {
+    if (this.uuid !== '') {
+      this.echoService.echo.leave(`conversation.${this.uuid}`);
+      this.echoService.echo.leave(`conversation-notes.${this.uuid}`);
+    }
   }
 
   protected senderLabel(message: Message): string {
@@ -1043,6 +1200,11 @@ export class Chat implements OnInit, OnDestroy {
       return;
     }
 
+    if (this.noteMode()) {
+      await this.submitNote(body);
+      return;
+    }
+
     this.draft = '';
     this.stopTyping();
     // Replying resolves the idle prompt.
@@ -1057,6 +1219,30 @@ export class Chat implements OnInit, OnDestroy {
       this.draft = body;
       this.snackBar.open('Message failed to send.', 'Dismiss', { duration: 4000 });
     }
+  }
+
+  /** Save an agent-only internal note (never shown to the visitor). */
+  private async submitNote(body: string): Promise<void> {
+    this.draft = '';
+    try {
+      const response = await firstValueFrom(this.api.note(this.uuid, body));
+      if (this.messages().every((message) => message.id !== response.data.id)) {
+        this.messages.update((messages) => [...messages, response.data]);
+      }
+    } catch {
+      this.draft = body;
+      this.snackBar.open('Note failed to save.', 'Dismiss', { duration: 4000 });
+    }
+  }
+
+  protected async loadCanned(): Promise<void> {
+    const language = this.conversation()?.language ?? '';
+    const response = await firstValueFrom(this.api.cannedResponses(language));
+    this.cannedResponses.set(response.data);
+  }
+
+  protected useCanned(canned: CannedResponse): void {
+    this.draft = this.draft === '' ? canned.body : `${this.draft}\n${canned.body}`;
   }
 
   /** Send the suggested idle follow-up straight to the visitor, then dismiss. */
@@ -1119,7 +1305,8 @@ export class Chat implements OnInit, OnDestroy {
   }
 
   protected onTyping(): void {
-    if (!this.canSend()) {
+    // A note is not a visitor-facing reply, so never leak a typing indicator.
+    if (!this.canSend() || this.noteMode()) {
       return;
     }
 

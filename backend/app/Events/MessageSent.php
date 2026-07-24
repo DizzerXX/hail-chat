@@ -28,6 +28,14 @@ class MessageSent implements ShouldBroadcast
     {
         $conversation = $this->message->conversation;
 
+        // Internal notes are agent-only: keep them OFF the public conversation
+        // channel (which the visitor's widget subscribes to with just the uuid)
+        // and broadcast solely on a private, authorized per-conversation notes
+        // channel that only the agent chat view subscribes to.
+        if ($this->message->sender_type === \App\Enums\SenderType::Note) {
+            return [new PrivateChannel('conversation-notes.'.$conversation->uuid)];
+        }
+
         return [
             new Channel('conversation.'.$conversation->uuid),
             new PrivateChannel('inbox.'.$conversation->inbox_id),

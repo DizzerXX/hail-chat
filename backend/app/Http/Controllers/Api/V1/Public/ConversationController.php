@@ -35,9 +35,13 @@ class ConversationController extends Controller
 
     public function show(Conversation $conversation): ConversationResource
     {
-        return ConversationResource::make(
-            $conversation->load(['inbox', 'assignedAgent', 'team', 'messages.agent', 'messages.attachments'])
-        );
+        // Internal notes are agent-only and must never reach the widget.
+        $conversation->load(['inbox', 'assignedAgent', 'team'])
+            ->load(['messages' => function ($query) {
+                $query->where('sender_type', '!=', SenderType::Note)->with('agent', 'attachments');
+            }]);
+
+        return ConversationResource::make($conversation);
     }
 
     public function message(SendMessageRequest $request, Conversation $conversation): JsonResponse
