@@ -33,12 +33,12 @@ class TranslationTest extends TestCase
         Sanctum::actingAs($this->agent->user);
     }
 
-    private function enable(string $method, string $endpoint = 'https://ai.test/translate'): void
+    private function enable(string $method, string $url = 'https://ai.test'): void
     {
         config([
             'translation.enabled' => true,
             'translation.method' => $method,
-            'translation.endpoint' => $endpoint,
+            'translation.url' => $url,
         ]);
     }
 
@@ -76,7 +76,7 @@ class TranslationTest extends TestCase
     {
         $this->enable('manual');
         Event::fake([MessageTranslated::class]);
-        Http::fake(['ai.test/*' => Http::response(['translation' => 'I need help'])]);
+        Http::fake(['ai.test/*' => Http::response(['success' => true, 'translated_text' => 'I need help'])]);
 
         $conversation = $this->conversationWithVisitorMessage();
         $message = $conversation->messages()->first();
@@ -87,9 +87,10 @@ class TranslationTest extends TestCase
             ->assertJsonPath('data.meta.translations.en', 'I need help');
 
         Http::assertSent(function ($request) {
-            return $request['text'] === 'Saya perlukan bantuan'
-                && $request['source'] === 'ms'
-                && $request['target'] === 'en';
+            return $request->url() === 'https://ai.test/translate'
+                && $request['text'] === 'Saya perlukan bantuan'
+                && $request['source_language'] === 'ms'
+                && $request['target_language'] === 'en';
         });
         Event::assertDispatched(MessageTranslated::class, function (MessageTranslated $event) {
             return $event->broadcastAs() === 'message.translated'
@@ -104,7 +105,7 @@ class TranslationTest extends TestCase
     public function test_draft_translation_returns_without_storing(): void
     {
         $this->enable('manual');
-        Http::fake(['ai.test/*' => Http::response(['translation' => 'Selamat pagi'])]);
+        Http::fake(['ai.test/*' => Http::response(['success' => true, 'translated_text' => 'Selamat pagi'])]);
 
         $this->postJson('/api/v1/agent/translate', ['text' => 'Good morning', 'target' => 'ms'])
             ->assertOk()
@@ -118,7 +119,7 @@ class TranslationTest extends TestCase
     {
         $this->enable('auto');
         Http::fake([
-            'ai.test/*' => Http::response(['translation' => '[t]']),
+            'ai.test/*' => Http::response(['success' => true, 'translated_text' => '[t]']),
         ]);
 
         // Visitor message through the public API (bot answers via FAQ).

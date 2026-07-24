@@ -16,9 +16,11 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(\App\Services\License\LicenseService::class);
+        // CachingTranslator wraps HttpTranslator (resolved by type-hint) to add
+        // the two-level text-keyed cache in front of the AI service.
         $this->app->bind(
             \App\Contracts\TranslatorInterface::class,
-            \App\Services\Translation\HttpTranslator::class,
+            \App\Services\Translation\CachingTranslator::class,
         );
     }
 

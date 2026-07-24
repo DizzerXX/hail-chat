@@ -27,7 +27,7 @@ class MessageTranslator
     /** Whether the external AI can actually be called. */
     public function ready(): bool
     {
-        return $this->enabled() && config('translation.endpoint') !== '';
+        return $this->enabled() && config('translation.url') !== '';
     }
 
     public function counterpart(string $language): string

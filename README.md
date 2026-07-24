@@ -396,22 +396,31 @@ the OpenAPI document below.
 
 ## AI translation (BM ↔ EN)
 
-Optional, env-controlled message translation via an **external AI server** (bring your own):
+Optional, env-controlled message translation via an **external SeaLLM/Ollama server**:
 
 | Env var | Meaning | Default |
 |---------|---------|---------|
 | `TRANSLATION` | Master switch | `false` |
 | `TRANSLATION_METHOD` | `manual` (per-message/draft buttons for agents), `auto` (background job translates every visitor/agent message), `none` | `none` |
-| `TRANSLATION_ENDPOINT` | Your AI server's translate URL | — |
-| `TRANSLATION_TOKEN` | Optional bearer token | — |
+| `TRANSLATION_API_URL` | Base URL of the translation service, e.g. `http://172.17.0.1:5555` | — |
+| `TRANSLATION_TIMEOUT` | Client timeout in seconds (the model can be slow) | `60` |
+| `TRANSLATION_CACHE_TTL` | Fast-tier cache lifetime in seconds | `86400` |
 
-Assumed AI contract (adapt `app/Services/Translation/HttpTranslator.php` — the only file
-that knows the wire format): `POST {endpoint}` with `{"text","source","target"}` →
-`{"translation":"…"}`. Translations cache on `messages.meta.translations` and broadcast as
-**`message.translated`**; the dashboard shows them under bubbles (with translate buttons in
-manual mode) and the widget shows agent replies in the visitor's language. Auto mode skips
-bot/system messages, never blocks message delivery, and degrades to a logged no-op when the
-endpoint is unset (manual returns a friendly 503).
+Wire contract (no auth; `en`/`ms` only), spoken only by
+`app/Services/Translation/HttpTranslator.php`: `POST {url}/translate` with
+`{"text","source_language","target_language"}`. The service returns **HTTP 200 even on
+failure** — success is the `success` boolean, not the status code — so a `200` with
+`{"success":false,"error":…}` is treated as a failure, as are `400`/`500`.
+
+**Caching lives entirely in Laravel** (`CachingTranslator` wraps `HttpTranslator`): a
+two-level, text-keyed cache — a fast tier on the default cache store (Redis once configured,
+DB otherwise, TTL `TRANSLATION_CACHE_TTL`) over a durable `translation_cache` table, both
+keyed by `sha256(source:target:text)`. The AI is only called on a miss, so identical text is
+never re-translated across conversations. Per-message results still cache on
+`messages.meta.translations` and broadcast as **`message.translated`**; the dashboard shows
+them under bubbles (translate buttons in manual mode) and the widget shows agent replies in
+the visitor's language. Auto mode skips bot/system messages, never blocks message delivery,
+and degrades to a logged no-op when the URL is unset (manual returns a friendly 503).
 
 ## Licensing (central License Manager)
 
