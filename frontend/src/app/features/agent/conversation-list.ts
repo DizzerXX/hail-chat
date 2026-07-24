@@ -5,6 +5,7 @@ import {
   OnInit,
   WritableSignal,
   computed,
+  effect,
   inject,
   signal,
 } from '@angular/core';
@@ -284,6 +285,26 @@ export class ConversationList implements OnInit, OnDestroy {
   ]);
 
   private inboxes: InboxSummary[] = [];
+  private poller: ReturnType<typeof setInterval> | null = null;
+  private wasOffline = false;
+
+  constructor() {
+    // The lists are kept live by the per-inbox socket channels; when the socket
+    // drops, poll them so the queue doesn't silently freeze, and reconcile once
+    // it reconnects.
+    effect(() => {
+      if (this.echoService.connected()) {
+        this.stopPolling();
+        if (this.wasOffline) {
+          this.wasOffline = false;
+          void this.reload();
+        }
+      } else {
+        this.wasOffline = true;
+        this.startPolling();
+      }
+    });
+  }
 
   async ngOnInit(): Promise<void> {
     await this.reload();
@@ -300,8 +321,20 @@ export class ConversationList implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.stopPolling();
     for (const inbox of this.inboxes) {
       this.echoService.echo.leave(`inbox.${inbox.id}`);
+    }
+  }
+
+  private startPolling(): void {
+    this.poller ??= setInterval(() => void this.reload(), 5000);
+  }
+
+  private stopPolling(): void {
+    if (this.poller !== null) {
+      clearInterval(this.poller);
+      this.poller = null;
     }
   }
 

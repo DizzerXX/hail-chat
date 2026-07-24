@@ -678,6 +678,8 @@ export class Chat implements OnInit, OnDestroy {
   private typingTimer: ReturnType<typeof setTimeout> | null = null;
   private typingActive = false;
   private clock: ReturnType<typeof setInterval> | null = null;
+  private poller: ReturnType<typeof setInterval> | null = null;
+  private wasOffline = false;
 
   protected readonly isOpen = computed(() => {
     const status = this.conversation()?.status;
@@ -792,6 +794,22 @@ export class Chat implements OnInit, OnDestroy {
       this.messages();
       queueMicrotask(() => this.scrollToBottom());
     });
+
+    // Realtime is Reverb-first; when the socket drops, poll the open
+    // conversation over HTTP so the agent never sits in silent dead air, and
+    // reconcile once the moment it reconnects.
+    effect(() => {
+      if (this.echoService.connected()) {
+        this.stopPolling();
+        if (this.wasOffline) {
+          this.wasOffline = false;
+          void this.poll();
+        }
+      } else {
+        this.wasOffline = true;
+        this.startPolling();
+      }
+    });
   }
 
   ngOnInit(): void {
@@ -812,8 +830,45 @@ export class Chat implements OnInit, OnDestroy {
     if (this.clock !== null) {
       clearInterval(this.clock);
     }
+    this.stopPolling();
     if (this.uuid !== '') {
       this.echoService.echo.leave(`conversation.${this.uuid}`);
+    }
+  }
+
+  private startPolling(): void {
+    this.poller ??= setInterval(() => void this.poll(), 4000);
+  }
+
+  private stopPolling(): void {
+    if (this.poller !== null) {
+      clearInterval(this.poller);
+      this.poller = null;
+    }
+  }
+
+  /**
+   * Refetch the conversation and append any messages we haven't seen. Merging
+   * by id (rather than replacing the array) keeps the same de-dupe guarantee as
+   * the `.message.sent` listener, so a reconnect can't double-render.
+   */
+  private async poll(): Promise<void> {
+    if (this.uuid === '') {
+      return;
+    }
+    try {
+      const response = await firstValueFrom(this.api.conversation(this.uuid));
+      this.conversation.set(response.data);
+      const incoming = response.data.messages ?? [];
+      this.messages.update((existing) => {
+        const seen = new Set(existing.map((message) => message.id));
+        const additions = incoming.filter((message) => !seen.has(message.id));
+        return additions.length > 0 ? [...existing, ...additions] : existing;
+      });
+      this.loadError.set(null);
+    } catch {
+      // Transient poll failures are expected while the network is flaky; the
+      // next tick (or the socket coming back) will reconcile.
     }
   }
 

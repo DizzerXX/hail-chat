@@ -1,10 +1,15 @@
-import { Injectable, inject } from '@angular/core';
+import { Injectable, Signal, inject, signal } from '@angular/core';
 import Echo from 'laravel-echo';
 import Pusher from 'pusher-js';
 import { environment } from '../../environments/environment';
 import { AuthService } from './auth.service';
 
 type PusherEcho = Echo<'pusher'>;
+
+interface PusherConnection {
+  state: string;
+  bind(event: 'state_change', callback: (states: { current: string }) => void): void;
+}
 
 /**
  * Laravel Echo over Reverb (Pusher protocol). Private channels authorize
@@ -17,6 +22,15 @@ export class EchoService {
   private readonly auth = inject(AuthService);
   private instance: PusherEcho | null = null;
 
+  /**
+   * Whether the realtime socket is currently connected. Consumers watch this
+   * to fall back to HTTP polling while the socket is down (Reverb restart,
+   * proxy hiccup, lost network) and stop once it reconnects. Optimistic by
+   * default so nothing polls before the socket has had a chance to connect.
+   */
+  private readonly connectedSignal = signal(true);
+  readonly connected: Signal<boolean> = this.connectedSignal.asReadonly();
+
   get echo(): PusherEcho {
     this.instance ??= this.connect();
     return this.instance;
@@ -25,12 +39,13 @@ export class EchoService {
   disconnect(): void {
     this.instance?.disconnect();
     this.instance = null;
+    this.connectedSignal.set(true);
   }
 
   private connect(): PusherEcho {
     (globalThis as Record<string, unknown>)['Pusher'] = Pusher;
 
-    return new Echo({
+    const echo = new Echo({
       broadcaster: 'pusher',
       key: environment.reverb.key,
       wsHost: environment.reverb.host,
@@ -64,5 +79,16 @@ export class EchoService {
         },
       }),
     });
+
+    // Reflect the Pusher connection lifecycle into the signal so consumers can
+    // switch to polling when the socket drops and reconcile when it returns.
+    const connection = (echo.connector as unknown as { pusher: { connection: PusherConnection } })
+      .pusher.connection;
+    connection.bind('state_change', ({ current }) => {
+      this.connectedSignal.set(current === 'connected');
+    });
+    this.connectedSignal.set(connection.state === 'connected');
+
+    return echo;
   }
 }
