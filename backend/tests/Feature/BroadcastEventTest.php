@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Events\AgentTyping;
+use App\Events\VisitorTyping;
 use App\Events\ConversationCreated;
 use App\Events\ConversationUpdated;
 use App\Events\MessageSent;
@@ -108,6 +109,32 @@ class BroadcastEventTest extends TestCase
                 && $event->agent->is($agent)
                 && $this->channelNames($event->broadcastOn()) === ['conversation.'.$conversation->uuid];
         });
+    }
+
+    public function test_public_typing_endpoint_broadcasts_visitor_typing(): void
+    {
+        Event::fake([VisitorTyping::class]);
+        $conversation = Conversation::factory()->active()->create();
+
+        $this->postJson("/api/v1/public/conversations/{$conversation->uuid}/typing", ['typing' => true])
+            ->assertNoContent();
+
+        Event::assertDispatched(VisitorTyping::class, function (VisitorTyping $event) use ($conversation) {
+            return $event->broadcastAs() === 'visitor.typing'
+                && $event->typing === true
+                && $this->channelNames($event->broadcastOn()) === ['conversation.'.$conversation->uuid];
+        });
+    }
+
+    public function test_public_typing_is_ignored_on_a_closed_conversation(): void
+    {
+        Event::fake([VisitorTyping::class]);
+        $conversation = Conversation::factory()->create(['status' => 'closed']);
+
+        $this->postJson("/api/v1/public/conversations/{$conversation->uuid}/typing", ['typing' => false])
+            ->assertNoContent();
+
+        Event::assertNotDispatched(VisitorTyping::class);
     }
 
     public function test_channel_authorization_rules(): void

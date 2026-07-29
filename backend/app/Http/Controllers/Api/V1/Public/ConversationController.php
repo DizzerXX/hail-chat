@@ -3,16 +3,19 @@
 namespace App\Http\Controllers\Api\V1\Public;
 
 use App\Enums\SenderType;
+use App\Events\VisitorTyping;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\SendMessageRequest;
 use App\Http\Requests\StartConversationRequest;
 use App\Http\Requests\StoreAttachmentRequest;
+use App\Http\Requests\TypingRequest;
 use App\Http\Resources\ConversationResource;
 use App\Http\Resources\MessageResource;
 use App\Models\Conversation;
 use App\Models\Inbox;
 use App\Services\ConversationService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Response;
 
 class ConversationController extends Controller
 {
@@ -73,6 +76,15 @@ class ConversationController extends Controller
         return response()->json([
             'message' => MessageResource::make($message)->resolve(),
         ], 201);
+    }
+
+    public function typing(TypingRequest $request, Conversation $conversation): Response
+    {
+        if ($conversation->status->isOpen()) {
+            broadcast(new VisitorTyping($conversation, $request->boolean('typing', true)));
+        }
+
+        return response()->noContent();
     }
 
     public function escalate(Conversation $conversation): ConversationResource

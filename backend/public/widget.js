@@ -36,6 +36,8 @@
   let socket = null;
   let pollTimer = null;
   let typingTimer = null;
+  let visitorTypingActive = false;
+  let visitorTypingTimer = null;
   let open = false;
   let botName = 'Bot'; // overridden by admin branding (app-config)
 
@@ -177,6 +179,8 @@
       sendMessage();
     }
   });
+  refs.input.addEventListener('input', onVisitorTyping);
+  refs.input.addEventListener('blur', stopVisitorTyping);
   refs.escalate.addEventListener('click', escalate);
   refs.end.addEventListener('click', endChat);
   refs.attach.addEventListener('click', () => refs.file.click());
@@ -396,10 +400,35 @@
     (conversation.messages || []).forEach(render);
   }
 
+  // Tell the agent the visitor is typing (mirror of the agent's indicator).
+  function onVisitorTyping() {
+    if (!conversation) return;
+    if (!visitorTypingActive) {
+      visitorTypingActive = true;
+      sendVisitorTyping(true);
+    }
+    clearTimeout(visitorTypingTimer);
+    visitorTypingTimer = setTimeout(stopVisitorTyping, 3000);
+  }
+
+  function stopVisitorTyping() {
+    clearTimeout(visitorTypingTimer);
+    if (visitorTypingActive) {
+      visitorTypingActive = false;
+      sendVisitorTyping(false);
+    }
+  }
+
+  function sendVisitorTyping(on) {
+    if (!conversation) return;
+    request('POST', '/api/v1/public/conversations/' + conversation.uuid + '/typing', { typing: on });
+  }
+
   async function sendMessage() {
     const body = refs.input.value.trim();
     if (body === '' || !conversation) return;
     refs.input.value = '';
+    stopVisitorTyping();
 
     const response = await api(
       'POST',

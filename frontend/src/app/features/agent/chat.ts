@@ -166,6 +166,13 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
                 </div>
               }
             }
+
+            @if (visitorTyping()) {
+              <div class="typing-indicator">
+                {{ conversation.visitor.name || 'Visitor' }} is typing
+                <span class="dots"><span></span><span></span><span></span></span>
+              </div>
+            }
           </main>
 
           <footer [class.note-mode]="noteMode()">
@@ -544,6 +551,44 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
       font-size: 12px;
       color: var(--tde-muted);
     }
+    .typing-indicator {
+      align-self: flex-start;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-style: italic;
+      color: var(--tde-muted);
+
+      .dots {
+        display: inline-flex;
+        gap: 3px;
+
+        span {
+          width: 5px;
+          height: 5px;
+          border-radius: 50%;
+          background: var(--tde-muted);
+          animation: tde-typing 1.2s infinite ease-in-out;
+        }
+        span:nth-child(2) {
+          animation-delay: 0.2s;
+        }
+        span:nth-child(3) {
+          animation-delay: 0.4s;
+        }
+      }
+    }
+    @keyframes tde-typing {
+      0%,
+      60%,
+      100% {
+        opacity: 0.3;
+      }
+      30% {
+        opacity: 1;
+      }
+    }
     .note-msg {
       align-self: stretch;
       background: #fdf6e3;
@@ -873,6 +918,7 @@ export class Chat implements OnInit, OnDestroy {
 
   protected readonly conversation = signal<Conversation | null>(null);
   protected readonly messages = signal<Message[]>([]);
+  protected readonly visitorTyping = signal(false);
   protected readonly faqs = signal<PublicFaq[]>([]);
   protected readonly cannedResponses = signal<CannedResponse[]>([]);
   protected readonly noteMode = signal(false);
@@ -886,6 +932,7 @@ export class Chat implements OnInit, OnDestroy {
   private uuid = '';
   private typingTimer: ReturnType<typeof setTimeout> | null = null;
   private typingActive = false;
+  private visitorTypingTimer: ReturnType<typeof setTimeout> | null = null;
   private clock: ReturnType<typeof setInterval> | null = null;
   private poller: ReturnType<typeof setInterval> | null = null;
   private wasOffline = false;
@@ -1048,6 +1095,9 @@ export class Chat implements OnInit, OnDestroy {
     if (this.clock !== null) {
       clearInterval(this.clock);
     }
+    if (this.visitorTypingTimer !== null) {
+      clearTimeout(this.visitorTypingTimer);
+    }
     this.stopPolling();
     this.leaveChannels();
   }
@@ -1102,6 +1152,7 @@ export class Chat implements OnInit, OnDestroy {
     this.cannedResponses.set([]);
     this.history.set(null);
     this.noteMode.set(false);
+    this.setVisitorTyping(false);
     this.draft = '';
 
     if (this.embedded() && this.isAgent()) {
@@ -1120,6 +1171,10 @@ export class Chat implements OnInit, OnDestroy {
     this.echoService.echo
       .channel(`conversation.${this.uuid}`)
       .listen('.message.sent', (payload: { message: Message }) => {
+        // The visitor sending a message ends their "typing" state.
+        if (payload.message.sender_type === 'visitor') {
+          this.setVisitorTyping(false);
+        }
         if (this.messages().every((message) => message.id !== payload.message.id)) {
           this.messages.update((messages) => [...messages, payload.message]);
         }
@@ -1130,6 +1185,9 @@ export class Chat implements OnInit, OnDestroy {
           this.patchTranslations(payload.message_id, payload.translations);
         },
       )
+      .listen('.visitor.typing', (payload: { typing: boolean }) => {
+        this.setVisitorTyping(payload.typing !== false);
+      })
       .listen('.conversation.updated', (payload: { conversation: Conversation }) => {
         this.conversation.update((current) =>
           current === null ? current : { ...current, ...payload.conversation },
@@ -1413,6 +1471,21 @@ export class Chat implements OnInit, OnDestroy {
     if (this.typingTimer !== null) {
       clearTimeout(this.typingTimer);
       this.typingTimer = null;
+    }
+  }
+
+  /**
+   * Show/hide the visitor typing indicator, with a safety auto-clear in case
+   * the "stopped typing" broadcast is missed.
+   */
+  private setVisitorTyping(on: boolean): void {
+    if (this.visitorTypingTimer !== null) {
+      clearTimeout(this.visitorTypingTimer);
+      this.visitorTypingTimer = null;
+    }
+    this.visitorTyping.set(on);
+    if (on) {
+      this.visitorTypingTimer = setTimeout(() => this.visitorTyping.set(false), 5000);
     }
   }
 

@@ -34,6 +34,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/app-config', [PublicAppConfigController::class, 'show']);
         Route::get('/conversations/{conversation}', [PublicConversationController::class, 'show']);
         Route::post('/conversations/{conversation}/messages', [PublicConversationController::class, 'message']);
+        Route::post('/conversations/{conversation}/typing', [PublicConversationController::class, 'typing']);
         Route::post('/conversations/{conversation}/attachments', [PublicConversationController::class, 'attachment']);
         Route::post('/conversations/{conversation}/escalate', [PublicConversationController::class, 'escalate']);
         Route::post('/conversations/{conversation}/close', [PublicConversationController::class, 'close']);
