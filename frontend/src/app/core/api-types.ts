@@ -250,6 +250,24 @@ export interface ChatSettings {
   widget_greeting_placeholder: string;
   widget_start_label: string;
   widget_input_placeholder: string;
+  // Pre-chat fields (tier 1 toggles/labels + tier 2 custom)
+  field_name_enabled: boolean;
+  field_name_required: boolean;
+  field_email_enabled: boolean;
+  field_email_required: boolean;
+  field_phone_enabled: boolean;
+  field_phone_required: boolean;
+  widget_email_label: string;
+  widget_phone_label: string;
+  custom_fields: CustomField[];
+}
+
+export interface CustomField {
+  key: string;
+  label: string;
+  type: 'text' | 'email' | 'phone' | 'number' | 'select';
+  required: boolean;
+  options?: string[];
 }
 
 export interface AgentNotification {

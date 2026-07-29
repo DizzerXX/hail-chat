@@ -167,6 +167,15 @@ URL), the bot name, and the pre-chat labels/placeholders. The widget reads them 
 `/public/app-config` (alongside `bubble_color`) and falls back to built-in defaults if the
 call fails. Settings are global (one set across all embeds).
 
+**Pre-chat fields are configurable too** (**Admin → Chat settings → Pre-chat form**). The three
+first-class fields — **name / email / phone** — each toggle show/required with an editable
+label; they stay as real columns, so email/phone feed contact history. Beyond those, admins add
+**custom fields** (`text / email / phone / number / select`, each optional or required). The
+widget renders them dynamically and enforces required client-side; the server re-validates
+against the config (required, select options) and stores answers **self-describing** in
+`conversation.meta.fields` (`[{key,label,value}]`), which the agent details panel lists. Unknown
+keys are dropped; the config is global.
+
 Prefer driving the API directly? It needs no authentication — the conversation UUID returned
 on start is the capability that authorizes all later calls for that conversation:
 

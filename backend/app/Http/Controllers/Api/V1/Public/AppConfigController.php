@@ -19,6 +19,24 @@ class AppConfigController extends Controller
         return response()->json(['data' => [
             'bubble_color' => $settings->bubble_color,
             'widget' => $settings->only(ChatSettings::BRANDING),
+            'fields' => [
+                'name' => [
+                    'enabled' => $settings->field_name_enabled,
+                    'required' => $settings->field_name_required,
+                    'label' => $settings->widget_name_label,
+                ],
+                'email' => [
+                    'enabled' => $settings->field_email_enabled,
+                    'required' => $settings->field_email_required,
+                    'label' => $settings->widget_email_label,
+                ],
+                'phone' => [
+                    'enabled' => $settings->field_phone_enabled,
+                    'required' => $settings->field_phone_required,
+                    'label' => $settings->widget_phone_label,
+                ],
+                'custom' => $settings->custom_fields ?? [],
+            ],
         ]]);
     }
 }

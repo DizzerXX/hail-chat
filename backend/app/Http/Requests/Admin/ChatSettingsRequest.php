@@ -45,7 +45,37 @@ class ChatSettingsRequest extends FormRequest
             'widget_greeting_placeholder' => ['required', 'string', 'max:200'],
             'widget_start_label' => ['required', 'string', 'max:60'],
             'widget_input_placeholder' => ['required', 'string', 'max:120'],
+
+            // Pre-chat fields — tier 1 toggles/labels.
+            'field_name_enabled' => ['required', 'boolean'],
+            'field_name_required' => ['required', 'boolean'],
+            'field_email_enabled' => ['required', 'boolean'],
+            'field_email_required' => ['required', 'boolean'],
+            'field_phone_enabled' => ['required', 'boolean'],
+            'field_phone_required' => ['required', 'boolean'],
+            'widget_email_label' => ['required', 'string', 'max:120'],
+            'widget_phone_label' => ['required', 'string', 'max:120'],
+
+            // Tier 2 — custom fields.
+            'custom_fields' => ['present', 'array', 'max:20'],
+            'custom_fields.*.key' => ['required', 'string', 'regex:/^[a-z][a-z0-9_]*$/', 'distinct', 'max:40'],
+            'custom_fields.*.label' => ['required', 'string', 'max:120'],
+            'custom_fields.*.type' => ['required', Rule::in(['text', 'email', 'phone', 'number', 'select'])],
+            'custom_fields.*.required' => ['required', 'boolean'],
+            'custom_fields.*.options' => ['array'],
+            'custom_fields.*.options.*' => ['required', 'string', 'max:120'],
         ];
+    }
+
+    public function withValidator(\Illuminate\Validation\Validator $validator): void
+    {
+        $validator->after(function ($validator) {
+            foreach ((array) $this->input('custom_fields', []) as $i => $field) {
+                if (($field['type'] ?? null) === 'select' && empty($field['options'])) {
+                    $validator->errors()->add("custom_fields.$i.options", 'A select field needs at least one option.');
+                }
+            }
+        });
     }
 
     public function messages(): array

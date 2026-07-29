@@ -41,6 +41,19 @@ return [
         'widget_start_label' => 'Start chat',
         'widget_input_placeholder' => 'Type a message…',
 
+        // Pre-chat fields. Tier 1: the three first-class fields (name shows by
+        // default; collecting email is what makes contact history useful).
+        'field_name_enabled' => true,
+        'field_name_required' => false,
+        'field_email_enabled' => false,
+        'field_email_required' => false,
+        'field_phone_enabled' => false,
+        'field_phone_required' => false,
+        'widget_email_label' => 'Email',
+        'widget_phone_label' => 'Phone',
+        // Tier 2: custom fields, e.g. [{key,label,type,required,options}].
+        'custom_fields' => [],
+
         // Auto-sent, visitor-visible warnings (localised by conversation language).
         'warn1_ms' => 'Adakah anda masih di sana? Balas untuk meneruskan perbualan.',
         'warn1_en' => 'Are you still there? Reply to keep the conversation going.',

@@ -29,6 +29,19 @@ class ChatSettings extends Model
         'widget_input_placeholder',
     ];
 
+    /** Pre-chat field configuration (tier 1 toggles/labels + tier 2 custom fields). */
+    public const FIELD_CONFIG = [
+        'field_name_enabled',
+        'field_name_required',
+        'field_email_enabled',
+        'field_email_required',
+        'field_phone_enabled',
+        'field_phone_required',
+        'widget_email_label',
+        'widget_phone_label',
+        'custom_fields',
+    ];
+
     protected function casts(): array
     {
         return [
@@ -37,6 +50,13 @@ class ChatSettings extends Model
             'customer_warn2_minutes' => 'integer',
             'customer_close_minutes' => 'integer',
             'agent_idle_minutes' => 'integer',
+            'field_name_enabled' => 'boolean',
+            'field_name_required' => 'boolean',
+            'field_email_enabled' => 'boolean',
+            'field_email_required' => 'boolean',
+            'field_phone_enabled' => 'boolean',
+            'field_phone_required' => 'boolean',
+            'custom_fields' => 'array',
         ];
     }
 

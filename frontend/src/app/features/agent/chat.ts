@@ -290,6 +290,10 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
               <dt>Phone</dt>
               <dd>{{ conversation.visitor.phone }}</dd>
             }
+            @for (field of visitorFields(); track field.key) {
+              <dt>{{ field.label }}</dt>
+              <dd>{{ field.value }}</dd>
+            }
             <dt>Inbox</dt>
             <dd># {{ conversation.inbox?.name }}</dd>
             <dt>Language</dt>
@@ -947,6 +951,15 @@ export class Chat implements OnInit, OnDestroy {
   protected readonly visitorInitial = computed(() =>
     (this.conversation()?.visitor.name || 'A').charAt(0).toUpperCase(),
   );
+
+  /** Custom pre-chat answers the visitor gave, stored self-describing in meta. */
+  protected readonly visitorFields = computed(() => {
+    const meta = this.conversation()?.meta as
+      | { fields?: { key: string; label: string; value: string }[] }
+      | null
+      | undefined;
+    return Array.isArray(meta?.fields) ? meta.fields : [];
+  });
 
   /** Ticks every second so the details-card timer stays live while open. */
   private readonly now = signal(Date.now());

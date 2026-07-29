@@ -39,6 +39,16 @@
   let open = false;
   let botName = 'Bot'; // overridden by admin branding (app-config)
 
+  // Pre-chat field config (admin-driven via app-config). Defaults collect just
+  // an optional name until app-config resolves.
+  let fieldConfig = {
+    name: { enabled: true, required: false, label: 'Your name (optional)' },
+    email: { enabled: false, required: false, label: 'Email' },
+    phone: { enabled: false, required: false, label: 'Phone' },
+    custom: [],
+  };
+  let fieldInputs = []; // [{ key, builtin, required, el }]
+
   // ---------- styles ----------
   const css = `
   .tdec-btn{position:fixed;right:20px;bottom:20px;width:56px;height:56px;border-radius:50%;
@@ -82,7 +92,8 @@
   .tdec-bar{display:flex;gap:8px;padding:8px 10px;background:#fff;border-top:1px solid #e1e0d9}
   .tdec-link{background:none;border:none;color:var(--tdec-accent,#2a78d6);cursor:pointer;font-size:12px;padding:4px}
   .tdec-pre{padding:18px;display:flex;flex-direction:column;gap:10px;background:#f7f7f5;flex:1}
-  .tdec-pre label{font-size:12px;color:#52514e}
+  .tdec-fields{display:flex;flex-direction:column;gap:10px}
+  .tdec-pre label{font-size:12px;color:#52514e;display:flex;flex-direction:column;gap:4px}
   .tdec-pre input,.tdec-pre select{border:1px solid #c3c2b7;border-radius:8px;padding:9px 12px;font:inherit;width:100%;box-sizing:border-box}
   .tdec-pre .tdec-start{background:var(--tdec-accent,#2a78d6);color:#fff;border:none;border-radius:8px;padding:11px;cursor:pointer;font:inherit;margin-top:4px}
   `;
@@ -105,9 +116,7 @@
       </div>
     </div>
     <div class="tdec-pre">
-      <label><span class="tdec-name-label">Your name (optional)</span>
-        <input type="text" class="tdec-name" autocomplete="name" />
-      </label>
+      <div class="tdec-fields"></div>
       <label><span class="tdec-lang-label">Language</span>
         <select class="tdec-lang">
           <option value="ms">Bahasa Malaysia</option>
@@ -148,7 +157,7 @@
     send: panel.querySelector('.tdec-send'),
     attach: panel.querySelector('.tdec-attach'),
     file: panel.querySelector('.tdec-file'),
-    name: panel.querySelector('.tdec-name'),
+    fields: panel.querySelector('.tdec-fields'),
     lang: panel.querySelector('.tdec-lang'),
     first: panel.querySelector('.tdec-first'),
     start: panel.querySelector('.tdec-start'),
@@ -173,6 +182,7 @@
   refs.attach.addEventListener('click', () => refs.file.click());
   refs.file.addEventListener('change', uploadFile);
 
+  renderFields(); // default fields until app-config resolves
   loadTheme();
 
   const savedUuid = localStorage.getItem(storageKey);
@@ -191,9 +201,56 @@
       const data = (body && body.data) || {};
       if (data.bubble_color) document.documentElement.style.setProperty('--tdec-accent', data.bubble_color);
       applyBranding(data.widget);
+      applyFields(data.fields);
     } catch (e) {
       /* keep the default accent + hardcoded copy */
     }
+  }
+
+  // Merge admin field config and re-render the pre-chat form.
+  function applyFields(f) {
+    if (!f) return;
+    if (f.name) fieldConfig.name = f.name;
+    if (f.email) fieldConfig.email = f.email;
+    if (f.phone) fieldConfig.phone = f.phone;
+    if (Array.isArray(f.custom)) fieldConfig.custom = f.custom;
+    renderFields();
+  }
+
+  // Build the pre-chat inputs from fieldConfig into the .tdec-fields container.
+  function renderFields() {
+    refs.fields.innerHTML = '';
+    fieldInputs = [];
+
+    const add = (def) => {
+      const label = document.createElement('label');
+      label.appendChild(element('span', 'tdec-field-label', def.required ? def.label + ' *' : def.label));
+
+      let input;
+      if (def.type === 'select') {
+        input = document.createElement('select');
+        if (!def.required) input.appendChild(new Option('', ''));
+        (def.options || []).forEach((o) => input.appendChild(new Option(o, o)));
+      } else {
+        input = document.createElement('input');
+        input.type =
+          def.type === 'email' ? 'email' : def.type === 'phone' ? 'tel' : def.type === 'number' ? 'number' : 'text';
+      }
+      input.className = 'tdec-field-input';
+      label.appendChild(input);
+      refs.fields.appendChild(label);
+      fieldInputs.push({ key: def.key, builtin: !!def.builtin, required: !!def.required, el: input });
+    };
+
+    ['name', 'email', 'phone'].forEach((key) => {
+      const c = fieldConfig[key];
+      if (c && c.enabled) {
+        add({ key: key, builtin: true, type: key === 'name' ? 'text' : key, required: c.required, label: c.label });
+      }
+    });
+    (fieldConfig.custom || []).forEach((f) =>
+      add({ key: f.key, builtin: false, type: f.type, required: f.required, label: f.label, options: f.options }),
+    );
   }
 
   // Apply admin-configured branding over the built-in defaults. Runs once
@@ -206,7 +263,6 @@
       if (el && value) el.textContent = value;
     };
     setText('.tdec-title', w.widget_title);
-    setText('.tdec-name-label', w.widget_name_label);
     setText('.tdec-lang-label', w.widget_language_label);
     setText('.tdec-msg-label', w.widget_message_label);
     setText('.tdec-start', w.widget_start_label);
@@ -263,16 +319,45 @@
       return;
     }
 
-    const response = await api('POST', `/api/v1/public/inboxes/${config.inbox}/conversations`, {
+    const visitor = { visitor_name: null, visitor_email: null, visitor_phone: null };
+    const fields = {};
+    for (let i = 0; i < fieldInputs.length; i++) {
+      const fi = fieldInputs[i];
+      const value = (fi.el.value || '').trim();
+      if (fi.required && value === '') {
+        fi.el.focus();
+        refs.status.textContent = 'Please fill in the required fields.';
+        return;
+      }
+      if (fi.builtin) {
+        visitor['visitor_' + fi.key] = value || null;
+      } else if (value !== '') {
+        fields[fi.key] = value;
+      }
+    }
+
+    // Use request() (not api()) so we can surface a validation error instead of
+    // silently resyncing.
+    const result = await request('POST', `/api/v1/public/inboxes/${config.inbox}/conversations`, {
       message: message,
-      visitor_name: refs.name.value.trim() || null,
+      visitor_name: visitor.visitor_name,
+      visitor_email: visitor.visitor_email,
+      visitor_phone: visitor.visitor_phone,
       language: refs.lang.value,
+      fields: fields,
       meta: { page: location.href },
     });
 
-    if (!response) return;
+    if (result.status === 422) {
+      refs.status.textContent = 'Please check your details and try again.';
+      return;
+    }
+    if (result.status < 200 || result.status >= 300 || !result.data) {
+      refs.status.textContent = 'Connection problem, please try again.';
+      return;
+    }
 
-    setConversation(response.data);
+    setConversation(result.data.data);
     localStorage.setItem(storageKey, conversation.uuid);
     (conversation.messages || []).forEach(render);
     connect();

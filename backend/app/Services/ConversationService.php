@@ -11,6 +11,7 @@ use App\Events\ConversationUpdated;
 use App\Events\MessageSent;
 use App\Http\Resources\ConversationResource;
 use App\Models\Agent;
+use App\Models\ChatSettings;
 use App\Models\Contact;
 use App\Models\Conversation;
 use App\Models\Inbox;
@@ -54,7 +55,7 @@ class ConversationService
                 'visitor_name' => $visitor['visitor_name'] ?? null,
                 'visitor_email' => $visitor['visitor_email'] ?? null,
                 'visitor_phone' => $visitor['visitor_phone'] ?? null,
-                'meta' => $visitor['meta'] ?? null,
+                'meta' => $this->buildMeta($visitor),
                 'last_activity_at' => now(),
             ]);
 
@@ -391,6 +392,36 @@ class ConversationService
         if ($config['bot']['escalate_on_miss'] ?? true) {
             $this->escalate($conversation);
         }
+    }
+
+    /**
+     * Merge any passed meta with normalized custom-field answers. Only fields
+     * defined in settings are kept, each stored self-describing (key+label+value)
+     * so the transcript stays complete even if the field config changes later.
+     *
+     * @param  array<string, mixed>  $visitor
+     * @return array<string, mixed>|null
+     */
+    private function buildMeta(array $visitor): ?array
+    {
+        $meta = $visitor['meta'] ?? [];
+        $answers = $visitor['fields'] ?? [];
+
+        $fields = [];
+        foreach (ChatSettings::current()->custom_fields ?? [] as $field) {
+            $key = $field['key'] ?? null;
+            $value = $key !== null ? ($answers[$key] ?? null) : null;
+
+            if ($value !== null && $value !== '') {
+                $fields[] = ['key' => $key, 'label' => $field['label'] ?? $key, 'value' => $value];
+            }
+        }
+
+        if ($fields !== []) {
+            $meta['fields'] = $fields;
+        }
+
+        return $meta === [] ? null : $meta;
     }
 
     /**

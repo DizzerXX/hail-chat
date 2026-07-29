@@ -47,6 +47,15 @@ class ChatSettingsTest extends TestCase
             'widget_greeting_placeholder' => 'Taip mesej anda',
             'widget_start_label' => 'Start chat',
             'widget_input_placeholder' => 'Type a message',
+            'field_name_enabled' => true,
+            'field_name_required' => false,
+            'field_email_enabled' => false,
+            'field_email_required' => false,
+            'field_phone_enabled' => false,
+            'field_phone_required' => false,
+            'widget_email_label' => 'Email',
+            'widget_phone_label' => 'Phone',
+            'custom_fields' => [],
         ], $overrides);
     }
 
@@ -129,5 +138,44 @@ class ChatSettingsTest extends TestCase
 
         $this->putJson('/api/v1/admin/chat-settings', $this->payload(['widget_title' => '']))
             ->assertUnprocessable()->assertJsonValidationErrors('widget_title');
+    }
+
+    public function test_custom_fields_persist_and_a_select_needs_options(): void
+    {
+        $this->putJson('/api/v1/admin/chat-settings', $this->payload([
+            'custom_fields' => [
+                ['key' => 'order_no', 'label' => 'Order number', 'type' => 'text', 'required' => true],
+                ['key' => 'plan', 'label' => 'Plan', 'type' => 'select', 'required' => false, 'options' => ['Basic', 'Pro']],
+            ],
+        ]))->assertOk()->assertJsonPath('data.custom_fields.1.options.1', 'Pro');
+
+        ChatSettings::forgetCurrent();
+        $this->assertCount(2, ChatSettings::current()->custom_fields);
+
+        // A select with no options is rejected.
+        $this->putJson('/api/v1/admin/chat-settings', $this->payload([
+            'custom_fields' => [['key' => 'plan', 'label' => 'Plan', 'type' => 'select', 'required' => false]],
+        ]))->assertUnprocessable()->assertJsonValidationErrors('custom_fields.0.options');
+
+        // Bad keys are rejected.
+        $this->putJson('/api/v1/admin/chat-settings', $this->payload([
+            'custom_fields' => [['key' => 'Bad Key!', 'label' => 'x', 'type' => 'text', 'required' => false]],
+        ]))->assertUnprocessable()->assertJsonValidationErrors('custom_fields.0.key');
+    }
+
+    public function test_public_app_config_exposes_the_fields_block(): void
+    {
+        ChatSettings::current()->update([
+            'field_email_enabled' => true,
+            'field_email_required' => true,
+            'custom_fields' => [['key' => 'order_no', 'label' => 'Order number', 'type' => 'text', 'required' => true]],
+        ]);
+        ChatSettings::forgetCurrent();
+
+        $this->getJson('/api/v1/public/app-config')
+            ->assertOk()
+            ->assertJsonPath('data.fields.email.enabled', true)
+            ->assertJsonPath('data.fields.email.required', true)
+            ->assertJsonPath('data.fields.custom.0.key', 'order_no');
     }
 }

@@ -10,7 +10,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { firstValueFrom } from 'rxjs';
-import { ChatSettings } from '../../core/api-types';
+import { ChatSettings, CustomField } from '../../core/api-types';
 import { AdminApiService } from './admin-api.service';
 
 @Component({
@@ -98,10 +98,6 @@ import { AdminApiService } from './admin-api.service';
               <input matInput [(ngModel)]="s.widget_bot_name" />
             </mat-form-field>
             <mat-form-field appearance="outline">
-              <mat-label>Name field label</mat-label>
-              <input matInput [(ngModel)]="s.widget_name_label" />
-            </mat-form-field>
-            <mat-form-field appearance="outline">
               <mat-label>Language field label</mat-label>
               <input matInput [(ngModel)]="s.widget_language_label" />
             </mat-form-field>
@@ -121,6 +117,59 @@ import { AdminApiService } from './admin-api.service';
               <mat-label>Composer placeholder</mat-label>
               <input matInput [(ngModel)]="s.widget_input_placeholder" />
             </mat-form-field>
+          </mat-card-content>
+        </mat-card>
+
+        <mat-card appearance="outlined" class="section">
+          <mat-card-header>
+            <mat-card-title>Pre-chat form</mat-card-title>
+            <mat-card-subtitle>What the widget asks before a chat starts</mat-card-subtitle>
+          </mat-card-header>
+          <mat-card-content>
+            @for (row of tier1Rows; track row.key) {
+              <div class="field-row">
+                <mat-form-field appearance="outline" subscriptSizing="dynamic">
+                  <mat-label>{{ row.name }} label</mat-label>
+                  <input matInput [(ngModel)]="s[row.label]" />
+                </mat-form-field>
+                <mat-slide-toggle [(ngModel)]="s[row.enabled]">Show</mat-slide-toggle>
+                <mat-slide-toggle [(ngModel)]="s[row.required]" [disabled]="!s[row.enabled]">Required</mat-slide-toggle>
+              </div>
+            }
+            <p class="muted hint">Collecting email or phone powers "previous conversations" in the chat details.</p>
+
+            <h3 class="custom-title">Custom fields</h3>
+            @for (f of s.custom_fields; track $index) {
+              <div class="custom-row">
+                <mat-form-field appearance="outline" subscriptSizing="dynamic">
+                  <mat-label>Key</mat-label>
+                  <input matInput [(ngModel)]="f.key" placeholder="order_no" />
+                </mat-form-field>
+                <mat-form-field appearance="outline" subscriptSizing="dynamic">
+                  <mat-label>Label</mat-label>
+                  <input matInput [(ngModel)]="f.label" />
+                </mat-form-field>
+                <mat-form-field appearance="outline" subscriptSizing="dynamic" class="type">
+                  <mat-label>Type</mat-label>
+                  <mat-select [(ngModel)]="f.type">
+                    @for (t of fieldTypes; track t) {
+                      <mat-option [value]="t">{{ t }}</mat-option>
+                    }
+                  </mat-select>
+                </mat-form-field>
+                @if (f.type === 'select') {
+                  <mat-form-field appearance="outline" subscriptSizing="dynamic">
+                    <mat-label>Options (comma-separated)</mat-label>
+                    <input matInput [ngModel]="(f.options || []).join(', ')" (ngModelChange)="setOptions(f, $event)" />
+                  </mat-form-field>
+                }
+                <mat-slide-toggle [(ngModel)]="f.required">Required</mat-slide-toggle>
+                <button matIconButton (click)="removeField($index)" aria-label="Remove field">
+                  <mat-icon>delete</mat-icon>
+                </button>
+              </div>
+            }
+            <button matButton (click)="addField()"><mat-icon>add</mat-icon> Add custom field</button>
           </mat-card-content>
         </mat-card>
 
@@ -208,6 +257,30 @@ import { AdminApiService } from './admin-api.service';
       margin: 8px 0 0;
       font-size: 12.5px;
     }
+    .field-row,
+    .custom-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 6px;
+      flex-wrap: wrap;
+    }
+    .field-row mat-form-field {
+      flex: 1;
+      min-width: 220px;
+    }
+    .custom-row mat-form-field {
+      flex: 1;
+      min-width: 150px;
+    }
+    .custom-row .type {
+      max-width: 150px;
+    }
+    .custom-title {
+      margin: 18px 0 8px;
+      font-size: 13px;
+      font-weight: 600;
+    }
   `,
 })
 export class ChatSettingsPage implements OnInit {
@@ -222,6 +295,39 @@ export class ChatSettingsPage implements OnInit {
     { key: 'warn2', label: '2nd warning', ms: 'warn2_ms', en: 'warn2_en' },
     { key: 'closed', label: 'Auto-close notice', ms: 'closed_ms', en: 'closed_en' },
   ] as const;
+
+  protected readonly tier1Rows = [
+    { key: 'name', name: 'Name', label: 'widget_name_label', enabled: 'field_name_enabled', required: 'field_name_required' },
+    { key: 'email', name: 'Email', label: 'widget_email_label', enabled: 'field_email_enabled', required: 'field_email_required' },
+    { key: 'phone', name: 'Phone', label: 'widget_phone_label', enabled: 'field_phone_enabled', required: 'field_phone_required' },
+  ] as const;
+
+  protected readonly fieldTypes = ['text', 'email', 'phone', 'number', 'select'] as const;
+
+  protected addField(): void {
+    const s = this.form();
+    if (s === null) {
+      return;
+    }
+    s.custom_fields = [...s.custom_fields, { key: '', label: '', type: 'text', required: false }];
+    this.form.set({ ...s });
+  }
+
+  protected removeField(index: number): void {
+    const s = this.form();
+    if (s === null) {
+      return;
+    }
+    s.custom_fields = s.custom_fields.filter((_, i) => i !== index);
+    this.form.set({ ...s });
+  }
+
+  protected setOptions(field: CustomField, value: string): void {
+    field.options = value
+      .split(',')
+      .map((option) => option.trim())
+      .filter((option) => option !== '');
+  }
 
   async ngOnInit(): Promise<void> {
     this.form.set((await firstValueFrom(this.api.chatSettings())).data);
