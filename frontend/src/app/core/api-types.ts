@@ -262,12 +262,19 @@ export interface ChatSettings {
   custom_fields: CustomField[];
 }
 
+export interface CascadeNode {
+  key: string;
+  label: string;
+  children?: CascadeNode[];
+}
+
 export interface CustomField {
   key: string;
   label: string;
-  type: 'text' | 'email' | 'phone' | 'number' | 'select';
+  type: 'text' | 'email' | 'phone' | 'number' | 'select' | 'cascade';
   required: boolean;
   options?: string[];
+  tree?: CascadeNode[];
 }
 
 export interface AgentNotification {

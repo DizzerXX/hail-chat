@@ -170,11 +170,16 @@ call fails. Settings are global (one set across all embeds).
 **Pre-chat fields are configurable too** (**Admin → Chat settings → Pre-chat form**). The three
 first-class fields — **name / email / phone** — each toggle show/required with an editable
 label; they stay as real columns, so email/phone feed contact history. Beyond those, admins add
-**custom fields** (`text / email / phone / number / select`, each optional or required). The
-widget renders them dynamically and enforces required client-side; the server re-validates
+**custom fields** (`text / email / phone / number / select / cascade`, each optional or required).
+The widget renders them dynamically and enforces required client-side; the server re-validates
 against the config (required, select options) and stores answers **self-describing** in
 `conversation.meta.fields` (`[{key,label,value}]`), which the agent details panel lists. Unknown
 keys are dropped; the config is global.
+
+A **`cascade`** field is a dependent-dropdown tree (defined as pasted JSON,
+`[{key,label,children?}]`, any depth). The widget reveals each next level as the visitor
+chooses; a started selection must be finished to a leaf. The answer is stored with its full
+`path` (`[{key,label}]` per level) so each level is addressable — e.g. for a CMS/CRM URL below.
 
 Prefer driving the API directly? It needs no authentication — the conversation UUID returned
 on start is the capability that authorizes all later calls for that conversation:
@@ -394,7 +399,18 @@ that would only touch its own record. (On standalone inboxes the embed keeps Clo
 also opens the inbox's CMS URL if one is set.)
 
 An inbox can optionally point at an external CMS/ticketing system: set **CMS URL** in the
-inbox dialog (stored as `channel_config.cms_url`, validated as an http(s) URL). When set:
+inbox dialog (stored as `channel_config.cms_url`). It may be a **template** with placeholders,
+resolved per conversation on the server (each value URL-encoded):
+
+| Placeholder | Value |
+|---|---|
+| `{id}` / `{uuid}` | conversation id / uuid (e.g. `case_id=livechat-{id}`) |
+| `{name}` `{email}` `{phone}` | visitor details |
+| `{field:KEY}` | a custom field answer (cascade = the joined path) |
+| `{field:KEY:N}` | level *N* of a cascade answer (e.g. `category={field:services:1}`) |
+
+e.g. `https://crm.example/create?case_id=livechat-{id}&customer_name={name}&category={field:services:1}&sub_category1={field:services:2}`.
+When set:
 
 - On the **dashboard**, closing a conversation opens the URL in a new tab, and the details
   card shows an **Open CMS** link (new tab) — handy for logging the interaction.

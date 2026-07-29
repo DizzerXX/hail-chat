@@ -410,10 +410,29 @@ class ConversationService
         $fields = [];
         foreach (ChatSettings::current()->custom_fields ?? [] as $field) {
             $key = $field['key'] ?? null;
-            $value = $key !== null ? ($answers[$key] ?? null) : null;
+            if ($key === null) {
+                continue;
+            }
+            $answer = $answers[$key] ?? null;
 
-            if ($value !== null && $value !== '') {
-                $fields[] = ['key' => $key, 'label' => $field['label'] ?? $key, 'value' => $value];
+            // A cascade answer (list of node keys) is resolved to a self-describing
+            // path so the transcript + CMS templating stay complete.
+            if (($field['type'] ?? 'text') === 'cascade') {
+                $path = $this->resolveCascadePath($field['tree'] ?? [], (array) ($answer ?? []));
+                if ($path !== []) {
+                    $fields[] = [
+                        'key' => $key,
+                        'label' => $field['label'] ?? $key,
+                        'value' => implode(' / ', array_column($path, 'label')),
+                        'path' => $path,
+                    ];
+                }
+
+                continue;
+            }
+
+            if ($answer !== null && $answer !== '') {
+                $fields[] = ['key' => $key, 'label' => $field['label'] ?? $key, 'value' => $answer];
             }
         }
 
@@ -422,6 +441,31 @@ class ConversationService
         }
 
         return $meta === [] ? null : $meta;
+    }
+
+    /**
+     * Walk a cascade tree following the selected keys, collecting each level's
+     * {key,label}. Stops at the first key that doesn't match.
+     *
+     * @param  list<array<string, mixed>>  $nodes
+     * @param  list<string>  $path
+     * @return list<array{key: string, label: string}>
+     */
+    private function resolveCascadePath(array $nodes, array $path): array
+    {
+        $resolved = [];
+        $current = $nodes;
+
+        foreach ($path as $selectedKey) {
+            $node = collect($current)->firstWhere('key', $selectedKey);
+            if ($node === null) {
+                break;
+            }
+            $resolved[] = ['key' => $node['key'], 'label' => $node['label']];
+            $current = $node['children'] ?? [];
+        }
+
+        return $resolved;
     }
 
     /**

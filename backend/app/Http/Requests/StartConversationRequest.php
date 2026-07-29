@@ -40,12 +40,23 @@ class StartConversationRequest extends FormRequest
                 continue;
             }
 
-            $rule = [($field['required'] ?? false) ? 'required' : 'nullable', 'string', 'max:1000'];
+            $required = ($field['required'] ?? false) ? 'required' : 'nullable';
+            $type = $field['type'] ?? 'text';
 
-            if (($field['type'] ?? 'text') === 'select' && ! empty($field['options'])) {
+            // A cascade answer is the selected path (a list of node keys).
+            if ($type === 'cascade') {
+                $rules["fields.$key"] = [$required, 'array'];
+                $rules["fields.$key.*"] = ['string', 'max:120'];
+
+                continue;
+            }
+
+            $rule = [$required, 'string', 'max:1000'];
+
+            if ($type === 'select' && ! empty($field['options'])) {
                 $rule[] = Rule::in($field['options']);
             }
-            if (($field['type'] ?? 'text') === 'email') {
+            if ($type === 'email') {
                 $rule[] = 'email:filter';
             }
 
@@ -53,5 +64,45 @@ class StartConversationRequest extends FormRequest
         }
 
         return $rules;
+    }
+
+    public function withValidator(\Illuminate\Validation\Validator $validator): void
+    {
+        $validator->after(function ($validator) {
+            foreach (ChatSettings::current()->custom_fields ?? [] as $field) {
+                if (($field['type'] ?? null) !== 'cascade') {
+                    continue;
+                }
+
+                $key = $field['key'] ?? null;
+                $path = $key !== null ? (array) $this->input("fields.$key", []) : [];
+
+                // Empty is handled by the required/nullable rule; a given path
+                // must chain valid keys and end at a leaf (a complete choice).
+                if ($path !== [] && ! $this->pathReachesLeaf($field['tree'] ?? [], $path)) {
+                    $validator->errors()->add("fields.$key", 'Please complete the selection.');
+                }
+            }
+        });
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $nodes
+     * @param  list<string>  $path
+     */
+    private function pathReachesLeaf(array $nodes, array $path): bool
+    {
+        $current = $nodes;
+        $node = null;
+
+        foreach ($path as $selectedKey) {
+            $node = collect($current)->firstWhere('key', $selectedKey);
+            if ($node === null) {
+                return false;
+            }
+            $current = $node['children'] ?? [];
+        }
+
+        return $node !== null && empty($node['children']);
     }
 }

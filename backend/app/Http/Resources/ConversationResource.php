@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Services\CmsUrlResolver;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -27,8 +28,13 @@ class ConversationResource extends JsonResource
                 'name' => $this->inbox->name,
                 'channel_type' => $this->inbox->channel_type,
                 // Agent-facing inbox config; never exposed on the public widget API.
+                // The CMS URL is a template resolved against this conversation's
+                // details + field answers (case_id, name, category, ...).
                 ...($request->user() !== null
-                    ? ['cms_url' => $this->inbox->channel_config['cms_url'] ?? null]
+                    ? ['cms_url' => app(CmsUrlResolver::class)->resolve(
+                        $this->inbox->channel_config['cms_url'] ?? null,
+                        $this->resource,
+                    )]
                     : []),
             ]),
             'assigned_agent' => $this->whenLoaded('assignedAgent', fn () => $this->assignedAgent === null ? null : [

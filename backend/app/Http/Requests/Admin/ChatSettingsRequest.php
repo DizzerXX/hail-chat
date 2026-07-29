@@ -60,10 +60,12 @@ class ChatSettingsRequest extends FormRequest
             'custom_fields' => ['present', 'array', 'max:20'],
             'custom_fields.*.key' => ['required', 'string', 'regex:/^[a-z][a-z0-9_]*$/', 'distinct', 'max:40'],
             'custom_fields.*.label' => ['required', 'string', 'max:120'],
-            'custom_fields.*.type' => ['required', Rule::in(['text', 'email', 'phone', 'number', 'select'])],
+            'custom_fields.*.type' => ['required', Rule::in(['text', 'email', 'phone', 'number', 'select', 'cascade'])],
             'custom_fields.*.required' => ['required', 'boolean'],
             'custom_fields.*.options' => ['array'],
             'custom_fields.*.options.*' => ['required', 'string', 'max:120'],
+            // Cascade (dependent-dropdown) tree: [{key,label,children?:[...]}]
+            'custom_fields.*.tree' => ['array'],
         ];
     }
 
@@ -71,11 +73,40 @@ class ChatSettingsRequest extends FormRequest
     {
         $validator->after(function ($validator) {
             foreach ((array) $this->input('custom_fields', []) as $i => $field) {
-                if (($field['type'] ?? null) === 'select' && empty($field['options'])) {
+                $type = $field['type'] ?? null;
+
+                if ($type === 'select' && empty($field['options'])) {
                     $validator->errors()->add("custom_fields.$i.options", 'A select field needs at least one option.');
+                }
+
+                if ($type === 'cascade' && ! $this->isValidTree($field['tree'] ?? null)) {
+                    $validator->errors()->add("custom_fields.$i.tree", 'A cascade field needs a valid tree of {key,label,children?} nodes.');
                 }
             }
         });
+    }
+
+    /** A non-empty list of nodes, each with a string key + label and (optionally) a valid child list. */
+    private function isValidTree(mixed $nodes): bool
+    {
+        if (! is_array($nodes) || $nodes === []) {
+            return false;
+        }
+
+        foreach ($nodes as $node) {
+            if (! is_array($node)
+                || ! isset($node['key'], $node['label'])
+                || ! is_string($node['key']) || $node['key'] === ''
+                || ! is_string($node['label']) || $node['label'] === '') {
+                return false;
+            }
+            if (isset($node['children']) && $node['children'] !== []
+                && ! $this->isValidTree($node['children'])) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     public function messages(): array

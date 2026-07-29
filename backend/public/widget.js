@@ -95,6 +95,9 @@
   .tdec-link{background:none;border:none;color:var(--tdec-accent,#2a78d6);cursor:pointer;font-size:12px;padding:4px}
   .tdec-pre{padding:18px;display:flex;flex-direction:column;gap:10px;background:#f7f7f5;flex:1}
   .tdec-fields{display:flex;flex-direction:column;gap:10px}
+  .tdec-field{display:flex;flex-direction:column;gap:4px}
+  .tdec-field-label{font-size:12px;color:#52514e}
+  .tdec-cascade{display:flex;flex-direction:column;gap:6px}
   .tdec-pre label{font-size:12px;color:#52514e;display:flex;flex-direction:column;gap:4px}
   .tdec-pre input,.tdec-pre select{border:1px solid #c3c2b7;border-radius:8px;padding:9px 12px;font:inherit;width:100%;box-sizing:border-box}
   .tdec-pre .tdec-start{background:var(--tdec-accent,#2a78d6);color:#fff;border:none;border-radius:8px;padding:11px;cursor:pointer;font:inherit;margin-top:4px}
@@ -252,9 +255,71 @@
         add({ key: key, builtin: true, type: key === 'name' ? 'text' : key, required: c.required, label: c.label });
       }
     });
-    (fieldConfig.custom || []).forEach((f) =>
-      add({ key: f.key, builtin: false, type: f.type, required: f.required, label: f.label, options: f.options }),
-    );
+    (fieldConfig.custom || []).forEach((f) => {
+      if (f.type === 'cascade') {
+        addCascade(f);
+      } else {
+        add({ key: f.key, builtin: false, type: f.type, required: f.required, label: f.label, options: f.options });
+      }
+    });
+  }
+
+  // A cascade field: dependent dropdowns driven by a {key,label,children} tree.
+  function addCascade(f) {
+    const wrap = document.createElement('div');
+    wrap.className = 'tdec-field';
+    wrap.appendChild(element('span', 'tdec-field-label', f.required ? f.label + ' *' : f.label));
+    const levels = document.createElement('div');
+    levels.className = 'tdec-cascade';
+    wrap.appendChild(levels);
+    refs.fields.appendChild(wrap);
+
+    addCascadeSelect(levels, f.tree || []);
+    fieldInputs.push({ key: f.key, builtin: false, required: !!f.required, cascade: true, tree: f.tree || [], levels: levels });
+  }
+
+  function addCascadeSelect(levels, nodes) {
+    const select = document.createElement('select');
+    select.className = 'tdec-field-input';
+    select.appendChild(new Option('', ''));
+    nodes.forEach((n) => select.appendChild(new Option(n.label, n.key)));
+    select.addEventListener('change', () => {
+      // Drop any deeper dropdowns, then reveal the next level if the choice has children.
+      let sib = select.nextElementSibling;
+      while (sib) {
+        const next = sib.nextElementSibling;
+        sib.remove();
+        sib = next;
+      }
+      const node = nodes.find((n) => n.key === select.value);
+      if (node && node.children && node.children.length) {
+        addCascadeSelect(levels, node.children);
+      }
+    });
+    levels.appendChild(select);
+  }
+
+  // The selected path (node keys, top to bottom), stopping at the first blank.
+  function readCascadePath(levels) {
+    const path = [];
+    const selects = levels.querySelectorAll('select');
+    for (let i = 0; i < selects.length; i++) {
+      if (selects[i].value === '') break;
+      path.push(selects[i].value);
+    }
+    return path;
+  }
+
+  // Whether a path ends at a leaf (a complete choice).
+  function cascadeAtLeaf(nodes, path) {
+    let current = nodes;
+    let node = null;
+    for (let i = 0; i < path.length; i++) {
+      node = current.find((n) => n.key === path[i]);
+      if (!node) return false;
+      current = node.children || [];
+    }
+    return node !== null && (!node.children || node.children.length === 0);
   }
 
   // Apply admin-configured branding over the built-in defaults. Runs once
@@ -327,6 +392,22 @@
     const fields = {};
     for (let i = 0; i < fieldInputs.length; i++) {
       const fi = fieldInputs[i];
+
+      if (fi.cascade) {
+        const path = readCascadePath(fi.levels);
+        if (fi.required && path.length === 0) {
+          refs.status.textContent = 'Please fill in the required fields.';
+          return;
+        }
+        // A started selection must be finished to a leaf.
+        if (path.length > 0 && !cascadeAtLeaf(fi.tree, path)) {
+          refs.status.textContent = 'Please complete the selection.';
+          return;
+        }
+        if (path.length > 0) fields[fi.key] = path;
+        continue;
+      }
+
       const value = (fi.el.value || '').trim();
       if (fi.required && value === '') {
         fi.el.focus();

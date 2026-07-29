@@ -163,6 +163,17 @@ import { AdminApiService } from './admin-api.service';
                     <input matInput [ngModel]="(f.options || []).join(', ')" (ngModelChange)="setOptions(f, $event)" />
                   </mat-form-field>
                 }
+                @if (f.type === 'cascade') {
+                  <mat-form-field appearance="outline" subscriptSizing="dynamic" class="tree">
+                    <mat-label>Tree JSON — [{{ '{' }}key,label,children?{{ '}' }}]</mat-label>
+                    <textarea
+                      matInput
+                      rows="4"
+                      [ngModel]="treeText(f)"
+                      (ngModelChange)="onTreeInput(f, $event)"
+                    ></textarea>
+                  </mat-form-field>
+                }
                 <mat-slide-toggle [(ngModel)]="f.required">Required</mat-slide-toggle>
                 <button matIconButton (click)="removeField($index)" aria-label="Remove field">
                   <mat-icon>delete</mat-icon>
@@ -276,6 +287,14 @@ import { AdminApiService } from './admin-api.service';
     .custom-row .type {
       max-width: 150px;
     }
+    .custom-row .tree {
+      flex-basis: 100%;
+
+      textarea {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+      }
+    }
     .custom-title {
       margin: 18px 0 8px;
       font-size: 13px;
@@ -302,7 +321,26 @@ export class ChatSettingsPage implements OnInit {
     { key: 'phone', name: 'Phone', label: 'widget_phone_label', enabled: 'field_phone_enabled', required: 'field_phone_required' },
   ] as const;
 
-  protected readonly fieldTypes = ['text', 'email', 'phone', 'number', 'select'] as const;
+  protected readonly fieldTypes = ['text', 'email', 'phone', 'number', 'select', 'cascade'] as const;
+
+  /** Raw JSON text per cascade field while editing (kept out of the payload). */
+  private readonly treeDrafts = new Map<CustomField, string>();
+
+  protected treeText(field: CustomField): string {
+    return this.treeDrafts.get(field) ?? JSON.stringify(field.tree ?? [], null, 2);
+  }
+
+  protected onTreeInput(field: CustomField, text: string): void {
+    this.treeDrafts.set(field, text);
+    try {
+      const parsed = JSON.parse(text);
+      if (Array.isArray(parsed)) {
+        field.tree = parsed;
+      }
+    } catch {
+      // Keep the last valid tree; the server validates the structure on save.
+    }
+  }
 
   protected addField(): void {
     const s = this.form();

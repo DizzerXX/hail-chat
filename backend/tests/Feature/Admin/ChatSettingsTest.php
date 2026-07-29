@@ -163,6 +163,30 @@ class ChatSettingsTest extends TestCase
         ]))->assertUnprocessable()->assertJsonValidationErrors('custom_fields.0.key');
     }
 
+    public function test_cascade_field_requires_a_valid_tree(): void
+    {
+        $tree = [
+            ['key' => 'perkhidmatan', 'label' => 'Perkhidmatan', 'children' => [
+                ['key' => 'visa', 'label' => 'Visa'],
+            ]],
+            ['key' => 'semakan', 'label' => 'Semakan Agensi'],
+        ];
+
+        $this->putJson('/api/v1/admin/chat-settings', $this->payload([
+            'custom_fields' => [['key' => 'services', 'label' => 'Service', 'type' => 'cascade', 'required' => true, 'tree' => $tree]],
+        ]))->assertOk()->assertJsonPath('data.custom_fields.0.tree.0.children.0.label', 'Visa');
+
+        // Missing tree.
+        $this->putJson('/api/v1/admin/chat-settings', $this->payload([
+            'custom_fields' => [['key' => 'services', 'label' => 'Service', 'type' => 'cascade', 'required' => true]],
+        ]))->assertUnprocessable()->assertJsonValidationErrors('custom_fields.0.tree');
+
+        // A node without a label.
+        $this->putJson('/api/v1/admin/chat-settings', $this->payload([
+            'custom_fields' => [['key' => 'services', 'label' => 'Service', 'type' => 'cascade', 'required' => true, 'tree' => [['key' => 'x']]]],
+        ]))->assertUnprocessable()->assertJsonValidationErrors('custom_fields.0.tree');
+    }
+
     public function test_public_app_config_exposes_the_fields_block(): void
     {
         ChatSettings::current()->update([

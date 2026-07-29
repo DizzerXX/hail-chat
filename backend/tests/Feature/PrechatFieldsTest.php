@@ -84,6 +84,63 @@ class PrechatFieldsTest extends TestCase
         $this->start(['fields' => ['plan' => 'Pro']])->assertCreated();
     }
 
+    private array $tree = [
+        ['key' => 'perkhidmatan', 'label' => 'Perkhidmatan', 'children' => [
+            ['key' => 'visa', 'label' => 'Visa', 'children' => [
+                ['key' => 'visa_tanpa', 'label' => 'Visa tanpa rujukan'],
+            ]],
+        ]],
+        ['key' => 'semakan', 'label' => 'Semakan Agensi'],
+    ];
+
+    public function test_a_cascade_answer_is_resolved_into_a_self_describing_path(): void
+    {
+        $this->configureFields([
+            'custom_fields' => [['key' => 'services', 'label' => 'Service', 'type' => 'cascade', 'required' => true, 'tree' => $this->tree]],
+        ]);
+
+        $uuid = $this->start(['fields' => ['services' => ['perkhidmatan', 'visa', 'visa_tanpa']]])
+            ->assertCreated()->json('data.uuid');
+
+        $field = Conversation::where('uuid', $uuid)->sole()->meta['fields'][0];
+        $this->assertSame('services', $field['key']);
+        $this->assertSame('Perkhidmatan / Visa / Visa tanpa rujukan', $field['value']);
+        $this->assertSame([
+            ['key' => 'perkhidmatan', 'label' => 'Perkhidmatan'],
+            ['key' => 'visa', 'label' => 'Visa'],
+            ['key' => 'visa_tanpa', 'label' => 'Visa tanpa rujukan'],
+        ], $field['path']);
+    }
+
+    public function test_a_top_level_leaf_is_a_complete_cascade_answer(): void
+    {
+        $this->configureFields([
+            'custom_fields' => [['key' => 'services', 'label' => 'Service', 'type' => 'cascade', 'required' => true, 'tree' => $this->tree]],
+        ]);
+
+        $uuid = $this->start(['fields' => ['services' => ['semakan']]])->assertCreated()->json('data.uuid');
+        $this->assertSame('Semakan Agensi', Conversation::where('uuid', $uuid)->sole()->meta['fields'][0]['value']);
+    }
+
+    public function test_incomplete_or_invalid_cascade_paths_are_rejected(): void
+    {
+        $this->configureFields([
+            'custom_fields' => [['key' => 'services', 'label' => 'Service', 'type' => 'cascade', 'required' => true, 'tree' => $this->tree]],
+        ]);
+
+        // Stops on a node that still has children (not a leaf).
+        $this->start(['fields' => ['services' => ['perkhidmatan', 'visa']]])
+            ->assertStatus(422)->assertJsonValidationErrors('fields.services');
+
+        // A key that isn't in the tree.
+        $this->start(['fields' => ['services' => ['nope']]])
+            ->assertStatus(422)->assertJsonValidationErrors('fields.services');
+
+        // Required, but nothing chosen.
+        $this->start(['fields' => []])
+            ->assertStatus(422)->assertJsonValidationErrors('fields.services');
+    }
+
     public function test_required_email_is_enforced_only_when_enabled_and_required(): void
     {
         // Not required by default → fine without an email.
