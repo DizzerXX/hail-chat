@@ -40,9 +40,9 @@ class CmsUrlResolver
                     'name' => $conversation->visitor_name,
                     'email' => $conversation->visitor_email,
                     'phone' => $conversation->visitor_phone,
-                    // Full public URL of the read-only chat transcript.
-                    'transcript' => rtrim((string) config('app.url'), '/')
-                        .'/api/v1/public/conversations/'.$conversation->uuid.'/transcript',
+                    // Full public URL of the read-only chat transcript page (SPA).
+                    'transcript' => rtrim((string) config('app.frontend_url'), '/')
+                        .'/preview/'.$conversation->uuid,
                     'field' => $this->fieldValue($fields, $fieldKey, $level),
                     default => '',
                 };

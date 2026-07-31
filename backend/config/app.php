@@ -54,6 +54,11 @@ return [
 
     'url' => env('APP_URL', 'http://localhost'),
 
+    // Public base URL of the Angular SPA (for links the CRM opens, e.g. the
+    // conversation transcript page). Same domain as APP_URL in production;
+    // a separate host in local dev (ng serve).
+    'frontend_url' => env('APP_FRONTEND_URL', env('APP_URL', 'http://localhost')),
+
     /*
     |--------------------------------------------------------------------------
     | Application Timezone

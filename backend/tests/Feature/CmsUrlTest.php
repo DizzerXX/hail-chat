@@ -56,11 +56,12 @@ class CmsUrlTest extends TestCase
 
     public function test_it_resolves_the_public_transcript_url(): void
     {
+        config(['app.frontend_url' => 'https://app.test']);
         $conversation = Conversation::factory()->create();
 
         $url = $this->resolve('https://crm.test/?chat={transcript}', $conversation);
 
-        $expected = rawurlencode(config('app.url')."/api/v1/public/conversations/{$conversation->uuid}/transcript");
+        $expected = rawurlencode("https://app.test/preview/{$conversation->uuid}");
         $this->assertSame("https://crm.test/?chat={$expected}", $url);
     }
 

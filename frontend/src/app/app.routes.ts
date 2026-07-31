@@ -32,6 +32,13 @@ export const routes: Routes = [
     loadComponent: () => import('./features/agent/embed-chat').then((m) => m.EmbedChat),
   },
   {
+    // Public read-only transcript (no auth) — opened by an external CMS/CRM via
+    // the conversation uuid. Just the chat room, no footer or details panel.
+    path: 'preview/:uuid',
+    loadComponent: () =>
+      import('./features/preview/conversation-preview').then((m) => m.ConversationPreview),
+  },
+  {
     path: 'admin',
     canActivate: [authGuard],
     loadComponent: () => import('./features/admin/admin-shell').then((m) => m.AdminShell),

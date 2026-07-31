@@ -78,24 +78,6 @@ class ConversationController extends Controller
         ], 201);
     }
 
-    /**
-     * A public, read-only HTML transcript for the conversation — the "chat room"
-     * only (no agent details), safe to open from an external CMS/CRM. Keyed by
-     * the unguessable uuid; internal notes are never included.
-     */
-    public function transcript(Conversation $conversation): \Illuminate\Contracts\View\View
-    {
-        $conversation->load(['inbox', 'messages' => function ($query) {
-            $query->where('sender_type', '!=', SenderType::Note)->with('agent', 'attachments');
-        }]);
-
-        return view('transcript', [
-            'conversation' => $conversation,
-            'botName' => \App\Models\ChatSettings::current()->widget_bot_name,
-            'accent' => \App\Models\ChatSettings::current()->bubble_color,
-        ]);
-    }
-
     public function typing(TypingRequest $request, Conversation $conversation): Response
     {
         if ($conversation->status->isOpen()) {
