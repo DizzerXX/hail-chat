@@ -33,7 +33,7 @@ class InboxRequest extends FormRequest
             'channel_config.bot.escalate_on_miss' => ['nullable', 'boolean'],
             // A CMS/CRM URL template — allows {placeholders} (which aren't valid
             // in a strict URL), so require the http(s) scheme rather than url:.
-            'channel_config.cms_url' => ['nullable', 'string', 'max:2048', 'regex:/^https?:\/\//i'],
+            'channel_config.cms_url' => ['nullable', 'string', 'max:4096', 'regex:/^https?:\/\//i'],
             'bot_enabled' => ['sometimes', 'boolean'],
             'is_active' => ['sometimes', 'boolean'],
         ];
