@@ -5,10 +5,12 @@ import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
+import { MatMenuModule } from '@angular/material/menu';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { firstValueFrom } from 'rxjs';
 import { ChatSettings, CustomField } from '../../core/api-types';
 import { AdminApiService } from './admin-api.service';
@@ -22,9 +24,11 @@ import { AdminApiService } from './admin-api.service';
     MatFormFieldModule,
     MatIconModule,
     MatInputModule,
+    MatMenuModule,
     MatProgressBarModule,
     MatSelectModule,
     MatSlideToggleModule,
+    MatTooltipModule,
   ],
   template: `
     <div class="page">
@@ -85,14 +89,46 @@ import { AdminApiService } from './admin-api.service';
               <mat-label>Header subtitle</mat-label>
               <input matInput [(ngModel)]="s.widget_subtitle" />
             </mat-form-field>
-            <mat-form-field appearance="outline">
-              <mat-label>Header icon (emoji or image URL)</mat-label>
-              <input matInput [(ngModel)]="s.widget_header_icon" />
-            </mat-form-field>
-            <mat-form-field appearance="outline">
-              <mat-label>Launcher icon (emoji or image URL)</mat-label>
-              <input matInput [(ngModel)]="s.widget_launcher_icon" />
-            </mat-form-field>
+            @for (ic of iconFields; track ic.key) {
+              <div class="icon-field">
+                <span class="icon-preview">
+                  @if (isImageIcon(s[ic.key])) {
+                    <img [src]="s[ic.key]" alt="" />
+                  } @else {
+                    {{ s[ic.key] || '—' }}
+                  }
+                </span>
+                <mat-form-field appearance="outline" subscriptSizing="dynamic">
+                  <mat-label>{{ ic.label }} (emoji, URL, or upload)</mat-label>
+                  <input matInput [(ngModel)]="s[ic.key]" />
+                </mat-form-field>
+                <input
+                  #iconFile
+                  type="file"
+                  hidden
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  (change)="onIconFile(ic.key, $event)"
+                />
+                <button matIconButton type="button" (click)="iconFile.click()" matTooltip="Upload an image">
+                  <mat-icon>upload</mat-icon>
+                </button>
+                <button matIconButton type="button" [matMenuTriggerFor]="emojiMenu" matTooltip="Pick an emoji">
+                  <mat-icon>mood</mat-icon>
+                </button>
+                <mat-menu #emojiMenu="matMenu" class="emoji-menu">
+                  <div class="emoji-grid">
+                    @for (e of emojis; track e) {
+                      <button type="button" mat-menu-item class="emoji-btn" (click)="s[ic.key] = e">{{ e }}</button>
+                    }
+                  </div>
+                </mat-menu>
+                @if (s[ic.key]) {
+                  <button matIconButton type="button" (click)="s[ic.key] = ''" matTooltip="Clear">
+                    <mat-icon>close</mat-icon>
+                  </button>
+                }
+              </div>
+            }
             <mat-form-field appearance="outline">
               <mat-label>Bot name</mat-label>
               <input matInput [(ngModel)]="s.widget_bot_name" />
@@ -300,6 +336,51 @@ import { AdminApiService } from './admin-api.service';
       font-size: 13px;
       font-weight: 600;
     }
+    .icon-field {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+
+      mat-form-field {
+        flex: 1;
+      }
+    }
+    .icon-preview {
+      flex-shrink: 0;
+      width: 40px;
+      height: 40px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--tde-border);
+      border-radius: 8px;
+      background: var(--tde-bubble);
+      font-size: 20px;
+      overflow: hidden;
+
+      img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+    }
+    .emoji-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 2px;
+      padding: 6px;
+
+      .emoji-btn {
+        min-width: 40px;
+        width: 40px;
+        height: 40px;
+        padding: 0;
+        font-size: 20px;
+        line-height: 40px;
+        text-align: center;
+        border-radius: 6px;
+      }
+    }
   `,
 })
 export class ChatSettingsPage implements OnInit {
@@ -322,6 +403,73 @@ export class ChatSettingsPage implements OnInit {
   ] as const;
 
   protected readonly fieldTypes = ['text', 'email', 'phone', 'number', 'select', 'cascade'] as const;
+
+  protected readonly iconFields = [
+    { key: 'widget_header_icon', label: 'Header icon' },
+    { key: 'widget_launcher_icon', label: 'Launcher icon' },
+  ] as const;
+
+  protected readonly emojis = [
+    '💬', '🗨️', '💭', '📩', '✉️', '📞', '☎️', '🎧', '🛎️', '❓',
+    'ℹ️', '🏢', '🏛️', '🛂', '🌐', '🤝', '👋', '⭐', '🔔', '😊',
+  ];
+
+  protected isImageIcon(value: string | null | undefined): boolean {
+    return !!value && (value.startsWith('http') || value.startsWith('data:'));
+  }
+
+  protected async onIconFile(
+    key: 'widget_header_icon' | 'widget_launcher_icon',
+    event: Event,
+  ): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) {
+      return;
+    }
+    if (file.size > 1024 * 1024) {
+      this.snackBar.open('Image too large (max 1 MB).', 'Dismiss', { duration: 4000 });
+      return;
+    }
+    try {
+      const dataUri = await this.toDownscaledDataUri(file, 128);
+      const settings = this.form();
+      if (settings !== null) {
+        settings[key] = dataUri;
+        this.form.set({ ...settings });
+      }
+    } catch {
+      this.snackBar.open('Could not read that image.', 'Dismiss', { duration: 4000 });
+    }
+  }
+
+  /** Read + downscale an image to a small PNG data-URI so it stays inline-sized. */
+  private toDownscaledDataUri(file: File, maxDim: number): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('read'));
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = () => reject(new Error('decode'));
+        img.onload = () => {
+          const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.max(1, Math.round(img.width * scale));
+          canvas.height = Math.max(1, Math.round(img.height * scale));
+          const ctx = canvas.getContext('2d');
+          if (ctx === null) {
+            reject(new Error('canvas'));
+            return;
+          }
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL('image/png'));
+        };
+        img.src = reader.result as string;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
 
   /** Raw JSON text per cascade field while editing (kept out of the payload). */
   private readonly treeDrafts = new Map<CustomField, string>();

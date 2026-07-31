@@ -163,6 +163,24 @@ class ChatSettingsTest extends TestCase
         ]))->assertUnprocessable()->assertJsonValidationErrors('custom_fields.0.key');
     }
 
+    public function test_an_uploaded_icon_data_uri_persists(): void
+    {
+        // A downscaled icon inlined as a data-URI is far longer than varchar(255).
+        $dataUri = 'data:image/png;base64,'.str_repeat('A', 8000);
+
+        $this->putJson('/api/v1/admin/chat-settings', $this->payload(['widget_launcher_icon' => $dataUri]))
+            ->assertOk()
+            ->assertJsonPath('data.widget_launcher_icon', $dataUri);
+
+        ChatSettings::forgetCurrent();
+        $this->assertSame($dataUri, ChatSettings::current()->widget_launcher_icon);
+
+        // And it's exposed to the widget via app-config.
+        $this->getJson('/api/v1/public/app-config')
+            ->assertOk()
+            ->assertJsonPath('data.widget.widget_launcher_icon', $dataUri);
+    }
+
     public function test_cascade_field_requires_a_valid_tree(): void
     {
         $tree = [

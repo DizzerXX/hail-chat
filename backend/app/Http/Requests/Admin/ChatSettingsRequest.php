@@ -36,8 +36,10 @@ class ChatSettingsRequest extends FormRequest
             // and header icon may be blank (hidden); the rest need a value.
             'widget_title' => ['required', 'string', 'max:120'],
             'widget_subtitle' => ['nullable', 'string', 'max:120'],
-            'widget_header_icon' => ['nullable', 'string', 'max:255'],
-            'widget_launcher_icon' => ['required', 'string', 'max:255'],
+            // Emoji, an image URL, or an uploaded image inlined as a data-URI
+            // (hence the generous limit).
+            'widget_header_icon' => ['nullable', 'string', 'max:500000'],
+            'widget_launcher_icon' => ['required', 'string', 'max:500000'],
             'widget_bot_name' => ['required', 'string', 'max:60'],
             'widget_name_label' => ['required', 'string', 'max:120'],
             'widget_language_label' => ['required', 'string', 'max:120'],

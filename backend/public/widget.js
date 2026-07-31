@@ -359,10 +359,10 @@
     }
   }
 
-  // An icon value is either an image URL (rendered as <img>) or an emoji/text.
+  // An icon value is an image (URL or inline data-URI, rendered as <img>) or an emoji/text.
   function applyIcon(el, value) {
     if (!el || !value) return;
-    if (/^https?:\/\//.test(value)) {
+    if (/^https?:\/\//.test(value) || value.slice(0, 5) === 'data:') {
       el.textContent = '';
       const img = document.createElement('img');
       img.src = value;
