@@ -256,6 +256,7 @@ export class InboxDialog implements OnInit {
       { label: 'Visitor name', value: '{name}' },
       { label: 'Visitor email', value: '{email}' },
       { label: 'Visitor phone', value: '{phone}' },
+      { label: 'Chat transcript URL (public)', value: '{transcript}' },
     ];
 
     for (const field of fields) {

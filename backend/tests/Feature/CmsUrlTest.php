@@ -54,6 +54,16 @@ class CmsUrlTest extends TestCase
         $this->assertStringContainsString('full=Perkhidmatan%20%2F%20Visa', $url);
     }
 
+    public function test_it_resolves_the_public_transcript_url(): void
+    {
+        $conversation = Conversation::factory()->create();
+
+        $url = $this->resolve('https://crm.test/?chat={transcript}', $conversation);
+
+        $expected = rawurlencode(config('app.url')."/api/v1/public/conversations/{$conversation->uuid}/transcript");
+        $this->assertSame("https://crm.test/?chat={$expected}", $url);
+    }
+
     public function test_missing_values_resolve_to_empty_and_blank_templates_to_null(): void
     {
         $conversation = Conversation::factory()->create(['visitor_name' => null, 'meta' => null]);

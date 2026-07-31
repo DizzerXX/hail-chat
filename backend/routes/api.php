@@ -33,6 +33,8 @@ Route::prefix('v1')->group(function () {
         Route::get('/inboxes/{inbox:slug}/faqs', [PublicFaqController::class, 'index']);
         Route::get('/app-config', [PublicAppConfigController::class, 'show']);
         Route::get('/conversations/{conversation}', [PublicConversationController::class, 'show']);
+        // Public read-only HTML transcript (for an external CMS/CRM to open).
+        Route::get('/conversations/{conversation}/transcript', [PublicConversationController::class, 'transcript']);
         Route::post('/conversations/{conversation}/messages', [PublicConversationController::class, 'message']);
         Route::post('/conversations/{conversation}/typing', [PublicConversationController::class, 'typing']);
         Route::post('/conversations/{conversation}/attachments', [PublicConversationController::class, 'attachment']);
