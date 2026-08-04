@@ -280,6 +280,25 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
             <span class="timer-label">{{ isOpen() ? 'Duration' : 'Total time' }}</span>
           </div>
 
+          @if (embedded() && idle(); as idle) {
+            <div
+              class="timer idle-timer"
+              [class.you]="idle.waitingOn === 'you'"
+              [class.closing]="idle.closing"
+            >
+              <mat-icon>hourglass_top</mat-icon>
+              <span class="value">{{ mmss(idle.idleSeconds) }}</span>
+              <span class="timer-label">
+                Idle · waiting on {{ idle.waitingOn }}
+                @if (!idle.closing) {
+                  <br />{{ idle.nextLabel }} in ~{{ mmss(idle.nextIn) }}
+                } @else {
+                  <br />closing…
+                }
+              </span>
+            </div>
+          }
+
           <div class="visitor-card">
             <span class="avatar detail-avatar">{{ visitorInitial() }}</span>
             <div>
@@ -812,6 +831,30 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
         color: var(--tde-muted);
       }
     }
+    .idle-timer {
+      margin-top: -6px;
+      /* Waiting on the customer (warn/auto-close path) — amber. */
+      background: rgba(245, 158, 11, 0.14);
+      color: #c77700;
+
+      /* Waiting on the agent to reply — neutral accent. */
+      &.you {
+        background: var(--tde-accent-soft);
+        color: var(--tde-accent);
+      }
+      /* Past the close threshold — auto-closing now. */
+      &.closing {
+        background: rgba(220, 38, 38, 0.14);
+        color: #dc2626;
+      }
+      .timer-label {
+        text-transform: none;
+        letter-spacing: 0;
+        text-align: right;
+        line-height: 1.35;
+        opacity: 0.9;
+      }
+    }
     .visitor-card {
       display: flex;
       align-items: center;
@@ -1033,6 +1076,91 @@ export class Chat implements OnInit, OnDestroy {
     return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
   });
 
+  /**
+   * A live mirror of the backend IdleSweepJob: whose turn it is, how long the
+   * conversation has been idle, and what fires next. Purely diagnostic — the
+   * sweep runs once a minute on whole-minute thresholds, so the actual action
+   * lands on the next minute boundary after the countdown hits zero.
+   */
+  protected readonly idle = computed(() => {
+    const conversation = this.conversation();
+    const idleCfg = this.appConfig.config()?.idle;
+
+    // Only meaningful while a standalone conversation is open with idle on.
+    if (
+      conversation === null ||
+      !this.isOpen() ||
+      !idleCfg?.enabled ||
+      conversation.inbox?.channel_type === 'mitel_openmedia'
+    ) {
+      return null;
+    }
+
+    // Last *real* (visitor/agent) message time — bot/system/note don't count,
+    // exactly as the sweep decides whose turn it is.
+    let lastVisitor = 0;
+    let lastAgent = 0;
+    for (const message of this.messages()) {
+      const at = new Date(message.created_at).getTime();
+      if (message.sender_type === 'visitor') {
+        lastVisitor = Math.max(lastVisitor, at);
+      } else if (message.sender_type === 'agent') {
+        lastAgent = Math.max(lastAgent, at);
+      }
+    }
+    if (lastVisitor === 0 && lastAgent === 0) {
+      return null;
+    }
+
+    const agentsTurn = lastVisitor > 0 && (lastAgent === 0 || lastVisitor > lastAgent);
+    const turnAt = agentsTurn ? lastVisitor : lastAgent;
+    const idleSeconds = Math.max(0, Math.floor((this.now() - turnAt) / 1000));
+
+    if (agentsTurn) {
+      // Waiting on the agent — the sweep nudges every agent_idle interval.
+      const interval = Math.max(1, idleCfg.agent_idle_minutes) * 60;
+      return {
+        waitingOn: 'you',
+        idleSeconds,
+        nextLabel: 'next nudge',
+        nextIn: interval - (idleSeconds % interval),
+        closing: false,
+      };
+    }
+
+    // Waiting on the customer — warn1, warn2, then auto-close.
+    const warn1 = idleCfg.customer_warn1_minutes * 60;
+    const warn2 = idleCfg.customer_warn2_minutes * 60;
+    const close = idleCfg.customer_close_minutes * 60;
+
+    let nextLabel: string;
+    let nextAt: number;
+    if (idleSeconds < warn1) {
+      [nextLabel, nextAt] = ['1st warning', warn1];
+    } else if (idleSeconds < warn2) {
+      [nextLabel, nextAt] = ['2nd warning', warn2];
+    } else if (idleSeconds < close) {
+      [nextLabel, nextAt] = ['auto-close', close];
+    } else {
+      [nextLabel, nextAt] = ['auto-close', idleSeconds];
+    }
+
+    return {
+      waitingOn: 'customer',
+      idleSeconds,
+      nextLabel,
+      nextIn: Math.max(0, nextAt - idleSeconds),
+      closing: idleSeconds >= close,
+    };
+  });
+
+  /** Seconds → m:ss for the idle readout. */
+  protected mmss(seconds: number): string {
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  }
+
   protected readonly composerPlaceholder = computed(() => {
     const conversation = this.conversation();
 
@@ -1189,9 +1317,23 @@ export class Chat implements OnInit, OnDestroy {
         this.setVisitorTyping(payload.typing !== false);
       })
       .listen('.conversation.updated', (payload: { conversation: Conversation }) => {
-        this.conversation.update((current) =>
-          current === null ? current : { ...current, ...payload.conversation },
-        );
+        this.conversation.update((current) => {
+          if (current === null) {
+            return current;
+          }
+          // This event rides the public channel, so its inbox omits agent-only
+          // fields (e.g. cms_url). A shallow merge would let that stripped inbox
+          // replace ours and wipe the "Open CMS" link on close — so merge the
+          // inbox nested, keeping our loaded fields under the fresh public ones.
+          const next = { ...current, ...payload.conversation };
+          if (current.inbox || payload.conversation.inbox) {
+            next.inbox = {
+              ...current.inbox,
+              ...payload.conversation.inbox,
+            } as Conversation['inbox'];
+          }
+          return next;
+        });
       });
 
     // Internal notes ride a private per-conversation channel so they reach

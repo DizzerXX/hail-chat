@@ -220,6 +220,13 @@ export interface AppConfig {
   bubble_color: string;
   notification_sound: string;
   warning_sound: string;
+  idle: {
+    enabled: boolean;
+    customer_warn1_minutes: number;
+    customer_warn2_minutes: number;
+    customer_close_minutes: number;
+    agent_idle_minutes: number;
+  };
 }
 
 export interface ChatSettings {

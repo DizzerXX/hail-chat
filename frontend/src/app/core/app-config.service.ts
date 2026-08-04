@@ -10,6 +10,13 @@ const FALLBACK: AppConfig = {
   bubble_color: '#2f80ed',
   notification_sound: 'notification-1.mp3',
   warning_sound: 'warning.mp3',
+  idle: {
+    enabled: false,
+    customer_warn1_minutes: 5,
+    customer_warn2_minutes: 8,
+    customer_close_minutes: 10,
+    agent_idle_minutes: 2,
+  },
 };
 
 @Injectable({ providedIn: 'root' })
