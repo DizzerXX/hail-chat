@@ -23,6 +23,11 @@ export class NotificationService {
 
   private agentId: number | null = null;
 
+  /** Reusable, pre-unlocked players keyed by filename (see primeAudio). */
+  private readonly players = new Map<string, HTMLAudioElement>();
+  private audioPrimed = false;
+  private audioUnlockBound = false;
+
   start(): void {
     const agentId = this.auth.user()?.agent?.id;
     if (agentId === undefined || agentId === this.agentId) {
@@ -35,9 +40,59 @@ export class NotificationService {
       void Notification.requestPermission();
     }
 
+    this.primeAudio();
+
     this.echoService.echo
       .private(`agents.${agentId}`)
       .listen('.agent.notified', (payload: AgentNotification) => this.handle(payload));
+  }
+
+  /**
+   * Idle alerts fire when the agent has been *inactive* — exactly when the
+   * browser's autoplay policy blocks `Audio.play()` (no recent user gesture),
+   * so a naive play() is silently rejected and no sound is heard. So on the
+   * first user gesture we "unlock" the players we'll need (a muted play+pause
+   * grants them permission), then reuse those same elements for real alerts.
+   */
+  private primeAudio(): void {
+    const config = this.appConfig.config();
+    for (const file of [config?.warning_sound, config?.notification_sound]) {
+      if (file && !this.players.has(file)) {
+        const audio = new Audio(`/sounds/${file}`);
+        audio.preload = 'auto';
+        this.players.set(file, audio);
+      }
+    }
+
+    if (this.audioUnlockBound) {
+      return;
+    }
+    this.audioUnlockBound = true;
+
+    const unlock = (): void => {
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('keydown', unlock);
+      if (this.audioPrimed) {
+        return;
+      }
+      this.audioPrimed = true;
+      for (const audio of this.players.values()) {
+        audio.muted = true;
+        audio
+          .play()
+          .then(() => {
+            audio.pause();
+            audio.currentTime = 0;
+            audio.muted = false;
+          })
+          .catch(() => {
+            audio.muted = false;
+          });
+      }
+    };
+
+    window.addEventListener('pointerdown', unlock);
+    window.addEventListener('keydown', unlock);
   }
 
   stop(): void {
@@ -70,8 +125,16 @@ export class NotificationService {
       return;
     }
 
-    // Autoplay may be blocked until the agent interacts with the page — ignore.
-    void new Audio(`/sounds/${file}`).play().catch(() => undefined);
+    // Reuse the player unlocked on first gesture (falling back to a fresh one);
+    // rewind so back-to-back alerts always replay from the start.
+    const audio = this.players.get(file) ?? new Audio(`/sounds/${file}`);
+    this.players.set(file, audio);
+    audio.currentTime = 0;
+    audio.play().catch((error: unknown) => {
+      // Still blocked (agent never interacted this session) — the badge and any
+      // desktop notification remain, so the alert isn't lost. Log for diagnosis.
+      console.warn(`Idle alert sound "${file}" was blocked by the browser`, error);
+    });
   }
 
   private desktop(payload: AgentNotification): void {
