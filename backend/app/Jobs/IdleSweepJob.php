@@ -32,6 +32,11 @@ class IdleSweepJob implements ShouldQueue
 
     public function handle(ConversationService $conversations): void
     {
+        // This job runs inside the long-lived queue worker, whose process-static
+        // ChatSettings cache would otherwise pin the values seen on the worker's
+        // first sweep — an admin save (which forgets the cache in the *web*
+        // process) would never reach us. Re-read fresh so edits take effect.
+        ChatSettings::forgetCurrent();
         $settings = ChatSettings::current();
 
         if (! $settings->idle_enabled) {
@@ -56,6 +61,20 @@ class IdleSweepJob implements ShouldQueue
         CarbonImmutable $now,
         ConversationService $conversations,
     ): void {
+        $isMitel = $conversation->inbox->channel_type === ChannelType::MitelOpenMedia;
+
+        // Visitor closed the browser tab and didn't return within the grace
+        // window — abandon it now, freeing the agent. Standalone only; on Mitel
+        // the MiCC case owns the lifecycle. Overrides the turn-based flow below.
+        if (! $isMitel && $conversation->visitor_left_at !== null) {
+            $grace = (int) config('chat.visitor_left_grace_seconds');
+            if ($conversation->visitor_left_at->diffInSeconds($now) >= $grace) {
+                $conversations->abandonAfterLeaving($conversation);
+
+                return;
+            }
+        }
+
         $lastVisitorAt = $this->lastMessageAt($conversation, SenderType::Visitor);
         $lastAgentAt = $this->lastMessageAt($conversation, SenderType::Agent);
 
@@ -76,8 +95,6 @@ class IdleSweepJob implements ShouldQueue
         $state = ($previous['anchor'] ?? null) === $anchor
             ? $previous
             : ['anchor' => $anchor];
-
-        $isMitel = $conversation->inbox->channel_type === ChannelType::MitelOpenMedia;
 
         $state = $agentsTurn
             ? $this->handleAgentIdle($conversation, $settings, $idle, $state)

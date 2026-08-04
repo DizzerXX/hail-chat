@@ -159,6 +159,39 @@ class PublicChatTest extends TestCase
         ]);
     }
 
+    public function test_leave_flags_the_visitor_as_gone_and_present_clears_it(): void
+    {
+        $conversation = Conversation::factory()->active()->create();
+
+        $this->postJson("/api/v1/public/conversations/{$conversation->uuid}/leave")
+            ->assertNoContent();
+        $this->assertNotNull($conversation->fresh()->visitor_left_at);
+
+        $this->postJson("/api/v1/public/conversations/{$conversation->uuid}/present")
+            ->assertNoContent();
+        $this->assertNull($conversation->fresh()->visitor_left_at);
+    }
+
+    public function test_leave_is_a_noop_on_a_closed_conversation(): void
+    {
+        $conversation = Conversation::factory()->closed()->create();
+
+        $this->postJson("/api/v1/public/conversations/{$conversation->uuid}/leave")
+            ->assertNoContent();
+        $this->assertNull($conversation->fresh()->visitor_left_at);
+    }
+
+    public function test_a_visitor_message_clears_a_pending_leave(): void
+    {
+        $conversation = Conversation::factory()->active()->create();
+        $conversation->forceFill(['visitor_left_at' => now()])->saveQuietly();
+
+        $this->postJson("/api/v1/public/conversations/{$conversation->uuid}/messages", ['body' => 'Still here'])
+            ->assertCreated();
+
+        $this->assertNull($conversation->fresh()->visitor_left_at);
+    }
+
     public function test_show_returns_conversation_with_messages(): void
     {
         $conversation = Conversation::factory()->create();

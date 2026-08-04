@@ -73,6 +73,9 @@ class FakeNode {
 
 function makeSandbox({ storage = {}, responses }) {
   const body = new FakeNode('body');
+  const windowNode = new FakeNode('window');
+  const beacons = [];
+  const presence = [];
   const timeouts = [];
   const sockets = [];
 
@@ -100,6 +103,12 @@ function makeSandbox({ storage = {}, responses }) {
       if (String(url).includes('/public/app-config')) {
         return { ok: true, status: 200, json: async () => ({ data: { bubble_color: '#2f80ed' } }) };
       }
+      // Presence pings (markPresent) are fire-and-forget; answer out-of-band so
+      // scenarios don't have to thread them through their response queues.
+      if (String(url).includes('/present')) {
+        presence.push(String(url));
+        return { ok: true, status: 204, json: async () => ({}) };
+      }
       const route = responses.shift();
       if (!route) throw new Error('unexpected fetch: ' + url);
       sandbox.lastFetch = { url, options };
@@ -123,6 +132,13 @@ function makeSandbox({ storage = {}, responses }) {
     clearTimeout: () => {},
     setInterval: () => 1,
     clearInterval: () => {},
+    window: windowNode,
+    navigator: {
+      sendBeacon: (url) => {
+        beacons.push(String(url));
+        return true;
+      },
+    },
     URL,
     JSON,
     Promise,
@@ -134,7 +150,7 @@ function makeSandbox({ storage = {}, responses }) {
 
   const button = body.children[0];
   const panel = body.children[1];
-  return { sandbox, body, button, panel, timeouts, sockets, storage };
+  return { sandbox, body, windowNode, button, panel, beacons, presence, timeouts, sockets, storage };
 }
 
 const conversation = (status, messages = []) => ({
@@ -152,7 +168,7 @@ const agentMessage = { id: 3, sender_type: 'agent', agent: { id: 1, display_name
 
 // ---------- scenario 1: fresh start, bot reply, ws events, end chat ----------
 {
-  const { sandbox, panel, timeouts, sockets, storage } = makeSandbox({
+  const { sandbox, panel, windowNode, beacons, presence, timeouts, sockets, storage } = makeSandbox({
     responses: [
       { status: 201, body: { data: conversation('bot', [visitorMessage, botMessage]) } }, // start
       { status: 201, body: { message: { id: 4, sender_type: 'visitor', body: 'lagi' }, bot_reply: null, status: 'awaiting_acceptance' } }, // send
@@ -189,6 +205,12 @@ const agentMessage = { id: 3, sender_type: 'agent', agent: { id: 1, display_name
   const socket = sockets[0];
   socket.onopen();
   check(socket.sent.some((f) => f.includes('pusher:subscribe') && f.includes('conversation.uuid-1')), 'subscribes to the conversation channel');
+  await new Promise((r) => setTimeout(r, 0));
+  check(presence.some((u) => u.includes('/conversations/uuid-1/present')), 'a live socket marks the visitor present');
+
+  // Closing the browser tab beacons a "leave" for the open conversation.
+  await windowNode.fire('pagehide');
+  check(beacons.some((u) => u.includes('/conversations/uuid-1/leave')), 'pagehide beacons a leave');
 
   socket.onmessage({ data: JSON.stringify({ event: 'message.sent', data: JSON.stringify({ message: agentMessage }) }) });
   check(refs.msgs.children.some((n) => n.textContent === 'Hi!'), 'ws message.sent renders the agent reply');
@@ -278,6 +300,36 @@ const agentMessage = { id: 3, sender_type: 'agent', agent: { id: 1, display_name
 
   await new Promise((r) => setTimeout(r, 0));
   check(!('tdechat.website' in storage), '404 resume clears the stored uuid');
+}
+
+// ---------- scenario 4: closing the widget panel ends an active chat ----------
+{
+  const { sandbox, button, panel, storage } = makeSandbox({
+    responses: [
+      { status: 201, body: { data: conversation('active', [visitorMessage]) } }, // start
+      { status: 200, body: { data: conversation('active', [visitorMessage]) } }, // refresh on open
+      { status: 200, body: { data: conversation('closed', [visitorMessage]) } }, // endChat -> close
+    ],
+  });
+
+  await new Promise((r) => setTimeout(r, 0));
+
+  const refs = {
+    first: panel.querySelector('.tdec-first'),
+    start: panel.querySelector('.tdec-start'),
+  };
+
+  refs.first.value = 'hi';
+  await refs.start.fire('click');
+  check(storage['tdechat.website'] === 'uuid-1', 'chat started and stored');
+
+  // Open the panel, then close it — closing ends the active conversation.
+  await button.fire('click'); // open
+  await button.fire('click'); // close
+  await new Promise((r) => setTimeout(r, 0));
+
+  check(String(sandbox.lastFetch.url).includes('/conversations/uuid-1/close'), 'closing the panel posts a visitor close');
+  check(!('tdechat.website' in storage), 'closing the panel clears the stored uuid');
 }
 
 console.log(failures === 0 ? '\nWIDGET SMOKE: ALL PASS' : `\nWIDGET SMOKE: ${failures} FAILURE(S)`);

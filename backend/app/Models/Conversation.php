@@ -28,6 +28,7 @@ class Conversation extends Model
         'external_state',
         'meta',
         'last_activity_at',
+        'visitor_left_at',
         'accepted_at',
         'closed_at',
     ];
@@ -45,6 +46,7 @@ class Conversation extends Model
             'status' => ConversationStatus::class,
             'meta' => 'array',
             'last_activity_at' => 'datetime',
+            'visitor_left_at' => 'datetime',
             'accepted_at' => 'datetime',
             'closed_at' => 'datetime',
         ];

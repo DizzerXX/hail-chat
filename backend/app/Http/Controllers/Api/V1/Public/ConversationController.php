@@ -100,4 +100,27 @@ class ConversationController extends Controller
             $this->conversations->close($conversation, 'visitor')->load(['inbox', 'assignedAgent', 'team'])
         );
     }
+
+    /**
+     * The visitor's page unloaded (sent as a sendBeacon on pagehide). Starts the
+     * grace countdown; the idle sweep abandons the chat if it isn't cleared in
+     * time. No body, so the beacon needs no CORS preflight.
+     */
+    public function leave(Conversation $conversation): Response
+    {
+        $this->conversations->markVisitorLeft($conversation);
+
+        return response()->noContent();
+    }
+
+    /**
+     * The visitor is present again (page (re)loaded or the socket reconnected),
+     * so cancel any pending "left the page" abandonment.
+     */
+    public function present(Conversation $conversation): Response
+    {
+        $this->conversations->markVisitorPresent($conversation);
+
+        return response()->noContent();
+    }
 }

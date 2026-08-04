@@ -162,6 +162,48 @@ class IdleSweepTest extends TestCase
         $this->assertSame(ConversationStatus::Active, $conversation->fresh()->status);
     }
 
+    public function test_visitor_who_left_is_abandoned_after_the_grace_window(): void
+    {
+        $grace = (int) config('chat.visitor_left_grace_seconds');
+        $conversation = $this->conversation();
+        $conversation->forceFill(['visitor_left_at' => now()->subSeconds($grace + 5)])->saveQuietly();
+
+        $this->sweep();
+
+        $conversation->refresh();
+        $this->assertSame(ConversationStatus::Abandoned, $conversation->status);
+        $this->assertNotNull($conversation->closed_at);
+        $this->assertNull($conversation->visitor_left_at);
+        $this->assertDatabaseHas('messages', [
+            'conversation_id' => $conversation->id,
+            'sender_type' => 'system',
+            'body' => 'Visitor left the chat.',
+        ]);
+    }
+
+    public function test_visitor_who_left_but_returned_within_grace_is_kept(): void
+    {
+        $conversation = $this->conversation();
+        // Left only a moment ago (within grace) → still present as far as we know.
+        $conversation->forceFill(['visitor_left_at' => now()->subSeconds(5)])->saveQuietly();
+
+        $this->sweep();
+
+        $this->assertSame(ConversationStatus::Active, $conversation->fresh()->status);
+    }
+
+    public function test_mitel_ignores_a_visitor_left_flag(): void
+    {
+        $grace = (int) config('chat.visitor_left_grace_seconds');
+        $conversation = $this->conversation(ChannelType::MitelOpenMedia);
+        $conversation->forceFill(['visitor_left_at' => now()->subSeconds($grace + 60)])->saveQuietly();
+
+        $this->sweep();
+
+        // MiCC owns the case lifecycle — never auto-abandoned by our sweep.
+        $this->assertSame(ConversationStatus::Active, $conversation->fresh()->status);
+    }
+
     public function test_disabled_idle_does_nothing(): void
     {
         ChatSettings::current()->update(['idle_enabled' => false]);

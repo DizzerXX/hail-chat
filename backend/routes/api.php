@@ -38,6 +38,10 @@ Route::prefix('v1')->group(function () {
         Route::post('/conversations/{conversation}/attachments', [PublicConversationController::class, 'attachment']);
         Route::post('/conversations/{conversation}/escalate', [PublicConversationController::class, 'escalate']);
         Route::post('/conversations/{conversation}/close', [PublicConversationController::class, 'close']);
+        // Visitor presence: /leave (pagehide beacon) starts the grace countdown,
+        // /present (reconnect) cancels it. See IdleSweepJob for the abandonment.
+        Route::post('/conversations/{conversation}/leave', [PublicConversationController::class, 'leave']);
+        Route::post('/conversations/{conversation}/present', [PublicConversationController::class, 'present']);
         // uuid is the download capability, so this stays public (used in <img src>).
         Route::get('/attachments/{attachment}', [PublicAttachmentController::class, 'show']);
     });

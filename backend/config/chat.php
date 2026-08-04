@@ -83,4 +83,10 @@ return [
     // Fixed alert played to the agent on a customer-idle warning (not selectable).
     'warning_sound' => 'warning.mp3',
 
+    // Grace after the visitor's page unloads (pagehide) before the idle sweep
+    // abandons the chat as `visitor_left`. A refresh reconnects and clears the
+    // flag well within this window. The sweep runs once a minute, so the real
+    // end lands between this value and ~60s later.
+    'visitor_left_grace_seconds' => (int) env('CHAT_VISITOR_LEFT_GRACE', 30),
+
 ];

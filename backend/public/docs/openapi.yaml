@@ -217,6 +217,37 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
 
+  /api/v1/public/conversations/{conversationUuid}/leave:
+    post:
+      tags: [Public]
+      summary: Signal the visitor left the page
+      description: >
+        Sent by the widget as a `navigator.sendBeacon` on `pagehide`. Starts a
+        grace countdown (`chat.visitor_left_grace_seconds`, default 30s); the
+        idle sweep then abandons the chat as `visitor_left` unless `/present`
+        clears it first. No request body, so the beacon needs no CORS preflight.
+        A no-op on closed or Mitel conversations.
+      operationId: markVisitorLeft
+      parameters:
+        - $ref: '#/components/parameters/ConversationUuid'
+      responses:
+        '204': { description: Recorded }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/v1/public/conversations/{conversationUuid}/present:
+    post:
+      tags: [Public]
+      summary: Signal the visitor is present
+      description: >
+        Cancels a pending `/leave` when the widget reconnects (page reload,
+        bfcache restore, or socket reconnect). A no-op when nothing is pending.
+      operationId: markVisitorPresent
+      parameters:
+        - $ref: '#/components/parameters/ConversationUuid'
+      responses:
+        '204': { description: Cleared }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /api/v1/auth/login:
     post:
       tags: [Auth]

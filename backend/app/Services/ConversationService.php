@@ -94,6 +94,10 @@ class ConversationService
     {
         abort_unless($conversation->status->isOpen(), 409, 'This conversation is closed.');
 
+        // A real message means the visitor is present — cancel any pending
+        // "left the page" abandonment from an earlier unload.
+        $this->markVisitorPresent($conversation);
+
         $message = $this->appendMessage($conversation, SenderType::Visitor, $body);
 
         if ($conversation->status === ConversationStatus::Bot) {
@@ -311,22 +315,65 @@ class ConversationService
             return $conversation;
         }
 
+        // A visitor-visible bot message so they see why the chat ended.
         $this->appendMessage($conversation, SenderType::Bot, $closingText, null, ['idle_closed' => true]);
 
+        return $this->abandon($conversation, 'idle');
+    }
+
+    /**
+     * Abandon a chat whose visitor closed the browser tab and did not return
+     * within the grace window (see IdleSweepJob). Unlike an idle timeout there's
+     * no visitor-visible message — they've gone — just a system note for agents.
+     */
+    public function abandonAfterLeaving(Conversation $conversation): Conversation
+    {
+        if (! $conversation->status->isOpen()) {
+            return $conversation;
+        }
+
+        $this->appendMessage($conversation, SenderType::System, 'Visitor left the chat.');
+
+        return $this->abandon($conversation, 'visitor_left');
+    }
+
+    /**
+     * Shared tail for the two visitor-side abandonments: flip to `abandoned`,
+     * stamp closed_at, fire the close webhook with the reason and broadcast.
+     */
+    private function abandon(Conversation $conversation, string $reason): Conversation
+    {
         $conversation->forceFill([
             'status' => ConversationStatus::Abandoned,
             'closed_at' => now(),
+            'visitor_left_at' => null,
         ])->save();
 
         $this->webhooks->dispatch(
             WebhookEvent::ConversationClosed,
-            ['conversation' => $this->payload($conversation), 'closed_by' => 'system', 'reason' => 'idle'],
+            ['conversation' => $this->payload($conversation), 'closed_by' => 'system', 'reason' => $reason],
             $conversation->inbox,
         );
 
         broadcast(new ConversationUpdated($conversation));
 
         return $conversation;
+    }
+
+    /** Record that the visitor's page unloaded (starts the grace countdown). */
+    public function markVisitorLeft(Conversation $conversation): void
+    {
+        if ($conversation->status->isOpen() && $conversation->visitor_left_at === null) {
+            $conversation->forceFill(['visitor_left_at' => now()])->saveQuietly();
+        }
+    }
+
+    /** Clear a pending "left the page" flag (the visitor is back / active). */
+    public function markVisitorPresent(Conversation $conversation): void
+    {
+        if ($conversation->visitor_left_at !== null) {
+            $conversation->forceFill(['visitor_left_at' => null])->saveQuietly();
+        }
     }
 
     public function reroute(Conversation $conversation, ?Team $team, ?Agent $agent): Conversation

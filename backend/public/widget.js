@@ -172,7 +172,30 @@
   refs.lang.value = config.language;
 
   // ---------- events ----------
-  button.addEventListener('click', () => toggle(!open));
+  button.addEventListener('click', () => {
+    // Closing the widget ends an active chat (no minimize-and-return); opening
+    // it just shows the panel.
+    if (open && conversation && isOpenStatus(conversation.status)) {
+      endChat();
+    }
+    toggle(!open);
+  });
+
+  // Closing the browser tab/window ends the chat after a short server-side
+  // grace (see IdleSweepJob). pagehide is the reliable unload signal and also
+  // covers bfcache; a plain refresh reconnects and clears the flag in time.
+  window.addEventListener('pagehide', () => {
+    if (conversation && isOpenStatus(conversation.status) && navigator.sendBeacon) {
+      navigator.sendBeacon(
+        config.api + '/api/v1/public/conversations/' + conversation.uuid + '/leave',
+      );
+    }
+  });
+
+  // Restored from the bfcache (JS state intact) - tell the server we're back.
+  window.addEventListener('pageshow', (event) => {
+    if (event.persisted) markPresent();
+  });
   refs.start.addEventListener('click', start);
   refs.first.addEventListener('keydown', (e) => e.key === 'Enter' && start());
   refs.send.addEventListener('click', sendMessage);
@@ -471,6 +494,9 @@
     setConversation(result.data.data);
     (conversation.messages || []).forEach(render);
     connect();
+    // We came back (e.g. after a refresh) - cancel any pending "left" flag the
+    // previous page's unload may have set, before the grace window elapses.
+    markPresent();
   }
 
   async function refresh() {
@@ -688,6 +714,9 @@
           data: { channel: 'conversation.' + conversation.uuid },
         }),
       );
+      // A live socket means the visitor is here; clear any pending "left" flag
+      // (covers reconnects after the tab was suspended, e.g. laptop sleep).
+      markPresent();
     };
 
     socket.onmessage = (frame) => {
@@ -790,6 +819,13 @@
 
   function isOpenStatus(status) {
     return !!status && status !== 'closed' && status !== 'abandoned';
+  }
+
+  // Tell the server the visitor is present, cancelling a pending unload/leave.
+  function markPresent() {
+    if (conversation && isOpenStatus(conversation.status)) {
+      request('POST', '/api/v1/public/conversations/' + conversation.uuid + '/present');
+    }
   }
 
   function element(tag, className, text) {
