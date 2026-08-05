@@ -1,163 +1,148 @@
 @use '@angular/material' as mat;
 
 html {
-  color-scheme: light;
-  @include mat.theme(
-    (
-      color: mat.$azure-palette,
-      typography: Roboto,
-      density: 0,
-    )
-  );
+    color-scheme: light;
+    @include mat.theme((color: mat.$azure-palette,
+            typography: Roboto,
+            density: 0,
+        ));
 
-  /*
+    /*
    * Component token overrides pull Material's inputs, selects, chips and
    * button toggles onto the workspace palette below. These are the supported
    * M3 override mixins — preferred over targeting Material's internal
    * selectors, which tie on specificity and break on version bumps.
    */
-  @include mat.form-field-overrides(
-    (
-      outlined-container-shape: 10px,
-      outlined-outline-color: #dde3ec,
-      outlined-hover-outline-color: #c3cddb,
-      outlined-focus-outline-color: var(--tde-accent),
-      outlined-focus-outline-width: 2px,
-      outlined-label-text-color: var(--tde-muted),
-      outlined-hover-label-text-color: var(--tde-muted),
-      outlined-focus-label-text-color: var(--tde-accent),
-      outlined-input-text-color: var(--tde-ink),
-      outlined-input-text-placeholder-color: var(--tde-muted),
-      outlined-caret-color: var(--tde-accent),
-    )
-  );
+    @include mat.form-field-overrides((outlined-container-shape: 10px,
+            outlined-outline-color: #dde3ec,
+            outlined-hover-outline-color: #c3cddb,
+            outlined-focus-outline-color: var(--tde-accent),
+            outlined-focus-outline-width: 2px,
+            outlined-label-text-color: var(--tde-muted),
+            outlined-hover-label-text-color: var(--tde-muted),
+            outlined-focus-label-text-color: var(--tde-accent),
+            outlined-input-text-color: var(--tde-ink),
+            outlined-input-text-placeholder-color: var(--tde-muted),
+            outlined-caret-color: var(--tde-accent),
+        ));
 
-  @include mat.select-overrides(
-    (
-      enabled-trigger-text-color: var(--tde-ink),
-      placeholder-text-color: var(--tde-muted),
-      enabled-arrow-color: var(--tde-muted),
-      focused-arrow-color: var(--tde-accent),
-      panel-background-color: var(--tde-panel),
-    )
-  );
+    @include mat.select-overrides((enabled-trigger-text-color: var(--tde-ink),
+            placeholder-text-color: var(--tde-muted),
+            enabled-arrow-color: var(--tde-muted),
+            focused-arrow-color: var(--tde-accent),
+            panel-background-color: var(--tde-panel),
+        ));
 
-  @include mat.chips-overrides(
-    (
-      container-shape-radius: 8px,
-      container-height: 26px,
-      outline-width: 0,
-      flat-selected-outline-width: 0,
-      elevated-container-color: var(--tde-bubble),
-      label-text-color: var(--tde-ink),
-      label-text-size: 12px,
-      label-text-weight: 500,
-      elevated-selected-container-color: var(--tde-accent-soft),
-      selected-label-text-color: var(--tde-accent),
-    )
-  );
+    @include mat.chips-overrides((container-shape-radius: 8px,
+            container-height: 26px,
+            outline-width: 0,
+            flat-selected-outline-width: 0,
+            elevated-container-color: var(--tde-bubble),
+            label-text-color: var(--tde-ink),
+            label-text-size: 12px,
+            label-text-weight: 500,
+            elevated-selected-container-color: var(--tde-accent-soft),
+            selected-label-text-color: var(--tde-accent),
+        ));
 
-  @include mat.button-toggle-overrides(
-    (
-      shape: 10px,
-      height: 38px,
-      background-color: var(--tde-panel),
-      text-color: var(--tde-muted),
-      divider-color: var(--tde-border),
-      selected-state-background-color: var(--tde-accent-soft),
-      selected-state-text-color: var(--tde-accent),
-      label-text-size: 13px,
-      label-text-weight: 500,
-    )
-  );
+    @include mat.button-toggle-overrides((shape: 10px,
+            height: 38px,
+            background-color: var(--tde-panel),
+            text-color: var(--tde-muted),
+            divider-color: var(--tde-border),
+            selected-state-background-color: var(--tde-accent-soft),
+            selected-state-text-color: var(--tde-accent),
+            label-text-size: 13px,
+            label-text-weight: 500,
+        ));
 }
 
 :root {
-  /* Shared TDEChat workspace palette — used by both the agent and admin shells. */
-  --tde-bg: #eef1f5;
-  --tde-panel: #ffffff;
-  --tde-ink: #29323d;
-  --tde-muted: #97a1b0;
-  --tde-accent: #2f80ed;
-  --tde-accent-soft: #eaf2fe;
-  --tde-bubble: #f4f6f9;
-  --tde-border: #edf0f4;
-  --tde-green: #2ecc71;
-  --tde-amber: #f2a33c;
-  --tde-red: #ef5350;
-  --tde-shadow: 0 1px 3px rgba(24, 39, 75, 0.06);
-  /* Agent message bubble; overridden at runtime from Chat Settings. */
-  --tde-agent-bubble: var(--tde-accent);
+    /* Shared TDEChat workspace palette — used by both the agent and admin shells. */
+    --tde-bg: #eef1f5;
+    --tde-panel: #ffffff;
+    --tde-ink: #29323d;
+    --tde-muted: #97a1b0;
+    --tde-accent: #2f80ed;
+    --tde-accent-soft: #eaf2fe;
+    --tde-bubble: #f4f6f9;
+    --tde-border: #edf0f4;
+    --tde-green: #2ecc71;
+    --tde-amber: #f2a33c;
+    --tde-red: #ef5350;
+    --tde-shadow: 0 1px 3px rgba(24, 39, 75, 0.06);
+    /* Agent message bubble; overridden at runtime from Chat Settings. */
+    --tde-agent-bubble: var(--tde-accent);
 }
 
 html,
 body {
-  height: 100%;
-  margin: 0;
+    height: 100%;
+    margin: 0;
 }
 
 body {
-  font-family: Roboto, 'Helvetica Neue', sans-serif;
-  background: var(--tde-bg);
-  color: var(--tde-ink);
+    font-family: Roboto, 'Helvetica Neue', sans-serif;
+    background: var(--tde-bg);
+    color: var(--tde-ink);
 }
 
 .spacer {
-  flex: 1 1 auto;
+    flex: 1 1 auto;
 }
 
 .page {
-  padding: 24px;
-  max-width: 1200px;
-  margin: 0 auto;
+    padding: 24px;
+    max-width: 1200px;
+    margin: 0 auto;
 }
 
 .page-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
 
-  h1 {
-    font-size: 22px;
-    font-weight: 600;
-    margin: 0;
-    color: var(--tde-ink);
-  }
+    h1 {
+        font-size: 22px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--tde-ink);
+    }
 }
 
 /* Material tables sit inside a white, rounded panel to match the workspace theme. */
 table.mat-mdc-table {
-  width: 100%;
-  background: var(--tde-panel);
-  border-radius: 12px;
-  box-shadow: var(--tde-shadow);
-  overflow: hidden;
+    width: 100%;
+    background: var(--tde-panel);
+    border-radius: 12px;
+    box-shadow: var(--tde-shadow);
+    overflow: hidden;
 
-  .mat-mdc-header-cell {
-    color: var(--tde-muted);
-    font-weight: 600;
-    font-size: 12px;
-    letter-spacing: 0.3px;
-    border-bottom-color: var(--tde-border);
-  }
+    .mat-mdc-header-cell {
+        color: var(--tde-muted);
+        font-weight: 600;
+        font-size: 12px;
+        letter-spacing: 0.3px;
+        border-bottom-color: var(--tde-border);
+    }
 
-  .mat-mdc-cell {
-    color: var(--tde-ink);
-    border-bottom-color: var(--tde-border);
-  }
+    .mat-mdc-cell {
+        color: var(--tde-ink);
+        border-bottom-color: var(--tde-border);
+    }
 
-  .mat-mdc-row:last-child .mat-mdc-cell {
-    border-bottom: none;
-  }
+    .mat-mdc-row:last-child .mat-mdc-cell {
+        border-bottom: none;
+    }
 }
 
 /* Outlined cards adopt the same soft panel look. */
 .mat-mdc-card.mat-mdc-card-outlined {
-  border: 1px solid var(--tde-border);
-  border-radius: 12px;
-  box-shadow: var(--tde-shadow);
-  background: var(--tde-panel);
+    border: 1px solid var(--tde-border);
+    border-radius: 12px;
+    box-shadow: var(--tde-shadow);
+    background: var(--tde-panel);
 }
 
 /*
@@ -168,34 +153,34 @@ table.mat-mdc-table {
  */
 .dialog-form,
 .mat-mdc-dialog-content.dialog-form {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 440px;
-  max-width: 100%;
-  box-sizing: border-box;
-  /* Keeps the first field's floating label clear of the top edge when the
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 440px;
+    max-width: 100%;
+    box-sizing: border-box;
+    /* Keeps the first field's floating label clear of the top edge when the
      content scrolls to a focused field. */
-  scroll-padding-top: 20px;
+    scroll-padding-top: 20px;
 
-  .mat-mdc-form-field {
-    width: 100%;
-  }
-
-  /* Toggles carry no subscript space of their own, so they need their own. */
-  mat-slide-toggle {
-    margin: 4px 0;
-  }
-
-  /* Stretched by the column layout, so split the width between the options
-     instead of leaving dead space at the group's trailing edge. */
-  mat-button-toggle-group {
-    width: 100%;
-
-    mat-button-toggle {
-      flex: 1;
+    .mat-mdc-form-field {
+        width: 100%;
     }
-  }
+
+    /* Toggles carry no subscript space of their own, so they need their own. */
+    mat-slide-toggle {
+        margin: 4px 0;
+    }
+
+    /* Stretched by the column layout, so split the width between the options
+     instead of leaving dead space at the group's trailing edge. */
+    mat-button-toggle-group {
+        width: 100%;
+
+        mat-button-toggle {
+            flex: 1;
+        }
+    }
 }
 
 /*
@@ -204,29 +189,33 @@ table.mat-mdc-table {
  * which flushes the first outline field against the scroll container's edge and
  * clips its floating label. Out-specify that exact rule to restore the padding.
  */
-.mat-mdc-dialog-container .mat-mdc-dialog-title + .mat-mdc-dialog-content.dialog-form {
-  padding-top: 20px;
+.mat-mdc-dialog-container .mat-mdc-dialog-title+.mat-mdc-dialog-content.dialog-form {
+    padding-top: 20px;
 }
 
 .mat-mdc-dialog-surface {
-  border-radius: 14px;
+    border-radius: 14px;
 }
 
 .mat-mdc-dialog-title {
-  color: var(--tde-ink);
-  font-weight: 600;
+    color: var(--tde-ink);
+    font-weight: 600;
 }
 
 .mat-mdc-dialog-actions {
-  padding: 8px 24px 20px;
-  gap: 8px;
+    padding: 8px 24px 20px;
+    gap: 8px;
+}
+
+.mat-mdc-card-header {
+    padding: 16px !important;
 }
 
 .muted {
-  color: var(--tde-muted);
+    color: var(--tde-muted);
 }
 
 .mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
 }

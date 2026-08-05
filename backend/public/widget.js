@@ -15,44 +15,44 @@
  * (Laravel Reverb) with HTTP polling as a fallback.
  */
 (function () {
-  'use strict';
+    'use strict';
 
-  const script = document.currentScript;
-  const config = {
-    api: (script.dataset.api || new URL(script.src).origin).replace(/\/$/, ''),
-    inbox: script.dataset.inbox || 'website',
-    reverbKey: script.dataset.reverbKey || '',
-    wsHost: script.dataset.wsHost || new URL(script.dataset.api || script.src).hostname,
-    wsPort: script.dataset.wsPort || '8080',
-    wsTls: script.dataset.wsTls === 'true',
-    language: script.dataset.language || 'ms',
-  };
+    const script = document.currentScript;
+    const config = {
+        api: (script.dataset.api || new URL(script.src).origin).replace(/\/$/, ''),
+        inbox: script.dataset.inbox || 'website',
+        reverbKey: script.dataset.reverbKey || '',
+        wsHost: script.dataset.wsHost || new URL(script.dataset.api || script.src).hostname,
+        wsPort: script.dataset.wsPort || '8080',
+        wsTls: script.dataset.wsTls === 'true',
+        language: script.dataset.language || 'ms',
+    };
 
-  const storageKey = 'tdechat.' + config.inbox;
-  const seenMessages = new Set();
-  const messageNodes = new Map();
+    const storageKey = 'tdechat.' + config.inbox;
+    const seenMessages = new Set();
+    const messageNodes = new Map();
 
-  let conversation = null;
-  let socket = null;
-  let pollTimer = null;
-  let typingTimer = null;
-  let visitorTypingActive = false;
-  let visitorTypingTimer = null;
-  let open = false;
-  let botName = 'Bot'; // overridden by admin branding (app-config)
+    let conversation = null;
+    let socket = null;
+    let pollTimer = null;
+    let typingTimer = null;
+    let visitorTypingActive = false;
+    let visitorTypingTimer = null;
+    let open = false;
+    let botName = 'Bot'; // overridden by admin branding (app-config)
 
-  // Pre-chat field config (admin-driven via app-config). Defaults collect just
-  // an optional name until app-config resolves.
-  let fieldConfig = {
-    name: { enabled: true, required: false, label: 'Your name (optional)' },
-    email: { enabled: false, required: false, label: 'Email' },
-    phone: { enabled: false, required: false, label: 'Phone' },
-    custom: [],
-  };
-  let fieldInputs = []; // [{ key, builtin, required, el }]
+    // Pre-chat field config (admin-driven via app-config). Defaults collect just
+    // an optional name until app-config resolves.
+    let fieldConfig = {
+        name: { enabled: true, required: false, label: 'Your name (optional)' },
+        email: { enabled: false, required: false, label: 'Email' },
+        phone: { enabled: false, required: false, label: 'Phone' },
+        custom: [],
+    };
+    let fieldInputs = []; // [{ key, builtin, required, el }]
 
-  // ---------- styles ----------
-  const css = `
+    // ---------- styles ----------
+    const css = `
   .tdec-btn{position:fixed;right:20px;bottom:20px;width:56px;height:56px;border-radius:50%;
     background:var(--tdec-accent,#2a78d6);color:#fff;border:none;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.25);
     font-size:24px;z-index:2147483000;display:flex;align-items:center;justify-content:center}
@@ -65,7 +65,7 @@
   .tdec-head{background:var(--tdec-accent,#2a78d6);color:#fff;padding:14px 16px;display:flex;align-items:center;gap:10px}
   .tdec-head h3{margin:0;font-size:15px;font-weight:600}
   .tdec-head-icon{font-size:22px;line-height:1;display:flex;align-items:center}
-  .tdec-head-icon img{width:28px;height:28px;border-radius:6px;object-fit:cover;display:block}
+  .tdec-head-icon img{width:auto;height:34px;border-radius:6px;object-fit:cover;display:block}
   .tdec-btn img{width:26px;height:26px;border-radius:6px;object-fit:cover;display:block}
   .tdec-status{font-size:12px;opacity:.85;margin-top:2px}
   .tdec-msgs{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:8px;background:#f7f7f5}
@@ -103,16 +103,16 @@
   .tdec-pre .tdec-start{background:var(--tdec-accent,#2a78d6);color:#fff;border:none;border-radius:8px;padding:11px;cursor:pointer;font:inherit;margin-top:4px}
   `;
 
-  // ---------- DOM ----------
-  const style = document.createElement('style');
-  style.textContent = css;
-  document.head.appendChild(style);
+    // ---------- DOM ----------
+    const style = document.createElement('style');
+    style.textContent = css;
+    document.head.appendChild(style);
 
-  const button = element('button', 'tdec-btn', '\uD83D\uDCAC');
-  button.setAttribute('aria-label', 'Open chat');
+    const button = element('button', 'tdec-btn', '\uD83D\uDCAC');
+    button.setAttribute('aria-label', 'Open chat');
 
-  const panel = element('div', 'tdec-panel');
-  panel.innerHTML = `
+    const panel = element('div', 'tdec-panel');
+    panel.innerHTML = `
     <div class="tdec-head">
       <span class="tdec-head-icon" style="display:none"></span>
       <div class="tdec-head-text">
@@ -149,697 +149,697 @@
     </div>
   `;
 
-  document.body.append(button, panel);
+    document.body.append(button, panel);
 
-  const refs = {
-    status: panel.querySelector('.tdec-status'),
-    pre: panel.querySelector('.tdec-pre'),
-    msgs: panel.querySelector('.tdec-msgs'),
-    typing: panel.querySelector('.tdec-typing'),
-    bar: panel.querySelector('.tdec-bar'),
-    foot: panel.querySelector('.tdec-foot'),
-    input: panel.querySelector('.tdec-input'),
-    send: panel.querySelector('.tdec-send'),
-    attach: panel.querySelector('.tdec-attach'),
-    file: panel.querySelector('.tdec-file'),
-    fields: panel.querySelector('.tdec-fields'),
-    lang: panel.querySelector('.tdec-lang'),
-    first: panel.querySelector('.tdec-first'),
-    start: panel.querySelector('.tdec-start'),
-    escalate: panel.querySelector('.tdec-escalate'),
-    end: panel.querySelector('.tdec-end'),
-  };
-  refs.lang.value = config.language;
-
-  // ---------- events ----------
-  button.addEventListener('click', () => {
-    // Closing the widget ends an active chat (no minimize-and-return); opening
-    // it just shows the panel.
-    if (open && conversation && isOpenStatus(conversation.status)) {
-      endChat();
-    }
-    toggle(!open);
-  });
-
-  // Closing the browser tab/window ends the chat after a short server-side
-  // grace (see IdleSweepJob). pagehide is the reliable unload signal and also
-  // covers bfcache; a plain refresh reconnects and clears the flag in time.
-  window.addEventListener('pagehide', () => {
-    if (conversation && isOpenStatus(conversation.status) && navigator.sendBeacon) {
-      navigator.sendBeacon(
-        config.api + '/api/v1/public/conversations/' + conversation.uuid + '/leave',
-      );
-    }
-  });
-
-  // Restored from the bfcache (JS state intact) - tell the server we're back.
-  window.addEventListener('pageshow', (event) => {
-    if (event.persisted) markPresent();
-  });
-  refs.start.addEventListener('click', start);
-  refs.first.addEventListener('keydown', (e) => e.key === 'Enter' && start());
-  refs.send.addEventListener('click', sendMessage);
-  refs.input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  });
-  refs.input.addEventListener('input', onVisitorTyping);
-  refs.input.addEventListener('blur', stopVisitorTyping);
-  refs.escalate.addEventListener('click', escalate);
-  refs.end.addEventListener('click', endChat);
-  refs.attach.addEventListener('click', () => refs.file.click());
-  refs.file.addEventListener('change', uploadFile);
-
-  renderFields(); // default fields until app-config resolves
-  loadTheme();
-
-  const savedUuid = localStorage.getItem(storageKey);
-  if (savedUuid) {
-    resume(savedUuid);
-  }
-
-  // ---------- flows ----------
-  async function loadTheme() {
-    try {
-      const response = await fetch(config.api + '/api/v1/public/app-config', {
-        headers: { Accept: 'application/json' },
-      });
-      if (!response.ok) return;
-      const body = await response.json();
-      const data = (body && body.data) || {};
-      if (data.bubble_color) document.documentElement.style.setProperty('--tdec-accent', data.bubble_color);
-      applyBranding(data.widget);
-      applyFields(data.fields);
-    } catch (e) {
-      /* keep the default accent + hardcoded copy */
-    }
-  }
-
-  // Merge admin field config and re-render the pre-chat form.
-  function applyFields(f) {
-    if (!f) return;
-    if (f.name) fieldConfig.name = f.name;
-    if (f.email) fieldConfig.email = f.email;
-    if (f.phone) fieldConfig.phone = f.phone;
-    if (Array.isArray(f.custom)) fieldConfig.custom = f.custom;
-    renderFields();
-  }
-
-  // Build the pre-chat inputs from fieldConfig into the .tdec-fields container.
-  function renderFields() {
-    refs.fields.innerHTML = '';
-    fieldInputs = [];
-
-    const add = (def) => {
-      const label = document.createElement('label');
-      label.appendChild(element('span', 'tdec-field-label', def.required ? def.label + ' *' : def.label));
-
-      let input;
-      if (def.type === 'select') {
-        input = document.createElement('select');
-        if (!def.required) input.appendChild(new Option('', ''));
-        (def.options || []).forEach((o) => input.appendChild(new Option(o, o)));
-      } else {
-        input = document.createElement('input');
-        input.type =
-          def.type === 'email' ? 'email' : def.type === 'phone' ? 'tel' : def.type === 'number' ? 'number' : 'text';
-      }
-      input.className = 'tdec-field-input';
-      label.appendChild(input);
-      refs.fields.appendChild(label);
-      fieldInputs.push({ key: def.key, builtin: !!def.builtin, required: !!def.required, el: input });
+    const refs = {
+        status: panel.querySelector('.tdec-status'),
+        pre: panel.querySelector('.tdec-pre'),
+        msgs: panel.querySelector('.tdec-msgs'),
+        typing: panel.querySelector('.tdec-typing'),
+        bar: panel.querySelector('.tdec-bar'),
+        foot: panel.querySelector('.tdec-foot'),
+        input: panel.querySelector('.tdec-input'),
+        send: panel.querySelector('.tdec-send'),
+        attach: panel.querySelector('.tdec-attach'),
+        file: panel.querySelector('.tdec-file'),
+        fields: panel.querySelector('.tdec-fields'),
+        lang: panel.querySelector('.tdec-lang'),
+        first: panel.querySelector('.tdec-first'),
+        start: panel.querySelector('.tdec-start'),
+        escalate: panel.querySelector('.tdec-escalate'),
+        end: panel.querySelector('.tdec-end'),
     };
+    refs.lang.value = config.language;
 
-    ['name', 'email', 'phone'].forEach((key) => {
-      const c = fieldConfig[key];
-      if (c && c.enabled) {
-        add({ key: key, builtin: true, type: key === 'name' ? 'text' : key, required: c.required, label: c.label });
-      }
-    });
-    (fieldConfig.custom || []).forEach((f) => {
-      if (f.type === 'cascade') {
-        addCascade(f);
-      } else {
-        add({ key: f.key, builtin: false, type: f.type, required: f.required, label: f.label, options: f.options });
-      }
-    });
-  }
-
-  // A cascade field: dependent dropdowns driven by a {key,label,children} tree.
-  function addCascade(f) {
-    const wrap = document.createElement('div');
-    wrap.className = 'tdec-field';
-    wrap.appendChild(element('span', 'tdec-field-label', f.required ? f.label + ' *' : f.label));
-    const levels = document.createElement('div');
-    levels.className = 'tdec-cascade';
-    wrap.appendChild(levels);
-    refs.fields.appendChild(wrap);
-
-    addCascadeSelect(levels, f.tree || []);
-    fieldInputs.push({ key: f.key, builtin: false, required: !!f.required, cascade: true, tree: f.tree || [], levels: levels });
-  }
-
-  function addCascadeSelect(levels, nodes) {
-    const select = document.createElement('select');
-    select.className = 'tdec-field-input';
-    select.appendChild(new Option('', ''));
-    nodes.forEach((n) => select.appendChild(new Option(n.label, n.key)));
-    select.addEventListener('change', () => {
-      // Drop any deeper dropdowns, then reveal the next level if the choice has children.
-      let sib = select.nextElementSibling;
-      while (sib) {
-        const next = sib.nextElementSibling;
-        sib.remove();
-        sib = next;
-      }
-      const node = nodes.find((n) => n.key === select.value);
-      if (node && node.children && node.children.length) {
-        addCascadeSelect(levels, node.children);
-      }
-    });
-    levels.appendChild(select);
-  }
-
-  // The selected path (node keys, top to bottom), stopping at the first blank.
-  function readCascadePath(levels) {
-    const path = [];
-    const selects = levels.querySelectorAll('select');
-    for (let i = 0; i < selects.length; i++) {
-      if (selects[i].value === '') break;
-      path.push(selects[i].value);
-    }
-    return path;
-  }
-
-  // Whether a path ends at a leaf (a complete choice).
-  function cascadeAtLeaf(nodes, path) {
-    let current = nodes;
-    let node = null;
-    for (let i = 0; i < path.length; i++) {
-      node = current.find((n) => n.key === path[i]);
-      if (!node) return false;
-      current = node.children || [];
-    }
-    return node !== null && (!node.children || node.children.length === 0);
-  }
-
-  // Apply admin-configured branding over the built-in defaults. Runs once
-  // app-config resolves; anything blank/absent keeps the default already shown.
-  function applyBranding(w) {
-    if (!w) return;
-
-    const setText = (selector, value) => {
-      const el = panel.querySelector(selector);
-      if (el && value) el.textContent = value;
-    };
-    setText('.tdec-title', w.widget_title);
-    setText('.tdec-lang-label', w.widget_language_label);
-    setText('.tdec-msg-label', w.widget_message_label);
-    setText('.tdec-start', w.widget_start_label);
-
-    // Subtitle may be intentionally blank - hide it when empty.
-    const subtitle = panel.querySelector('.tdec-status');
-    if (subtitle && w.widget_subtitle !== undefined) {
-      subtitle.textContent = w.widget_subtitle || '';
-      subtitle.style.display = w.widget_subtitle ? '' : 'none';
-    }
-
-    if (w.widget_greeting_placeholder) refs.first.setAttribute('placeholder', w.widget_greeting_placeholder);
-    if (w.widget_input_placeholder) refs.input.setAttribute('placeholder', w.widget_input_placeholder);
-    if (w.widget_bot_name) botName = w.widget_bot_name;
-
-    applyIcon(button, w.widget_launcher_icon);
-    const headIcon = panel.querySelector('.tdec-head-icon');
-    if (headIcon) {
-      if (w.widget_header_icon) {
-        applyIcon(headIcon, w.widget_header_icon);
-        headIcon.style.display = '';
-      } else {
-        headIcon.style.display = 'none';
-      }
-    }
-  }
-
-  // An icon value is an image (URL or inline data-URI, rendered as <img>) or an emoji/text.
-  function applyIcon(el, value) {
-    if (!el || !value) return;
-    if (/^https?:\/\//.test(value) || value.slice(0, 5) === 'data:') {
-      el.textContent = '';
-      const img = document.createElement('img');
-      img.src = value;
-      img.alt = '';
-      el.appendChild(img);
-    } else {
-      el.textContent = value;
-    }
-  }
-
-  function toggle(show) {
-    open = show;
-    panel.classList.toggle('open', show);
-    if (show && conversation) {
-      refresh();
-    }
-  }
-
-  async function start() {
-    const message = refs.first.value.trim();
-    if (message === '') {
-      refs.first.focus();
-      return;
-    }
-
-    const visitor = { visitor_name: null, visitor_email: null, visitor_phone: null };
-    const fields = {};
-    for (let i = 0; i < fieldInputs.length; i++) {
-      const fi = fieldInputs[i];
-
-      if (fi.cascade) {
-        const path = readCascadePath(fi.levels);
-        if (fi.required && path.length === 0) {
-          refs.status.textContent = 'Please fill in the required fields.';
-          return;
+    // ---------- events ----------
+    button.addEventListener('click', () => {
+        // Closing the widget ends an active chat (no minimize-and-return); opening
+        // it just shows the panel.
+        if (open && conversation && isOpenStatus(conversation.status)) {
+            endChat();
         }
-        // A started selection must be finished to a leaf.
-        if (path.length > 0 && !cascadeAtLeaf(fi.tree, path)) {
-          refs.status.textContent = 'Please complete the selection.';
-          return;
+        toggle(!open);
+    });
+
+    // Closing the browser tab/window ends the chat after a short server-side
+    // grace (see IdleSweepJob). pagehide is the reliable unload signal and also
+    // covers bfcache; a plain refresh reconnects and clears the flag in time.
+    window.addEventListener('pagehide', () => {
+        if (conversation && isOpenStatus(conversation.status) && navigator.sendBeacon) {
+            navigator.sendBeacon(
+                config.api + '/api/v1/public/conversations/' + conversation.uuid + '/leave',
+            );
         }
-        if (path.length > 0) fields[fi.key] = path;
-        continue;
-      }
-
-      const value = (fi.el.value || '').trim();
-      if (fi.required && value === '') {
-        fi.el.focus();
-        refs.status.textContent = 'Please fill in the required fields.';
-        return;
-      }
-      if (fi.builtin) {
-        visitor['visitor_' + fi.key] = value || null;
-      } else if (value !== '') {
-        fields[fi.key] = value;
-      }
-    }
-
-    // Use request() (not api()) so we can surface a validation error instead of
-    // silently resyncing.
-    const result = await request('POST', `/api/v1/public/inboxes/${config.inbox}/conversations`, {
-      message: message,
-      visitor_name: visitor.visitor_name,
-      visitor_email: visitor.visitor_email,
-      visitor_phone: visitor.visitor_phone,
-      language: refs.lang.value,
-      fields: fields,
-      meta: { page: location.href },
     });
 
-    if (result.status === 422) {
-      refs.status.textContent = 'Please check your details and try again.';
-      return;
-    }
-    if (result.status < 200 || result.status >= 300 || !result.data) {
-      refs.status.textContent = 'Connection problem, please try again.';
-      return;
-    }
-
-    setConversation(result.data.data);
-    localStorage.setItem(storageKey, conversation.uuid);
-    (conversation.messages || []).forEach(render);
-    connect();
-  }
-
-  async function resume(uuid) {
-    const result = await request('GET', `/api/v1/public/conversations/${uuid}`);
-
-    if (result.status === 404) {
-      // The conversation genuinely no longer exists server-side.
-      localStorage.removeItem(storageKey);
-      return;
-    }
-
-    if (result.status < 200 || result.status >= 300) {
-      // Transient failure (backend/db down): keep the stored conversation
-      // and keep retrying until the server comes back.
-      show('chat');
-      refs.status.textContent = 'Connection problem \u2014 retrying\u2026';
-      refs.input.disabled = true;
-      refs.send.disabled = true;
-      setTimeout(() => resume(uuid), 5000);
-      return;
-    }
-
-    setConversation(result.data.data);
-    (conversation.messages || []).forEach(render);
-    connect();
-    // We came back (e.g. after a refresh) - cancel any pending "left" flag the
-    // previous page's unload may have set, before the grace window elapses.
-    markPresent();
-  }
-
-  async function refresh() {
-    if (!conversation) return;
-    const response = await api('GET', `/api/v1/public/conversations/${conversation.uuid}`);
-    if (!response) return;
-    setConversation(response.data);
-    (conversation.messages || []).forEach(render);
-  }
-
-  // Tell the agent the visitor is typing (mirror of the agent's indicator).
-  function onVisitorTyping() {
-    if (!conversation) return;
-    if (!visitorTypingActive) {
-      visitorTypingActive = true;
-      sendVisitorTyping(true);
-    }
-    clearTimeout(visitorTypingTimer);
-    visitorTypingTimer = setTimeout(stopVisitorTyping, 3000);
-  }
-
-  function stopVisitorTyping() {
-    clearTimeout(visitorTypingTimer);
-    if (visitorTypingActive) {
-      visitorTypingActive = false;
-      sendVisitorTyping(false);
-    }
-  }
-
-  function sendVisitorTyping(on) {
-    if (!conversation) return;
-    request('POST', '/api/v1/public/conversations/' + conversation.uuid + '/typing', { typing: on });
-  }
-
-  async function sendMessage() {
-    const body = refs.input.value.trim();
-    if (body === '' || !conversation) return;
-    refs.input.value = '';
-    stopVisitorTyping();
-
-    const response = await api(
-      'POST',
-      `/api/v1/public/conversations/${conversation.uuid}/messages`,
-      { body: body },
-    );
-    if (!response) return;
-
-    render(response.message);
-    if (response.bot_reply) render(response.bot_reply);
-    updateStatus(response.status);
-  }
-
-  async function uploadFile(e) {
-    const file = e.target.files && e.target.files[0];
-    e.target.value = ''; // let the same file be re-picked later
-    if (!file || !conversation) return;
-
-    // Multipart, so let the browser set the boundary - can't use api().
-    const form = new FormData();
-    form.append('file', file);
-    try {
-      const response = await fetch(
-        config.api + '/api/v1/public/conversations/' + conversation.uuid + '/attachments',
-        { method: 'POST', headers: { Accept: 'application/json' }, body: form },
-      );
-      if (response.status >= 200 && response.status < 300) {
-        const data = await response.json();
-        render(data.message);
-      } else if (response.status === 422) {
-        const data = await response.json().catch(() => null);
-        refs.status.textContent = (data && data.message) || 'That file is not allowed.';
-      } else {
-        refs.status.textContent = 'Upload problem \u2014 try again.';
-      }
-    } catch (err) {
-      refs.status.textContent = 'Upload problem \u2014 try again.';
-    }
-  }
-
-  function renderAttachment(att) {
-    if (att.is_image) {
-      const link = element('a', 'tdec-att-img');
-      link.href = att.url;
-      link.target = '_blank';
-      link.rel = 'noopener';
-      const img = document.createElement('img');
-      img.src = att.url;
-      img.alt = att.name;
-      img.loading = 'lazy';
-      link.appendChild(img);
-      return link;
-    }
-    const link = element('a', 'tdec-att-file');
-    link.href = att.url;
-    link.target = '_blank';
-    link.rel = 'noopener';
-    link.appendChild(element('span', 'tdec-att-name', att.name));
-    return link;
-  }
-
-  async function escalate() {
-    if (!conversation) return;
-    const response = await api('POST', `/api/v1/public/conversations/${conversation.uuid}/escalate`);
-    if (response) setConversation(response.data);
-  }
-
-  async function endChat() {
-    if (conversation && isOpenStatus(conversation.status)) {
-      await api('POST', `/api/v1/public/conversations/${conversation.uuid}/close`);
-    }
-    localStorage.removeItem(storageKey);
-    disconnect();
-    conversation = null;
-    seenMessages.clear();
-    messageNodes.clear();
-    refs.msgs.innerHTML = '';
-    show('pre');
-    refs.status.textContent = 'TDEChat';
-  }
-
-  // ---------- rendering ----------
-  function setConversation(data) {
-    conversation = data;
-    show('chat');
-    updateStatus(conversation.status);
-  }
-
-  function updateStatus(status) {
-    if (conversation) conversation.status = status;
-
-    const agent = conversation && conversation.assigned_agent;
-    const labels = {
-      pending: 'Connecting\u2026',
-      bot: 'Chatbot \u2014 ask anything',
-      awaiting_acceptance: 'Waiting for an agent\u2026',
-      active: agent ? 'Chatting with ' + agent.display_name : 'Agent connected',
-      closed: 'Conversation ended',
-      abandoned: 'Conversation ended',
-    };
-    refs.status.textContent = labels[status] || status;
-
-    const openNow = isOpenStatus(status);
-    refs.input.disabled = !openNow;
-    refs.send.disabled = !openNow;
-    refs.escalate.style.display = status === 'bot' || status === 'pending' ? '' : 'none';
-    refs.end.textContent = openNow ? 'End chat' : 'Start a new chat';
-  }
-
-  function render(message) {
-    if (!message || seenMessages.has(message.id)) return;
-    seenMessages.add(message.id);
-
-    if (message.sender_type !== 'visitor' && message.sender_type !== 'system') {
-      const sender = element(
-        'div',
-        'tdec-sender',
-        message.sender_type === 'bot' ? botName : (message.agent && message.agent.display_name) || 'Agent',
-      );
-      refs.msgs.appendChild(sender);
-    }
-
-    const bubble = element('div', 'tdec-msg ' + message.sender_type, message.body);
-    (message.attachments || []).forEach(function (att) {
-      bubble.appendChild(renderAttachment(att));
+    // Restored from the bfcache (JS state intact) - tell the server we're back.
+    window.addEventListener('pageshow', (event) => {
+        if (event.persisted) markPresent();
     });
-    refs.msgs.appendChild(bubble);
-    messageNodes.set(message.id, { bubble: bubble, senderType: message.sender_type });
+    refs.start.addEventListener('click', start);
+    refs.first.addEventListener('keydown', (e) => e.key === 'Enter' && start());
+    refs.send.addEventListener('click', sendMessage);
+    refs.input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+    refs.input.addEventListener('input', onVisitorTyping);
+    refs.input.addEventListener('blur', stopVisitorTyping);
+    refs.escalate.addEventListener('click', escalate);
+    refs.end.addEventListener('click', endChat);
+    refs.attach.addEventListener('click', () => refs.file.click());
+    refs.file.addEventListener('change', uploadFile);
 
-    applyTranslation(message.id, (message.meta && message.meta.translations) || null);
-    refs.msgs.scrollTop = refs.msgs.scrollHeight;
-  }
+    renderFields(); // default fields until app-config resolves
+    loadTheme();
 
-  /**
-   * Shows the visitor-language translation under agent replies (auto mode
-   * translates agent messages into the conversation language).
-   */
-  function applyTranslation(messageId, translations) {
-    const entry = messageNodes.get(messageId);
-    if (!entry || entry.senderType !== 'agent' || !translations || !conversation) return;
-
-    const text = translations[conversation.language];
-    if (!text || text === entry.bubble.firstChild?.textContent) return;
-
-    if (!entry.translationNode) {
-      entry.translationNode = element('div', 'tdec-trans');
-      entry.bubble.appendChild(entry.translationNode);
-    }
-    entry.translationNode.textContent = text;
-  }
-
-  function show(which) {
-    refs.pre.style.display = which === 'pre' ? 'flex' : 'none';
-    refs.msgs.style.display = which === 'chat' ? 'flex' : 'none';
-    refs.bar.style.display = which === 'chat' ? 'flex' : 'none';
-    refs.foot.style.display = which === 'chat' ? 'flex' : 'none';
-  }
-
-  // ---------- realtime (Pusher protocol over Reverb) ----------
-  function connect() {
-    if (!config.reverbKey || !conversation) {
-      startPolling();
-      return;
+    const savedUuid = localStorage.getItem(storageKey);
+    if (savedUuid) {
+        resume(savedUuid);
     }
 
-    const scheme = config.wsTls ? 'wss' : 'ws';
-    socket = new WebSocket(
-      `${scheme}://${config.wsHost}:${config.wsPort}/app/${config.reverbKey}?protocol=7&client=tdechat-widget&version=1.0`,
-    );
-
-    socket.onopen = () => {
-      stopPolling();
-      socket.send(
-        JSON.stringify({
-          event: 'pusher:subscribe',
-          data: { channel: 'conversation.' + conversation.uuid },
-        }),
-      );
-      // A live socket means the visitor is here; clear any pending "left" flag
-      // (covers reconnects after the tab was suspended, e.g. laptop sleep).
-      markPresent();
-    };
-
-    socket.onmessage = (frame) => {
-      const message = JSON.parse(frame.data);
-      const payload = typeof message.data === 'string' ? safeJson(message.data) : message.data;
-
-      switch (message.event) {
-        case 'pusher:ping':
-          socket.send(JSON.stringify({ event: 'pusher:pong', data: {} }));
-          break;
-        case 'message.sent':
-          render(payload.message);
-          break;
-        case 'agent.typing':
-          showTyping(payload.typing);
-          break;
-        case 'message.translated':
-          applyTranslation(payload.message_id, payload.translations);
-          break;
-        case 'conversation.updated':
-          conversation.assigned_agent = payload.conversation.assigned_agent;
-          updateStatus(payload.conversation.status);
-          break;
-      }
-    };
-
-    socket.onclose = () => {
-      socket = null;
-      if (conversation && isOpenStatus(conversation.status)) {
-        startPolling();
-        setTimeout(connect, 3000);
-      }
-    };
-  }
-
-  function disconnect() {
-    stopPolling();
-    if (socket) {
-      socket.onclose = null;
-      socket.close();
-      socket = null;
-    }
-  }
-
-  function showTyping(on) {
-    refs.typing.classList.toggle('on', on !== false);
-    clearTimeout(typingTimer);
-    if (on !== false) {
-      typingTimer = setTimeout(() => refs.typing.classList.remove('on'), 4000);
-    }
-  }
-
-  function startPolling() {
-    if (pollTimer) return;
-    pollTimer = setInterval(() => {
-      if (open) refresh();
-    }, 5000);
-  }
-
-  function stopPolling() {
-    clearInterval(pollTimer);
-    pollTimer = null;
-  }
-
-  // ---------- helpers ----------
-  async function request(method, path, body) {
-    try {
-      const response = await fetch(config.api + path, {
-        method: method,
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: body ? JSON.stringify(body) : undefined,
-      });
-
-      return {
-        status: response.status,
-        data: response.status === 204 ? {} : await response.json().catch(() => null),
-      };
-    } catch (error) {
-      return { status: 0, data: null };
-    }
-  }
-
-  async function api(method, path, body) {
-    const result = await request(method, path, body);
-
-    if (result.status >= 200 && result.status < 300) {
-      return result.data;
+    // ---------- flows ----------
+    async function loadTheme() {
+        try {
+            const response = await fetch(config.api + '/api/v1/public/app-config', {
+                headers: { Accept: 'application/json' },
+            });
+            if (!response.ok) return;
+            const body = await response.json();
+            const data = (body && body.data) || {};
+            if (data.bubble_color) document.documentElement.style.setProperty('--tdec-accent', data.bubble_color);
+            applyBranding(data.widget);
+            applyFields(data.fields);
+        } catch (e) {
+            /* keep the default accent + hardcoded copy */
+        }
     }
 
-    if (result.status >= 400 && result.status < 500) {
-      // Client-state conflict (e.g. escalating an already-escalated chat):
-      // resync with the server instead of alarming the visitor.
-      refresh();
-      return null;
+    // Merge admin field config and re-render the pre-chat form.
+    function applyFields(f) {
+        if (!f) return;
+        if (f.name) fieldConfig.name = f.name;
+        if (f.email) fieldConfig.email = f.email;
+        if (f.phone) fieldConfig.phone = f.phone;
+        if (Array.isArray(f.custom)) fieldConfig.custom = f.custom;
+        renderFields();
     }
 
-    refs.status.textContent = 'Connection problem \u2014 retrying\u2026';
-    return null;
-  }
+    // Build the pre-chat inputs from fieldConfig into the .tdec-fields container.
+    function renderFields() {
+        refs.fields.innerHTML = '';
+        fieldInputs = [];
 
-  function isOpenStatus(status) {
-    return !!status && status !== 'closed' && status !== 'abandoned';
-  }
+        const add = (def) => {
+            const label = document.createElement('label');
+            label.appendChild(element('span', 'tdec-field-label', def.required ? def.label + ' *' : def.label));
 
-  // Tell the server the visitor is present, cancelling a pending unload/leave.
-  function markPresent() {
-    if (conversation && isOpenStatus(conversation.status)) {
-      request('POST', '/api/v1/public/conversations/' + conversation.uuid + '/present');
+            let input;
+            if (def.type === 'select') {
+                input = document.createElement('select');
+                if (!def.required) input.appendChild(new Option('', ''));
+                (def.options || []).forEach((o) => input.appendChild(new Option(o, o)));
+            } else {
+                input = document.createElement('input');
+                input.type =
+                    def.type === 'email' ? 'email' : def.type === 'phone' ? 'tel' : def.type === 'number' ? 'number' : 'text';
+            }
+            input.className = 'tdec-field-input';
+            label.appendChild(input);
+            refs.fields.appendChild(label);
+            fieldInputs.push({ key: def.key, builtin: !!def.builtin, required: !!def.required, el: input });
+        };
+
+        ['name', 'email', 'phone'].forEach((key) => {
+            const c = fieldConfig[key];
+            if (c && c.enabled) {
+                add({ key: key, builtin: true, type: key === 'name' ? 'text' : key, required: c.required, label: c.label });
+            }
+        });
+        (fieldConfig.custom || []).forEach((f) => {
+            if (f.type === 'cascade') {
+                addCascade(f);
+            } else {
+                add({ key: f.key, builtin: false, type: f.type, required: f.required, label: f.label, options: f.options });
+            }
+        });
     }
-  }
 
-  function element(tag, className, text) {
-    const node = document.createElement(tag);
-    node.className = className;
-    if (text !== undefined) node.textContent = text;
-    return node;
-  }
+    // A cascade field: dependent dropdowns driven by a {key,label,children} tree.
+    function addCascade(f) {
+        const wrap = document.createElement('div');
+        wrap.className = 'tdec-field';
+        wrap.appendChild(element('span', 'tdec-field-label', f.required ? f.label + ' *' : f.label));
+        const levels = document.createElement('div');
+        levels.className = 'tdec-cascade';
+        wrap.appendChild(levels);
+        refs.fields.appendChild(wrap);
 
-  function safeJson(text) {
-    try {
-      return JSON.parse(text);
-    } catch (error) {
-      return {};
+        addCascadeSelect(levels, f.tree || []);
+        fieldInputs.push({ key: f.key, builtin: false, required: !!f.required, cascade: true, tree: f.tree || [], levels: levels });
     }
-  }
+
+    function addCascadeSelect(levels, nodes) {
+        const select = document.createElement('select');
+        select.className = 'tdec-field-input';
+        select.appendChild(new Option('', ''));
+        nodes.forEach((n) => select.appendChild(new Option(n.label, n.key)));
+        select.addEventListener('change', () => {
+            // Drop any deeper dropdowns, then reveal the next level if the choice has children.
+            let sib = select.nextElementSibling;
+            while (sib) {
+                const next = sib.nextElementSibling;
+                sib.remove();
+                sib = next;
+            }
+            const node = nodes.find((n) => n.key === select.value);
+            if (node && node.children && node.children.length) {
+                addCascadeSelect(levels, node.children);
+            }
+        });
+        levels.appendChild(select);
+    }
+
+    // The selected path (node keys, top to bottom), stopping at the first blank.
+    function readCascadePath(levels) {
+        const path = [];
+        const selects = levels.querySelectorAll('select');
+        for (let i = 0; i < selects.length; i++) {
+            if (selects[i].value === '') break;
+            path.push(selects[i].value);
+        }
+        return path;
+    }
+
+    // Whether a path ends at a leaf (a complete choice).
+    function cascadeAtLeaf(nodes, path) {
+        let current = nodes;
+        let node = null;
+        for (let i = 0; i < path.length; i++) {
+            node = current.find((n) => n.key === path[i]);
+            if (!node) return false;
+            current = node.children || [];
+        }
+        return node !== null && (!node.children || node.children.length === 0);
+    }
+
+    // Apply admin-configured branding over the built-in defaults. Runs once
+    // app-config resolves; anything blank/absent keeps the default already shown.
+    function applyBranding(w) {
+        if (!w) return;
+
+        const setText = (selector, value) => {
+            const el = panel.querySelector(selector);
+            if (el && value) el.textContent = value;
+        };
+        setText('.tdec-title', w.widget_title);
+        setText('.tdec-lang-label', w.widget_language_label);
+        setText('.tdec-msg-label', w.widget_message_label);
+        setText('.tdec-start', w.widget_start_label);
+
+        // Subtitle may be intentionally blank - hide it when empty.
+        const subtitle = panel.querySelector('.tdec-status');
+        if (subtitle && w.widget_subtitle !== undefined) {
+            subtitle.textContent = w.widget_subtitle || '';
+            subtitle.style.display = w.widget_subtitle ? '' : 'none';
+        }
+
+        if (w.widget_greeting_placeholder) refs.first.setAttribute('placeholder', w.widget_greeting_placeholder);
+        if (w.widget_input_placeholder) refs.input.setAttribute('placeholder', w.widget_input_placeholder);
+        if (w.widget_bot_name) botName = w.widget_bot_name;
+
+        applyIcon(button, w.widget_launcher_icon);
+        const headIcon = panel.querySelector('.tdec-head-icon');
+        if (headIcon) {
+            if (w.widget_header_icon) {
+                applyIcon(headIcon, w.widget_header_icon);
+                headIcon.style.display = '';
+            } else {
+                headIcon.style.display = 'none';
+            }
+        }
+    }
+
+    // An icon value is an image (URL or inline data-URI, rendered as <img>) or an emoji/text.
+    function applyIcon(el, value) {
+        if (!el || !value) return;
+        if (/^https?:\/\//.test(value) || value.slice(0, 5) === 'data:') {
+            el.textContent = '';
+            const img = document.createElement('img');
+            img.src = value;
+            img.alt = '';
+            el.appendChild(img);
+        } else {
+            el.textContent = value;
+        }
+    }
+
+    function toggle(show) {
+        open = show;
+        panel.classList.toggle('open', show);
+        if (show && conversation) {
+            refresh();
+        }
+    }
+
+    async function start() {
+        const message = refs.first.value.trim();
+        if (message === '') {
+            refs.first.focus();
+            return;
+        }
+
+        const visitor = { visitor_name: null, visitor_email: null, visitor_phone: null };
+        const fields = {};
+        for (let i = 0; i < fieldInputs.length; i++) {
+            const fi = fieldInputs[i];
+
+            if (fi.cascade) {
+                const path = readCascadePath(fi.levels);
+                if (fi.required && path.length === 0) {
+                    refs.status.textContent = 'Please fill in the required fields.';
+                    return;
+                }
+                // A started selection must be finished to a leaf.
+                if (path.length > 0 && !cascadeAtLeaf(fi.tree, path)) {
+                    refs.status.textContent = 'Please complete the selection.';
+                    return;
+                }
+                if (path.length > 0) fields[fi.key] = path;
+                continue;
+            }
+
+            const value = (fi.el.value || '').trim();
+            if (fi.required && value === '') {
+                fi.el.focus();
+                refs.status.textContent = 'Please fill in the required fields.';
+                return;
+            }
+            if (fi.builtin) {
+                visitor['visitor_' + fi.key] = value || null;
+            } else if (value !== '') {
+                fields[fi.key] = value;
+            }
+        }
+
+        // Use request() (not api()) so we can surface a validation error instead of
+        // silently resyncing.
+        const result = await request('POST', `/api/v1/public/inboxes/${config.inbox}/conversations`, {
+            message: message,
+            visitor_name: visitor.visitor_name,
+            visitor_email: visitor.visitor_email,
+            visitor_phone: visitor.visitor_phone,
+            language: refs.lang.value,
+            fields: fields,
+            meta: { page: location.href },
+        });
+
+        if (result.status === 422) {
+            refs.status.textContent = 'Please check your details and try again.';
+            return;
+        }
+        if (result.status < 200 || result.status >= 300 || !result.data) {
+            refs.status.textContent = 'Connection problem, please try again.';
+            return;
+        }
+
+        setConversation(result.data.data);
+        localStorage.setItem(storageKey, conversation.uuid);
+        (conversation.messages || []).forEach(render);
+        connect();
+    }
+
+    async function resume(uuid) {
+        const result = await request('GET', `/api/v1/public/conversations/${uuid}`);
+
+        if (result.status === 404) {
+            // The conversation genuinely no longer exists server-side.
+            localStorage.removeItem(storageKey);
+            return;
+        }
+
+        if (result.status < 200 || result.status >= 300) {
+            // Transient failure (backend/db down): keep the stored conversation
+            // and keep retrying until the server comes back.
+            show('chat');
+            refs.status.textContent = 'Connection problem \u2014 retrying\u2026';
+            refs.input.disabled = true;
+            refs.send.disabled = true;
+            setTimeout(() => resume(uuid), 5000);
+            return;
+        }
+
+        setConversation(result.data.data);
+        (conversation.messages || []).forEach(render);
+        connect();
+        // We came back (e.g. after a refresh) - cancel any pending "left" flag the
+        // previous page's unload may have set, before the grace window elapses.
+        markPresent();
+    }
+
+    async function refresh() {
+        if (!conversation) return;
+        const response = await api('GET', `/api/v1/public/conversations/${conversation.uuid}`);
+        if (!response) return;
+        setConversation(response.data);
+        (conversation.messages || []).forEach(render);
+    }
+
+    // Tell the agent the visitor is typing (mirror of the agent's indicator).
+    function onVisitorTyping() {
+        if (!conversation) return;
+        if (!visitorTypingActive) {
+            visitorTypingActive = true;
+            sendVisitorTyping(true);
+        }
+        clearTimeout(visitorTypingTimer);
+        visitorTypingTimer = setTimeout(stopVisitorTyping, 3000);
+    }
+
+    function stopVisitorTyping() {
+        clearTimeout(visitorTypingTimer);
+        if (visitorTypingActive) {
+            visitorTypingActive = false;
+            sendVisitorTyping(false);
+        }
+    }
+
+    function sendVisitorTyping(on) {
+        if (!conversation) return;
+        request('POST', '/api/v1/public/conversations/' + conversation.uuid + '/typing', { typing: on });
+    }
+
+    async function sendMessage() {
+        const body = refs.input.value.trim();
+        if (body === '' || !conversation) return;
+        refs.input.value = '';
+        stopVisitorTyping();
+
+        const response = await api(
+            'POST',
+            `/api/v1/public/conversations/${conversation.uuid}/messages`,
+            { body: body },
+        );
+        if (!response) return;
+
+        render(response.message);
+        if (response.bot_reply) render(response.bot_reply);
+        updateStatus(response.status);
+    }
+
+    async function uploadFile(e) {
+        const file = e.target.files && e.target.files[0];
+        e.target.value = ''; // let the same file be re-picked later
+        if (!file || !conversation) return;
+
+        // Multipart, so let the browser set the boundary - can't use api().
+        const form = new FormData();
+        form.append('file', file);
+        try {
+            const response = await fetch(
+                config.api + '/api/v1/public/conversations/' + conversation.uuid + '/attachments',
+                { method: 'POST', headers: { Accept: 'application/json' }, body: form },
+            );
+            if (response.status >= 200 && response.status < 300) {
+                const data = await response.json();
+                render(data.message);
+            } else if (response.status === 422) {
+                const data = await response.json().catch(() => null);
+                refs.status.textContent = (data && data.message) || 'That file is not allowed.';
+            } else {
+                refs.status.textContent = 'Upload problem \u2014 try again.';
+            }
+        } catch (err) {
+            refs.status.textContent = 'Upload problem \u2014 try again.';
+        }
+    }
+
+    function renderAttachment(att) {
+        if (att.is_image) {
+            const link = element('a', 'tdec-att-img');
+            link.href = att.url;
+            link.target = '_blank';
+            link.rel = 'noopener';
+            const img = document.createElement('img');
+            img.src = att.url;
+            img.alt = att.name;
+            img.loading = 'lazy';
+            link.appendChild(img);
+            return link;
+        }
+        const link = element('a', 'tdec-att-file');
+        link.href = att.url;
+        link.target = '_blank';
+        link.rel = 'noopener';
+        link.appendChild(element('span', 'tdec-att-name', att.name));
+        return link;
+    }
+
+    async function escalate() {
+        if (!conversation) return;
+        const response = await api('POST', `/api/v1/public/conversations/${conversation.uuid}/escalate`);
+        if (response) setConversation(response.data);
+    }
+
+    async function endChat() {
+        if (conversation && isOpenStatus(conversation.status)) {
+            await api('POST', `/api/v1/public/conversations/${conversation.uuid}/close`);
+        }
+        localStorage.removeItem(storageKey);
+        disconnect();
+        conversation = null;
+        seenMessages.clear();
+        messageNodes.clear();
+        refs.msgs.innerHTML = '';
+        show('pre');
+        refs.status.textContent = 'TDEChat';
+    }
+
+    // ---------- rendering ----------
+    function setConversation(data) {
+        conversation = data;
+        show('chat');
+        updateStatus(conversation.status);
+    }
+
+    function updateStatus(status) {
+        if (conversation) conversation.status = status;
+
+        const agent = conversation && conversation.assigned_agent;
+        const labels = {
+            pending: 'Connecting\u2026',
+            bot: 'Chatbot \u2014 ask anything',
+            awaiting_acceptance: 'Waiting for an agent\u2026',
+            active: agent ? 'Chatting with ' + agent.display_name : 'Agent connected',
+            closed: 'Conversation ended',
+            abandoned: 'Conversation ended',
+        };
+        refs.status.textContent = labels[status] || status;
+
+        const openNow = isOpenStatus(status);
+        refs.input.disabled = !openNow;
+        refs.send.disabled = !openNow;
+        refs.escalate.style.display = status === 'bot' || status === 'pending' ? '' : 'none';
+        refs.end.textContent = openNow ? 'End chat' : 'Start a new chat';
+    }
+
+    function render(message) {
+        if (!message || seenMessages.has(message.id)) return;
+        seenMessages.add(message.id);
+
+        if (message.sender_type !== 'visitor' && message.sender_type !== 'system') {
+            const sender = element(
+                'div',
+                'tdec-sender',
+                message.sender_type === 'bot' ? botName : (message.agent && message.agent.display_name) || 'Agent',
+            );
+            refs.msgs.appendChild(sender);
+        }
+
+        const bubble = element('div', 'tdec-msg ' + message.sender_type, message.body);
+        (message.attachments || []).forEach(function (att) {
+            bubble.appendChild(renderAttachment(att));
+        });
+        refs.msgs.appendChild(bubble);
+        messageNodes.set(message.id, { bubble: bubble, senderType: message.sender_type });
+
+        applyTranslation(message.id, (message.meta && message.meta.translations) || null);
+        refs.msgs.scrollTop = refs.msgs.scrollHeight;
+    }
+
+    /**
+     * Shows the visitor-language translation under agent replies (auto mode
+     * translates agent messages into the conversation language).
+     */
+    function applyTranslation(messageId, translations) {
+        const entry = messageNodes.get(messageId);
+        if (!entry || entry.senderType !== 'agent' || !translations || !conversation) return;
+
+        const text = translations[conversation.language];
+        if (!text || text === entry.bubble.firstChild?.textContent) return;
+
+        if (!entry.translationNode) {
+            entry.translationNode = element('div', 'tdec-trans');
+            entry.bubble.appendChild(entry.translationNode);
+        }
+        entry.translationNode.textContent = text;
+    }
+
+    function show(which) {
+        refs.pre.style.display = which === 'pre' ? 'flex' : 'none';
+        refs.msgs.style.display = which === 'chat' ? 'flex' : 'none';
+        refs.bar.style.display = which === 'chat' ? 'flex' : 'none';
+        refs.foot.style.display = which === 'chat' ? 'flex' : 'none';
+    }
+
+    // ---------- realtime (Pusher protocol over Reverb) ----------
+    function connect() {
+        if (!config.reverbKey || !conversation) {
+            startPolling();
+            return;
+        }
+
+        const scheme = config.wsTls ? 'wss' : 'ws';
+        socket = new WebSocket(
+            `${scheme}://${config.wsHost}:${config.wsPort}/app/${config.reverbKey}?protocol=7&client=tdechat-widget&version=1.0`,
+        );
+
+        socket.onopen = () => {
+            stopPolling();
+            socket.send(
+                JSON.stringify({
+                    event: 'pusher:subscribe',
+                    data: { channel: 'conversation.' + conversation.uuid },
+                }),
+            );
+            // A live socket means the visitor is here; clear any pending "left" flag
+            // (covers reconnects after the tab was suspended, e.g. laptop sleep).
+            markPresent();
+        };
+
+        socket.onmessage = (frame) => {
+            const message = JSON.parse(frame.data);
+            const payload = typeof message.data === 'string' ? safeJson(message.data) : message.data;
+
+            switch (message.event) {
+                case 'pusher:ping':
+                    socket.send(JSON.stringify({ event: 'pusher:pong', data: {} }));
+                    break;
+                case 'message.sent':
+                    render(payload.message);
+                    break;
+                case 'agent.typing':
+                    showTyping(payload.typing);
+                    break;
+                case 'message.translated':
+                    applyTranslation(payload.message_id, payload.translations);
+                    break;
+                case 'conversation.updated':
+                    conversation.assigned_agent = payload.conversation.assigned_agent;
+                    updateStatus(payload.conversation.status);
+                    break;
+            }
+        };
+
+        socket.onclose = () => {
+            socket = null;
+            if (conversation && isOpenStatus(conversation.status)) {
+                startPolling();
+                setTimeout(connect, 3000);
+            }
+        };
+    }
+
+    function disconnect() {
+        stopPolling();
+        if (socket) {
+            socket.onclose = null;
+            socket.close();
+            socket = null;
+        }
+    }
+
+    function showTyping(on) {
+        refs.typing.classList.toggle('on', on !== false);
+        clearTimeout(typingTimer);
+        if (on !== false) {
+            typingTimer = setTimeout(() => refs.typing.classList.remove('on'), 4000);
+        }
+    }
+
+    function startPolling() {
+        if (pollTimer) return;
+        pollTimer = setInterval(() => {
+            if (open) refresh();
+        }, 5000);
+    }
+
+    function stopPolling() {
+        clearInterval(pollTimer);
+        pollTimer = null;
+    }
+
+    // ---------- helpers ----------
+    async function request(method, path, body) {
+        try {
+            const response = await fetch(config.api + path, {
+                method: method,
+                headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                body: body ? JSON.stringify(body) : undefined,
+            });
+
+            return {
+                status: response.status,
+                data: response.status === 204 ? {} : await response.json().catch(() => null),
+            };
+        } catch (error) {
+            return { status: 0, data: null };
+        }
+    }
+
+    async function api(method, path, body) {
+        const result = await request(method, path, body);
+
+        if (result.status >= 200 && result.status < 300) {
+            return result.data;
+        }
+
+        if (result.status >= 400 && result.status < 500) {
+            // Client-state conflict (e.g. escalating an already-escalated chat):
+            // resync with the server instead of alarming the visitor.
+            refresh();
+            return null;
+        }
+
+        refs.status.textContent = 'Connection problem \u2014 retrying\u2026';
+        return null;
+    }
+
+    function isOpenStatus(status) {
+        return !!status && status !== 'closed' && status !== 'abandoned';
+    }
+
+    // Tell the server the visitor is present, cancelling a pending unload/leave.
+    function markPresent() {
+        if (conversation && isOpenStatus(conversation.status)) {
+            request('POST', '/api/v1/public/conversations/' + conversation.uuid + '/present');
+        }
+    }
+
+    function element(tag, className, text) {
+        const node = document.createElement(tag);
+        node.className = className;
+        if (text !== undefined) node.textContent = text;
+        return node;
+    }
+
+    function safeJson(text) {
+        try {
+            return JSON.parse(text);
+        } catch (error) {
+            return {};
+        }
+    }
 })();

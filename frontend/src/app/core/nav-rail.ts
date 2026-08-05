@@ -105,7 +105,7 @@ import { AgentApiService } from '../features/agent/agent-api.service';
       border-radius: 10px;
       display: grid;
       place-items: center;
-      background: var(--tde-accent);
+    //   background: var(--tde-accent);
       color: #fff;
       margin-bottom: 14px;
 
