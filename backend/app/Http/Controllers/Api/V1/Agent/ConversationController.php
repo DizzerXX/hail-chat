@@ -64,7 +64,7 @@ class ConversationController extends Controller
         $this->authorizeView($request, $conversation);
 
         return ConversationResource::make(
-            $conversation->load(['inbox', 'assignedAgent', 'team', 'messages.agent', 'messages.attachments'])
+            $conversation->load(['inbox', 'assignedAgent', 'team', 'messages.agent', 'messages.attachments', 'events'])
         );
     }
 
@@ -164,7 +164,7 @@ class ConversationController extends Controller
         $team = $request->filled('team_id') ? Team::findOrFail($request->validated('team_id')) : null;
         $agent = $request->filled('agent_id') ? Agent::findOrFail($request->validated('agent_id')) : null;
 
-        $rerouted = $this->conversations->reroute($conversation, $team, $agent);
+        $rerouted = $this->conversations->reroute($conversation, $team, $agent, $request->user()?->agent);
 
         return ConversationResource::make($rerouted->load(['inbox', 'assignedAgent', 'team']));
     }

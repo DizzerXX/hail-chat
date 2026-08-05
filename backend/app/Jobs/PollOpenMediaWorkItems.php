@@ -130,6 +130,8 @@ class PollOpenMediaWorkItems implements ShouldQueue
      */
     private function markGone(Conversation $conversation, WorkItemSnapshot $snapshot): void
     {
+        $wasWith = $conversation->assignedAgent?->displayName();
+
         $conversation->forceFill([
             'status' => ConversationStatus::Abandoned,
             'closed_at' => now(),
@@ -138,16 +140,25 @@ class PollOpenMediaWorkItems implements ShouldQueue
             ]),
         ])->save();
 
+        $conversation->recordEvent('abandoned', 'system', null, array_filter(['reason' => 'no_agent', 'was_with' => $wasWith]));
+
         event(new WorkItemAbandoned($conversation, $snapshot));
         broadcast(new ConversationUpdated($conversation));
     }
 
     private function markAbandoned(Conversation $conversation, WorkItemSnapshot $snapshot, bool $failed = false): void
     {
+        $wasWith = $conversation->assignedAgent?->displayName();
+
         $conversation->forceFill([
             'status' => ConversationStatus::Abandoned,
             'closed_at' => now(),
         ])->save();
+
+        $conversation->recordEvent('abandoned', 'system', null, array_filter([
+            'reason' => $failed ? 'inbox_failed' : 'micc',
+            'was_with' => $wasWith,
+        ]));
 
         if ($failed) {
             Log::warning('MiCC reported an inbox routing failure for a work item.', [
@@ -167,6 +178,8 @@ class PollOpenMediaWorkItems implements ShouldQueue
             'status' => ConversationStatus::Closed,
             'closed_at' => now(),
         ])->save();
+
+        $conversation->recordEvent('closed', 'system', $conversation->assignedAgent?->displayName(), ['by' => 'micc']);
 
         $webhooks->dispatch(
             WebhookEvent::ConversationClosed,

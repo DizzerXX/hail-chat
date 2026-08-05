@@ -51,6 +51,15 @@ class ConversationResource extends JsonResource
             'closed_at' => $this->closed_at,
             'created_at' => $this->created_at,
             'messages' => MessageResource::collection($this->whenLoaded('messages')),
+            // Handling audit trail — agent-facing only; the relation is loaded
+            // exclusively by the agent conversation endpoint, never the public one.
+            'activity' => $this->whenLoaded('events', fn () => $this->events->map(fn ($event) => [
+                'type' => $event->type,
+                'actor_type' => $event->actor_type,
+                'actor_name' => $event->actor_name,
+                'detail' => $event->detail,
+                'created_at' => $event->created_at,
+            ])->values()),
         ];
     }
 }

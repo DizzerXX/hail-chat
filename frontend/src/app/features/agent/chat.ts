@@ -21,7 +21,14 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
-import { CannedResponse, ContactHistory, Conversation, Message, PublicFaq } from '../../core/api-types';
+import {
+  CannedResponse,
+  ContactHistory,
+  Conversation,
+  ConversationEvent,
+  Message,
+  PublicFaq,
+} from '../../core/api-types';
 import { AppConfigService } from '../../core/app-config.service';
 import { AuthService } from '../../core/auth.service';
 import { EchoService } from '../../core/echo.service';
@@ -350,6 +357,23 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
               <mat-icon>open_in_new</mat-icon>
               Open CMS
             </a>
+          }
+
+          @if (conversation.activity?.length) {
+            <div class="activity">
+              <h4>Activity</h4>
+              <ol class="timeline">
+                @for (event of conversation.activity!; track $index) {
+                  <li [class]="'ev ev-' + event.type">
+                    <mat-icon>{{ activityIcon(event) }}</mat-icon>
+                    <div class="ev-text">
+                      <span class="ev-label">{{ activityLabel(event) }}</span>
+                      <span class="ev-time">{{ event.created_at | date: 'MMM d, h:mm a' }}</span>
+                    </div>
+                  </li>
+                }
+              </ol>
+            </div>
           }
 
           @if (history()?.conversations?.length) {
@@ -747,7 +771,8 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
     footer.note-mode .send {
       background: #d9a441;
     }
-    .history {
+    .history,
+    .activity {
       margin-top: 20px;
       border-top: 1px solid var(--tde-border);
       padding-top: 14px;
@@ -758,6 +783,52 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.4px;
+        color: var(--tde-muted);
+      }
+    }
+    .timeline {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+
+      .ev {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+
+        mat-icon {
+          font-size: 18px;
+          width: 18px;
+          height: 18px;
+          margin-top: 1px;
+          color: var(--tde-muted);
+          flex-shrink: 0;
+        }
+        &.ev-transferred mat-icon {
+          color: var(--tde-accent);
+        }
+        &.ev-abandoned mat-icon {
+          color: #c77700;
+        }
+        &.ev-closed mat-icon {
+          color: #1e9e5a;
+        }
+      }
+      .ev-text {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+      .ev-label {
+        font-size: 13px;
+        line-height: 1.35;
+        word-break: break-word;
+      }
+      .ev-time {
+        font-size: 11px;
         color: var(--tde-muted);
       }
     }
@@ -1373,6 +1444,46 @@ export class Chat implements OnInit, OnDestroy {
 
   protected statusLabel(status: Conversation['status']): string {
     return status.replace(/_/g, ' ');
+  }
+
+  protected activityIcon(event: ConversationEvent): string {
+    return {
+      accepted: 'login',
+      transferred: 'swap_horiz',
+      rerouted: 'alt_route',
+      abandoned: 'person_off',
+      closed: 'check_circle',
+    }[event.type];
+  }
+
+  /** A readable, agent-facing label for an audit-trail entry. */
+  protected activityLabel(event: ConversationEvent): string {
+    const d = event.detail ?? {};
+    switch (event.type) {
+      case 'accepted':
+        return `Accepted by ${event.actor_name ?? 'an agent'}`;
+      case 'transferred':
+        return d.from
+          ? `Transferred from ${d.from} to ${event.actor_name ?? 'an agent'}`
+          : `Taken over by ${event.actor_name ?? 'an agent'}`;
+      case 'rerouted': {
+        const target = d.to_agent ?? d.to_team;
+        return `Rerouted${target ? ` to ${target}` : ''}${event.actor_name ? ` by ${event.actor_name}` : ''}`;
+      }
+      case 'abandoned': {
+        const who = d.was_with ? ` — was with ${d.was_with}` : '';
+        if (d.reason === 'visitor_left') return `Visitor left${who}`;
+        if (d.reason === 'no_agent') return 'Ended with no agent';
+        if (d.reason === 'inbox_failed') return `Routing failed${who}`;
+        return `Abandoned (inactivity)${who}`;
+      }
+      case 'closed':
+        if (d.by === 'visitor') return 'Closed by visitor';
+        if (d.by === 'micc') return 'Closed in Ignite';
+        return `Closed by ${event.actor_name ?? 'an agent'}`;
+      default:
+        return event.type;
+    }
   }
 
   protected async accept(): Promise<void> {

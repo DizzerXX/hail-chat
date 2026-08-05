@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\ConversationStatus;
 use App\Models\Agent;
 use App\Models\Conversation;
+use App\Models\Inbox;
 use App\Models\Role;
 use App\Models\Team;
 use App\Models\User;
@@ -113,6 +114,44 @@ class ClaimConversationTest extends TestCase
         $this->claim($conversation)->assertStatus(409);
 
         $this->assertSame($owner->id, $conversation->refresh()->assigned_agent_id);
+    }
+
+    public function test_micc_transfer_lets_the_new_agent_take_over_and_logs_it(): void
+    {
+        // On a MiCC inbox, Ignite is the source of truth for who owns the case,
+        // so a regular agent opening the embed after a transfer takes it over.
+        $inbox = Inbox::factory()->mitelOpenMedia()->create();
+        $agentA = $this->makeAgent();
+        $agentB = $this->makeAgent();
+        $conversation = Conversation::factory()->active()->for($inbox)->create(['assigned_agent_id' => $agentA->id]);
+
+        Sanctum::actingAs($agentB->user);
+        $this->claim($conversation)
+            ->assertOk()
+            ->assertJsonPath('data.assigned_agent.id', $agentB->id);
+
+        $this->assertSame($agentB->id, $conversation->refresh()->assigned_agent_id);
+        $this->assertDatabaseHas('conversation_events', [
+            'conversation_id' => $conversation->id,
+            'type' => 'transferred',
+            'actor_name' => $agentB->displayName(),
+        ]);
+        $this->assertSame($agentA->displayName(), $conversation->events()->where('type', 'transferred')->first()->detail['from']);
+    }
+
+    public function test_a_conversation_abandoned_mid_transfer_stays_with_the_previous_agent(): void
+    {
+        // Visitor abandoned before agent B claimed → must remain attributed to A,
+        // and B cannot retroactively claim a closed/abandoned chat.
+        $inbox = Inbox::factory()->mitelOpenMedia()->create();
+        $agentA = $this->makeAgent();
+        $agentB = $this->makeAgent();
+        $conversation = Conversation::factory()->abandoned()->for($inbox)->create(['assigned_agent_id' => $agentA->id]);
+
+        Sanctum::actingAs($agentB->user);
+        $this->claim($conversation)->assertStatus(409);
+
+        $this->assertSame($agentA->id, $conversation->refresh()->assigned_agent_id);
     }
 
     public function test_supervisor_with_assign_permission_may_take_over(): void

@@ -173,6 +173,8 @@ class ConversationService
             'last_activity_at' => now(),
         ])->save();
 
+        $conversation->recordEvent('accepted', 'agent', $agent->displayName());
+
         broadcast(new ConversationUpdated($conversation));
 
         return $conversation;
@@ -204,8 +206,15 @@ class ConversationService
             'This conversation is no longer open.',
         );
 
+        // On a MiCC inbox, Ignite owns case routing: an agent opening the embed
+        // has just been transferred the case there, so let them take it over
+        // from the previous agent. Standalone stays protected (no stealing an
+        // active chat without the reassign permission).
+        $isMitel = $conversation->inbox->channel_type === ChannelType::MitelOpenMedia;
+
         abort_unless(
             $conversation->assigned_agent_id === null
+                || $isMitel
                 || $agent->user->hasPermission('conversations.assign'),
             409,
             'This conversation is assigned to another agent.',
@@ -213,11 +222,23 @@ class ConversationService
 
         $this->assertAgentFree($conversation, $agent);
 
+        // Capture the outgoing agent before we overwrite it, so the audit trail
+        // can show "transferred from A to B".
+        $previousName = $conversation->assignedAgent?->displayName();
+        $reassignment = $conversation->assigned_agent_id !== null;
+
         $conversation->forceFill([
             'assigned_agent_id' => $agent->id,
             'accepted_at' => $conversation->accepted_at ?? now(),
             'last_activity_at' => now(),
         ])->save();
+
+        $conversation->recordEvent(
+            $reassignment ? 'transferred' : 'accepted',
+            'agent',
+            $agent->displayName(),
+            $reassignment && $previousName !== null ? ['from' => $previousName] : [],
+        );
 
         broadcast(new ConversationUpdated($conversation));
 
@@ -284,6 +305,13 @@ class ConversationService
 
         $this->appendMessage($conversation, SenderType::System, 'Conversation closed by '.$closedBy.'.');
 
+        $conversation->recordEvent(
+            'closed',
+            $closedBy === 'visitor' ? 'visitor' : 'agent',
+            $closedBy === 'visitor' ? null : $conversation->assignedAgent?->displayName(),
+            ['by' => $closedBy],
+        );
+
         $this->webhooks->dispatch(
             WebhookEvent::ConversationClosed,
             ['conversation' => $this->payload($conversation), 'closed_by' => $closedBy],
@@ -343,11 +371,23 @@ class ConversationService
      */
     private function abandon(Conversation $conversation, string $reason): Conversation
     {
+        // Record who was handling it when it was abandoned — the audit trail
+        // must keep the chat attributed to that agent (e.g. abandoned mid-transfer
+        // stays "was with Agent A"), which is why we never clear assigned_agent_id.
+        $wasWith = $conversation->assignedAgent?->displayName();
+
         $conversation->forceFill([
             'status' => ConversationStatus::Abandoned,
             'closed_at' => now(),
             'visitor_left_at' => null,
         ])->save();
+
+        $conversation->recordEvent(
+            'abandoned',
+            $reason === 'visitor_left' ? 'visitor' : 'system',
+            null,
+            array_filter(['reason' => $reason, 'was_with' => $wasWith]),
+        );
 
         $this->webhooks->dispatch(
             WebhookEvent::ConversationClosed,
@@ -376,7 +416,7 @@ class ConversationService
         }
     }
 
-    public function reroute(Conversation $conversation, ?Team $team, ?Agent $agent): Conversation
+    public function reroute(Conversation $conversation, ?Team $team, ?Agent $agent, ?Agent $by = null): Conversation
     {
         abort_unless(in_array($conversation->status, [
             ConversationStatus::AwaitingAcceptance,
@@ -390,6 +430,11 @@ class ConversationService
         }
 
         $this->providers->resolve($conversation->inbox)->rerouteWorkItem($conversation, $team, $agent);
+
+        $conversation->recordEvent('rerouted', 'agent', $by?->displayName(), array_filter([
+            'to_agent' => $agent?->displayName(),
+            'to_team' => $team?->name,
+        ]));
 
         broadcast(new ConversationUpdated($conversation));
 

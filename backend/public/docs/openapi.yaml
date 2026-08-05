@@ -1587,6 +1587,21 @@ components:
           type: array
           description: Present when the endpoint includes messages
           items: { $ref: '#/components/schemas/Message' }
+        activity:
+          type: array
+          description: >
+            Handling audit trail (accepted / transferred / rerouted / abandoned /
+            closed). Agent endpoints only — never returned on the public API.
+          items:
+            type: object
+            properties:
+              type: { type: string, enum: [accepted, transferred, rerouted, abandoned, closed] }
+              actor_type: { type: [string, 'null'], enum: [agent, visitor, system, null] }
+              actor_name: { type: [string, 'null'] }
+              detail:
+                type: [object, 'null']
+                description: "e.g. {from, to_agent, to_team, reason, was_with, by}"
+              created_at: { type: string, format: date-time }
 
     Message:
       type: object

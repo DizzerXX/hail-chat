@@ -47,6 +47,22 @@ export interface Conversation {
   closed_at: string | null;
   created_at: string;
   messages?: Message[];
+  activity?: ConversationEvent[];
+}
+
+export interface ConversationEvent {
+  type: 'accepted' | 'transferred' | 'rerouted' | 'abandoned' | 'closed';
+  actor_type: 'agent' | 'visitor' | 'system' | null;
+  actor_name: string | null;
+  detail: {
+    from?: string;
+    to_agent?: string;
+    to_team?: string;
+    reason?: string;
+    was_with?: string;
+    by?: string;
+  } | null;
+  created_at: string;
 }
 
 export interface Attachment {

@@ -86,4 +86,27 @@ class Conversation extends Model
     {
         return $this->hasMany(FaqQuery::class);
     }
+
+    /** Handling audit trail (accepted / transferred / abandoned / closed …). */
+    public function events(): HasMany
+    {
+        return $this->hasMany(ConversationEvent::class)->orderBy('id');
+    }
+
+    /**
+     * Append an entry to the handling audit trail. Agent-facing only (never
+     * surfaced on the public API); display names are captured at event time so
+     * the log survives an agent being renamed or removed.
+     *
+     * @param  array<string, mixed>  $detail
+     */
+    public function recordEvent(string $type, ?string $actorType = null, ?string $actorName = null, array $detail = []): void
+    {
+        $this->events()->create([
+            'type' => $type,
+            'actor_type' => $actorType,
+            'actor_name' => $actorName,
+            'detail' => $detail === [] ? null : $detail,
+        ]);
+    }
 }
