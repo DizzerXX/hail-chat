@@ -8,6 +8,8 @@ use App\Http\Controllers\Api\V1\Admin\InboxController as AdminInboxController;
 use App\Http\Controllers\Api\V1\Admin\LicenseController;
 use App\Http\Controllers\Api\V1\Admin\MitelQueueController;
 use App\Http\Controllers\Api\V1\Admin\RoutingRuleController;
+use App\Http\Controllers\Api\V1\Admin\SystemSettingsController;
+use App\Http\Controllers\Api\V1\Admin\SystemStatusController;
 use App\Http\Controllers\Api\V1\Admin\TeamController;
 use App\Http\Controllers\Api\V1\Admin\UserController;
 use App\Http\Controllers\Api\V1\Admin\WebhookController;
@@ -124,6 +126,18 @@ Route::prefix('v1')->group(function () {
         });
         Route::get('/license/seats', [LicenseController::class, 'seats'])
             ->middleware('permission:agents.manage');
+        // Read-only user detail + audit trail for the "View" dialog (not
+        // license-gated, so you can inspect accounts even when seats are over).
+        Route::middleware('permission:agents.manage')->group(function () {
+            Route::get('/users/{user}', [UserController::class, 'show']);
+            Route::get('/users/{user}/activity', [UserController::class, 'activity']);
+        });
+
+        Route::middleware('permission:system.manage')->group(function () {
+            Route::get('/system-settings', [SystemSettingsController::class, 'show']);
+            Route::put('/system-settings', [SystemSettingsController::class, 'update']);
+            Route::get('/system/status', [SystemStatusController::class, 'show']);
+        });
 
         Route::middleware('permission:license.manage')->group(function () {
             Route::get('/license', [LicenseController::class, 'show']);

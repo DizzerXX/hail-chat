@@ -198,6 +198,48 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
 
+  /api/v1/admin/system-settings:
+    get:
+      tags: [Admin]
+      summary: Read system settings (branding + data retention)
+      description: Requires `system.manage`. The public `brand` (app_name/favicon/logo) is also exposed unauthenticated via `/public/app-config`.
+      operationId: getSystemSettings
+      responses:
+        '200': { description: OK }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    put:
+      tags: [Admin]
+      summary: Update system settings
+      description: >
+        Requires `system.manage`. `retention_days` is floored at
+        `system.retention_min_days`. Enabling retention schedules permanent daily
+        deletion of closed/abandoned conversations older than the window.
+      operationId: updateSystemSettings
+      responses:
+        '200': { description: Saved }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /api/v1/admin/system/status:
+    get:
+      tags: [Admin]
+      summary: System health snapshot
+      description: "Requires `system.manage`. Best-effort checks: database, redis, reverb, queue, mitel, license seats."
+      operationId: getSystemStatus
+      responses:
+        '200': { description: OK }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/v1/admin/users/{userId}/activity:
+    get:
+      tags: [Admin]
+      summary: A user's account/system audit trail
+      description: Requires `agents.manage`. Login, settings, and user-management actions performed by that user (for the users-list "View" dialog).
+      operationId: getUserActivity
+      responses:
+        '200': { description: OK }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
   /api/v1/public/conversations/{conversationUuid}/close:
     post:
       tags: [Public]

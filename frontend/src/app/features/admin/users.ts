@@ -12,6 +12,7 @@ import { firstValueFrom } from 'rxjs';
 import { AdminUser, SeatInfo } from '../../core/api-types';
 import { AdminApiService } from './admin-api.service';
 import { UserDialog } from './user-dialog';
+import { UserViewDialog } from './user-view-dialog';
 
 @Component({
   selector: 'app-users',
@@ -91,6 +92,9 @@ import { UserDialog } from './user-dialog';
         <ng-container matColumnDef="actions">
           <th mat-header-cell *matHeaderCellDef></th>
           <td mat-cell *matCellDef="let user">
+            <button matIconButton (click)="view(user)" aria-label="View">
+              <mat-icon>visibility</mat-icon>
+            </button>
             <button matIconButton (click)="edit(user)" aria-label="Edit">
               <mat-icon>edit</mat-icon>
             </button>
@@ -142,6 +146,10 @@ export class Users implements OnInit {
           void this.reload();
         }
       });
+  }
+
+  protected view(user: AdminUser): void {
+    this.dialog.open(UserViewDialog, { data: user.id, width: '520px' });
   }
 
   protected async reload(): Promise<void> {

@@ -126,6 +126,7 @@ export class AdminShell {
     { path: 'webhooks', label: 'Webhooks', icon: 'webhook', permission: 'webhooks.manage' },
     { path: 'routing', label: 'Routing rules', icon: 'alt_route', permission: 'routing.manage' },
     { path: 'chat-settings', label: 'Chat settings', icon: 'tune', permission: 'settings.manage' },
+    { path: 'system', label: 'System settings', icon: 'settings', permission: 'system.manage' },
     { path: 'license', label: 'License', icon: 'key', permission: 'license.manage' },
   ];
 

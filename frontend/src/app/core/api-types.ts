@@ -156,6 +156,7 @@ export interface AdminUser {
     status: AgentStatus;
     team_ids: number[];
   } | null;
+  created_at: string;
 }
 
 export interface Role {
@@ -243,6 +244,43 @@ export interface AppConfig {
     customer_close_minutes: number;
     agent_idle_minutes: number;
   };
+}
+
+export interface Brand {
+  app_name: string;
+  favicon: string | null;
+  logo: string | null;
+}
+
+export interface SystemSettings {
+  app_name: string;
+  favicon: string | null;
+  logo: string | null;
+  retention_enabled: boolean;
+  retention_days: number;
+  retention_min_days: number;
+  last_purge_at: string | null;
+  last_purge_count: number;
+}
+
+export interface SystemStatus {
+  database: boolean;
+  redis: boolean;
+  reverb: boolean;
+  queue: { up: boolean; pending: number };
+  mitel: { enabled: boolean; configured: boolean };
+  license: { enforced: boolean; used: number; max: number | null };
+}
+
+export interface UserDetail extends AdminUser {
+  last_login_at: string | null;
+}
+
+export interface AuditEntry {
+  action: string;
+  description: string | null;
+  ip_address: string | null;
+  created_at: string;
 }
 
 export interface ChatSettings {

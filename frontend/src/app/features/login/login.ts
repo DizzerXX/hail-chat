@@ -7,6 +7,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AuthService } from '../../core/auth.service';
+import { BrandingService } from '../../core/branding.service';
 
 @Component({
   selector: 'app-login',
@@ -18,7 +19,10 @@ import { AuthService } from '../../core/auth.service';
           <mat-progress-bar mode="indeterminate" />
         }
         <mat-card-header>
-          <mat-card-title>TDEChat</mat-card-title>
+          @if (branding.logo(); as logo) {
+            <img class="brand-logo" [src]="logo" [alt]="branding.appName()" />
+          }
+          <mat-card-title>{{ branding.appName() }}</mat-card-title>
           <mat-card-subtitle>Sign in to your workspace</mat-card-subtitle>
         </mat-card-header>
         <mat-card-content>
@@ -50,6 +54,12 @@ import { AuthService } from '../../core/auth.service';
     mat-card {
       width: 360px;
     }
+    .brand-logo {
+      max-height: 48px;
+      max-width: 200px;
+      object-fit: contain;
+      margin-bottom: 8px;
+    }
     form {
       display: flex;
       flex-direction: column;
@@ -64,6 +74,7 @@ import { AuthService } from '../../core/auth.service';
   `,
 })
 export class Login {
+  protected readonly branding = inject(BrandingService);
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);

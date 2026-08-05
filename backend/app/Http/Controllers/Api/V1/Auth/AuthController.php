@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1\Auth;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\LoginRequest;
 use App\Http\Resources\UserResource;
+use App\Models\AuditLog;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -28,6 +29,8 @@ class AuthController extends Controller
 
         $deviceName = $request->validated('device_name');
         $user->tokens()->where('name', $deviceName)->delete();
+
+        AuditLog::record($user, 'login', null, 'Signed in');
 
         return response()->json([
             'token' => $user->createToken($deviceName)->plainTextToken,

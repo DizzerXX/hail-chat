@@ -29,6 +29,7 @@ class RolePermissionSeeder extends Seeder
         'analytics.view' => 'View dashboards and reports',
         'license.manage' => 'View and manage the installation license',
         'settings.manage' => 'View and edit chat settings',
+        'system.manage' => 'Edit system settings (branding, data retention) and view system health',
     ];
 
     /**

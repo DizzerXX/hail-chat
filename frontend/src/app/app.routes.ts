@@ -97,6 +97,12 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./features/admin/chat-settings').then((m) => m.ChatSettingsPage),
       },
+      {
+        path: 'system',
+        canActivate: [permissionGuard('system.manage')],
+        loadComponent: () =>
+          import('./features/admin/system-settings').then((m) => m.SystemSettingsPage),
+      },
     ],
   },
   { path: '**', redirectTo: 'agent' },

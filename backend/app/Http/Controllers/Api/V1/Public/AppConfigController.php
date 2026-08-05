@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\Public;
 
 use App\Http\Controllers\Controller;
 use App\Models\ChatSettings;
+use App\Models\SystemSettings;
 use Illuminate\Http\JsonResponse;
 
 class AppConfigController extends Controller
@@ -17,6 +18,8 @@ class AppConfigController extends Controller
         $settings = ChatSettings::current();
 
         return response()->json(['data' => [
+            // System branding for the login page / browser tab / dashboard.
+            'brand' => SystemSettings::current()->only(SystemSettings::BRANDING),
             'bubble_color' => $settings->bubble_color,
             'widget' => $settings->only(ChatSettings::BRANDING),
             'fields' => [

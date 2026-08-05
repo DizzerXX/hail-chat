@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\UserRequest;
 use App\Http\Resources\Admin\AdminUserResource;
 use App\Models\Agent;
+use App\Models\AuditLog;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
@@ -55,9 +56,42 @@ class UserController extends Controller
             return $user;
         });
 
+        AuditLog::record($request->user(), 'user.created', $user, "Created user {$user->email}");
+
         return AdminUserResource::make($user->load(['role', 'agent.teams']))
             ->response()
             ->setStatusCode(201);
+    }
+
+    /** Full details + last login for the users-list "View" dialog. */
+    public function show(User $user): JsonResponse
+    {
+        $lastLogin = AuditLog::where('user_id', $user->id)
+            ->where('action', 'login')
+            ->latest('id')
+            ->value('created_at');
+
+        return response()->json(['data' => [
+            ...AdminUserResource::make($user->load(['role', 'agent.teams']))->resolve(),
+            'last_login_at' => $lastLogin,
+        ]]);
+    }
+
+    /** That user's account/system audit trail (most recent first). */
+    public function activity(User $user): JsonResponse
+    {
+        $entries = AuditLog::where('user_id', $user->id)
+            ->latest('id')
+            ->limit(50)
+            ->get()
+            ->map(fn (AuditLog $entry) => [
+                'action' => $entry->action,
+                'description' => $entry->description,
+                'ip_address' => $entry->ip_address,
+                'created_at' => $entry->created_at,
+            ]);
+
+        return response()->json(['data' => $entries]);
     }
 
     public function update(UserRequest $request, User $user): AdminUserResource
@@ -79,6 +113,14 @@ class UserController extends Controller
 
             $this->syncAgentProfile($user, $request);
         });
+
+        $deactivated = $request->validated('is_active', $user->is_active) === false;
+        AuditLog::record(
+            $request->user(),
+            $deactivated ? 'user.deactivated' : 'user.updated',
+            $user,
+            ($deactivated ? 'Deactivated user ' : 'Updated user ').$user->email,
+        );
 
         return AdminUserResource::make($user->fresh(['role', 'agent.teams']));
     }

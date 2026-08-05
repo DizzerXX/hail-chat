@@ -3,6 +3,7 @@
 use App\Jobs\IdleSweepJob;
 use App\Jobs\LicenseSyncJob;
 use App\Jobs\PollOpenMediaWorkItems;
+use App\Jobs\PurgeExpiredConversationsJob;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -25,6 +26,10 @@ if (config('license.url') !== '' && (string) config('license.platform_id') !== '
 // Idle handling for standalone conversations: warn/close silent customers and
 // nudge idle agents. Runs every minute; the job itself honours idle_enabled.
 Schedule::job(new IdleSweepJob())->everyMinute()->withoutOverlapping();
+
+// Data-retention sweep: permanently deletes old closed conversations. Runs
+// daily; the job itself honours retention_enabled and the minimum-age floor.
+Schedule::job(new PurgeExpiredConversationsJob())->dailyAt('03:30')->withoutOverlapping();
 
 if (config('mitel.enabled')) {
     $poll = Schedule::job(new PollOpenMediaWorkItems())->withoutOverlapping();

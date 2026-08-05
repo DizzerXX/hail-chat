@@ -7,6 +7,7 @@ import {
   AdminUser,
   AgentDirectoryEntry,
   AnalyticsSummary,
+  AuditEntry,
   CannedResponse,
   ChatSettings,
   FaqGroup,
@@ -17,7 +18,10 @@ import {
   Role,
   RoutingRule,
   SeatInfo,
+  SystemSettings,
+  SystemStatus,
   Team,
+  UserDetail,
   Webhook,
   WebhookDelivery,
 } from '../../core/api-types';
@@ -203,6 +207,28 @@ export class AdminApiService {
 
   saveChatSettings(payload: Partial<ChatSettings>): Observable<{ data: ChatSettings }> {
     return this.http.put<{ data: ChatSettings }>(`${api}/chat-settings`, payload);
+  }
+
+  // System settings
+  systemSettings(): Observable<{ data: SystemSettings }> {
+    return this.http.get<{ data: SystemSettings }>(`${api}/system-settings`);
+  }
+
+  saveSystemSettings(payload: Partial<SystemSettings>): Observable<{ data: SystemSettings }> {
+    return this.http.put<{ data: SystemSettings }>(`${api}/system-settings`, payload);
+  }
+
+  systemStatus(): Observable<{ data: SystemStatus }> {
+    return this.http.get<{ data: SystemStatus }>(`${api}/system/status`);
+  }
+
+  // User detail + audit trail (the users-list "View" dialog)
+  userDetail(id: number): Observable<{ data: UserDetail }> {
+    return this.http.get<{ data: UserDetail }>(`${api}/users/${id}`);
+  }
+
+  userActivity(id: number): Observable<{ data: AuditEntry[] }> {
+    return this.http.get<{ data: AuditEntry[] }>(`${api}/users/${id}/activity`);
   }
 
   // Analytics

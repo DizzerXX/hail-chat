@@ -6,6 +6,7 @@ import { RouterLink, RouterLinkActive } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { AgentStatus } from './api-types';
 import { AuthService } from './auth.service';
+import { BrandingService } from './branding.service';
 import { NotificationService } from './notification.service';
 import { AgentApiService } from '../features/agent/agent-api.service';
 
@@ -20,8 +21,12 @@ import { AgentApiService } from '../features/agent/agent-api.service';
     imports: [RouterLink, RouterLinkActive, MatIconModule, MatMenuModule, MatTooltipModule],
     template: `
     <nav class="rail">
-      <a routerLink="/agent" class="brand" matTooltip="TDEChat" matTooltipPosition="right">
-        <mat-icon>forum</mat-icon>
+      <a routerLink="/agent" class="brand" [matTooltip]="branding.appName()" matTooltipPosition="right">
+        @if (branding.logo(); as logo) {
+          <img class="brand-logo" [src]="logo" [alt]="branding.appName()" />
+        } @else {
+          <mat-icon>forum</mat-icon>
+        }
       </a>
 
       <a
@@ -108,6 +113,12 @@ import { AgentApiService } from '../features/agent/agent-api.service';
         font-size: 22px;
         width: 22px;
         height: 22px;
+      }
+      .brand-logo {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        border-radius: 10px;
       }
     }
     .rail-btn {
@@ -216,6 +227,7 @@ import { AgentApiService } from '../features/agent/agent-api.service';
 })
 export class NavRail {
     protected readonly auth = inject(AuthService);
+    protected readonly branding = inject(BrandingService);
     protected readonly notifications = inject(NotificationService);
     private readonly api = inject(AgentApiService);
 
