@@ -18,13 +18,13 @@ import { BrandingService } from '../../core/branding.service';
         @if (busy()) {
           <mat-progress-bar mode="indeterminate" />
         }
-        <mat-card-header>
+        <div class="brand">
           @if (branding.logo(); as logo) {
             <img class="brand-logo" [src]="logo" [alt]="branding.appName()" />
           }
-          <mat-card-title>{{ branding.appName() }}</mat-card-title>
-          <mat-card-subtitle>Sign in to your workspace</mat-card-subtitle>
-        </mat-card-header>
+          <h1 class="brand-name">{{ branding.appName() }}</h1>
+          <p class="brand-sub">Sign in to your workspace</p>
+        </div>
         <mat-card-content>
           <form (ngSubmit)="submit()">
             <mat-form-field appearance="outline">
@@ -54,11 +54,28 @@ import { BrandingService } from '../../core/branding.service';
     mat-card {
       width: 360px;
     }
+    .brand {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      padding: 20px 0 4px;
+    }
     .brand-logo {
-      max-height: 48px;
-      max-width: 200px;
+      max-height: 72px;
+      max-width: 220px;
       object-fit: contain;
-      margin-bottom: 8px;
+      margin-bottom: 12px;
+    }
+    .brand-name {
+      margin: 0;
+      font-size: 22px;
+      font-weight: 600;
+    }
+    .brand-sub {
+      margin: 4px 0 0;
+      font-size: 13px;
+      color: var(--mat-sys-on-surface-variant);
     }
     form {
       display: flex;
