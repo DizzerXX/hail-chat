@@ -42,3 +42,8 @@ __screenshots__/
 # System files
 .DS_Store
 Thumbs.db
+
+# Per-deployment build config — each server creates its own with its host/keys.
+# The production build (angular.json fileReplacements) swaps environment.ts for
+# this file, so it is intentionally untracked and never conflicts on git pull.
+/src/environments/environment.production.ts
