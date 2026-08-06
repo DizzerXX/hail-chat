@@ -266,7 +266,7 @@ export interface SystemSettings {
 export interface SystemStatus {
   version: string;
   database: boolean;
-  redis: boolean;
+  redis: { used: boolean; up: boolean };
   reverb: boolean;
   queue: { up: boolean; pending: number };
   mitel: { enabled: boolean; configured: boolean };

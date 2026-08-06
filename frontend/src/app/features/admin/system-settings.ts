@@ -119,11 +119,14 @@ import { AdminApiService } from './admin-api.service';
         @if (status(); as s) {
           <ul class="status">
             <li [class.ok]="s.database"><mat-icon>{{ dot(s.database) }}</mat-icon> Database</li>
-            <li [class.ok]="s.redis"><mat-icon>{{ dot(s.redis) }}</mat-icon> Redis</li>
+            <li [class.ok]="s.redis.used && s.redis.up" [class.na]="!s.redis.used">
+              <mat-icon>{{ !s.redis.used ? 'remove' : dot(s.redis.up) }}</mat-icon> Redis
+              @if (!s.redis.used) { <span class="meta">not in use</span> }</li>
             <li [class.ok]="s.reverb"><mat-icon>{{ dot(s.reverb) }}</mat-icon> Websockets (Reverb)</li>
             <li [class.ok]="s.queue.up"><mat-icon>{{ dot(s.queue.up) }}</mat-icon> Queue worker
               <span class="meta">{{ s.queue.pending }} pending</span></li>
-            <li [class.ok]="s.mitel.enabled"><mat-icon>{{ s.mitel.enabled ? dot(s.mitel.configured) : 'remove' }}</mat-icon>
+            <li [class.ok]="s.mitel.enabled && s.mitel.configured" [class.na]="!s.mitel.enabled">
+              <mat-icon>{{ !s.mitel.enabled ? 'remove' : dot(s.mitel.configured) }}</mat-icon>
               Mitel MiCC <span class="meta">{{ s.mitel.enabled ? 'enabled' : 'disabled' }}</span></li>
             <li class="ok"><mat-icon>badge</mat-icon> License
               <span class="meta">{{ s.license.enforced ? s.license.used + ' / ' + s.license.max + ' seats' : 'not enforced' }}</span></li>
@@ -159,6 +162,7 @@ import { AdminApiService } from './admin-api.service';
     .status li { display: flex; align-items: center; gap: 10px; font-size: 14px; }
     .status li mat-icon { font-size: 18px; width: 18px; height: 18px; color: #b3261e; }
     .status li.ok mat-icon { color: #1e9e5a; }
+    .status li.na mat-icon { color: var(--mat-sys-on-surface-variant); }
     .status .meta { margin-left: auto; font-size: 12px; color: var(--mat-sys-on-surface-variant); }
   `,
 })

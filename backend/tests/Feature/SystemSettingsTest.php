@@ -88,6 +88,8 @@ class SystemSettingsTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.database', true)          // the test DB is reachable
             ->assertJsonPath('data.version', config('app.version'))
-            ->assertJsonStructure(['data' => ['version', 'redis', 'reverb', 'queue' => ['up', 'pending'], 'mitel', 'license']]);
+            ->assertJsonStructure(['data' => [
+                'version', 'redis' => ['used', 'up'], 'reverb', 'queue' => ['up', 'pending'], 'mitel', 'license',
+            ]]);
     }
 }

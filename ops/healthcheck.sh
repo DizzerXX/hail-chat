@@ -26,14 +26,29 @@ for s in $SERVICES; do
   systemctl is-active --quiet "$s" || problems+=("service DOWN: $s")
 done
 
-# 2) Failed queue jobs? (read the table directly — no artisan, so no root-owned
-#    log files land in storage/logs).
+# 2) Database reachable? + failed queue jobs. Read the table directly (no
+#    artisan, so no root-owned log files land in storage/logs). The DB is often
+#    remote, so an explicit reachability check is worth having.
 DB_HOST="$(env_get DB_HOST)"; DB_PORT="$(env_get DB_PORT)"; DB_NAME="$(env_get DB_DATABASE)"
 DB_USER="$(env_get DB_USERNAME)"; DB_PASS="$(env_get DB_PASSWORD)"
 if [ -n "$DB_HOST" ] && command -v psql >/dev/null; then
-  failed="$(PGPASSWORD="$DB_PASS" psql -tAq -h "$DB_HOST" -p "${DB_PORT:-5432}" -U "$DB_USER" -d "$DB_NAME" \
-    -c 'SELECT count(*) FROM failed_jobs;' 2>/dev/null | tr -dc '0-9')"
-  [ -n "${failed:-}" ] && [ "$failed" -gt 0 ] && problems+=("failed queue jobs: $failed")
+  if ! PGPASSWORD="$DB_PASS" psql -tAq -h "$DB_HOST" -p "${DB_PORT:-5432}" -U "$DB_USER" -d "$DB_NAME" -c 'SELECT 1' >/dev/null 2>&1; then
+    problems+=("database unreachable: $DB_HOST")
+  else
+    failed="$(PGPASSWORD="$DB_PASS" psql -tAq -h "$DB_HOST" -p "${DB_PORT:-5432}" -U "$DB_USER" -d "$DB_NAME" \
+      -c 'SELECT count(*) FROM failed_jobs;' 2>/dev/null | tr -dc '0-9')"
+    [ -n "${failed:-}" ] && [ "$failed" -gt 0 ] && problems+=("failed queue jobs: $failed")
+  fi
+fi
+
+# 3) Redis reachable — only when the app actually uses it (cache/queue/session
+#    on redis). Boxes on file/database drivers skip this, so no false alarms.
+if printf '%s\n' "$(env_get CACHE_STORE)" "$(env_get QUEUE_CONNECTION)" "$(env_get SESSION_DRIVER)" | grep -qx 'redis'; then
+  R_HOST="$(env_get REDIS_HOST)"; R_PORT="$(env_get REDIS_PORT)"
+  if command -v redis-cli >/dev/null; then
+    [ "$(redis-cli -h "${R_HOST:-127.0.0.1}" -p "${R_PORT:-6379}" ping 2>/dev/null)" = "PONG" ] \
+      || problems+=("redis down: ${R_HOST:-127.0.0.1}:${R_PORT:-6379}")
+  fi
 fi
 
 if [ ${#problems[@]} -eq 0 ]; then

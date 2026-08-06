@@ -18,10 +18,22 @@ class SystemStatusController extends Controller
 {
     public function show(LicenseService $license): JsonResponse
     {
+        // Only treat Redis as a health signal when the app actually uses it —
+        // otherwise a box on file/database drivers would show a permanent (and
+        // meaningless) red.
+        $usesRedis = in_array('redis', [
+            config('cache.default'),
+            config('queue.default'),
+            config('session.driver'),
+        ], true);
+
         return response()->json(['data' => [
             'version' => config('app.version'),
             'database' => $this->ok(fn () => DB::connection()->getPdo() !== null),
-            'redis' => $this->ok(fn () => (string) Redis::connection()->ping() !== ''),
+            'redis' => [
+                'used' => $usesRedis,
+                'up' => $usesRedis ? $this->ok(fn () => (string) Redis::connection()->ping() !== '') : true,
+            ],
             'reverb' => $this->ok(fn () => $this->tcpReachable(
                 (string) config('broadcasting.connections.reverb.options.host'),
                 (int) config('broadcasting.connections.reverb.options.port'),
