@@ -19,6 +19,7 @@ class SystemStatusController extends Controller
     public function show(LicenseService $license): JsonResponse
     {
         return response()->json(['data' => [
+            'version' => config('app.version'),
             'database' => $this->ok(fn () => DB::connection()->getPdo() !== null),
             'redis' => $this->ok(fn () => (string) Redis::connection()->ping() !== ''),
             'reverb' => $this->ok(fn () => $this->tcpReachable(

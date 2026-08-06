@@ -87,6 +87,7 @@ class SystemSettingsTest extends TestCase
         $this->getJson('/api/v1/admin/system/status')
             ->assertOk()
             ->assertJsonPath('data.database', true)          // the test DB is reachable
-            ->assertJsonStructure(['data' => ['redis', 'reverb', 'queue' => ['up', 'pending'], 'mitel', 'license']]);
+            ->assertJsonPath('data.version', config('app.version'))
+            ->assertJsonStructure(['data' => ['version', 'redis', 'reverb', 'queue' => ['up', 'pending'], 'mitel', 'license']]);
     }
 }

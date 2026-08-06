@@ -15,6 +15,11 @@ return [
 
     'name' => env('APP_NAME', 'Laravel'),
 
+    // Application version, read from the repo-root VERSION file (bump it to cut
+    // a release). Surfaced in the admin System health panel so each box shows
+    // exactly what it is running. Cached with config:cache at deploy time.
+    'version' => trim((string) @file_get_contents(dirname(base_path()).'/VERSION')) ?: 'dev',
+
     /*
     |--------------------------------------------------------------------------
     | Application Environment

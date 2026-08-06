@@ -264,6 +264,7 @@ export interface SystemSettings {
 }
 
 export interface SystemStatus {
+  version: string;
   database: boolean;
   redis: boolean;
   reverb: boolean;

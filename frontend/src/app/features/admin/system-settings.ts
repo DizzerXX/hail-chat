@@ -111,6 +111,9 @@ import { AdminApiService } from './admin-api.service';
       <mat-card appearance="outlined" class="health">
         <div class="health-head">
           <h2>System health</h2>
+          @if (status(); as s) {
+            <span class="version">v{{ s.version }}</span>
+          }
           <button matIconButton (click)="loadStatus()" matTooltip="Refresh"><mat-icon>refresh</mat-icon></button>
         </div>
         @if (status(); as s) {
@@ -150,7 +153,8 @@ import { AdminApiService } from './admin-api.service';
     .days { width: 220px; display: block; }
     .actions { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
     .actions mat-progress-bar { flex: 1; }
-    .health-head { display: flex; align-items: center; justify-content: space-between; }
+    .health-head { display: flex; align-items: center; gap: 8px; }
+    .health-head .version { margin-left: auto; font-size: 12px; font-weight: 600; color: var(--mat-sys-on-surface-variant); font-variant-numeric: tabular-nums; }
     .status { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
     .status li { display: flex; align-items: center; gap: 10px; font-size: 14px; }
     .status li mat-icon { font-size: 18px; width: 18px; height: 18px; color: #b3261e; }
