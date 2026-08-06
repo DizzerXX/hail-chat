@@ -1,0 +1,12 @@
+[Unit]
+Description=TDEChat database backup
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Runs as root: it reads backend/.env (DB secrets) and writes root-only dumps.
+# Uncomment to ship a copy off-box (strongly recommended):
+# Environment=TDECHAT_BACKUP_RSYNC=deploy@backup-host:/backups/tdechat
+# Environment=TDECHAT_BACKUP_KEEP_DAYS=14
+ExecStart=/var/www/tdechat/ops/backup-db.sh

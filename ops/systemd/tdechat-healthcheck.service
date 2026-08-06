@@ -1,0 +1,11 @@
+[Unit]
+Description=TDEChat health watchdog
+
+[Service]
+Type=oneshot
+# Set at least one alert channel, or failures are only written to the journal:
+# Environment=TDECHAT_ALERT_WEBHOOK=https://hooks.slack.com/services/XXX/YYY/ZZZ
+# Environment=TDECHAT_ALERT_EMAIL=ops@example.gov.my
+# Override the watched units if this box names them differently:
+# Environment=TDECHAT_SERVICES=php8.4-fpm tdechat-reverb tdechat-queue tdechat-scheduler
+ExecStart=/var/www/tdechat/ops/healthcheck.sh
