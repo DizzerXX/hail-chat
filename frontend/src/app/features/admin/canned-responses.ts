@@ -18,6 +18,7 @@ import { MatTableModule } from '@angular/material/table';
 import { firstValueFrom } from 'rxjs';
 import { CannedResponse } from '../../core/api-types';
 import { AdminApiService } from './admin-api.service';
+import { ConfirmService } from '../../core/confirm.service';
 
 @Component({
   selector: 'app-canned-response-dialog',
@@ -165,6 +166,7 @@ export class CannedResponseDialog {
 })
 export class CannedResponses implements OnInit {
   private readonly api = inject(AdminApiService);
+  private readonly confirm = inject(ConfirmService);
   private readonly dialog = inject(MatDialog);
 
   protected readonly columns = ['title', 'language', 'active', 'actions'];
@@ -186,7 +188,7 @@ export class CannedResponses implements OnInit {
   }
 
   protected async remove(response: CannedResponse): Promise<void> {
-    if (confirm('Delete this canned response?')) {
+    if ((await this.confirm.ask({ message: 'Delete this canned response?', danger: true }))) {
       await firstValueFrom(this.api.deleteCannedResponse(response.id));
       await this.reload();
     }

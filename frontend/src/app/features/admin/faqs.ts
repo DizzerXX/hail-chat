@@ -11,6 +11,7 @@ import { MatTableModule } from '@angular/material/table';
 import { firstValueFrom } from 'rxjs';
 import { FaqGroup } from '../../core/api-types';
 import { AdminApiService } from './admin-api.service';
+import { ConfirmService } from '../../core/confirm.service';
 import { FaqDialog } from './faq-dialog';
 
 @Component({
@@ -94,6 +95,7 @@ import { FaqDialog } from './faq-dialog';
 })
 export class Faqs implements OnInit {
   private readonly api = inject(AdminApiService);
+  private readonly confirm = inject(ConfirmService);
   private readonly dialog = inject(MatDialog);
 
   protected readonly columns = ['question', 'languages', 'usage', 'updated', 'actions'];
@@ -116,7 +118,7 @@ export class Faqs implements OnInit {
   }
 
   protected async remove(group: FaqGroup): Promise<void> {
-    if (confirm('Delete this FAQ in all languages?')) {
+    if ((await this.confirm.ask({ message: 'Delete this FAQ in all languages?', danger: true }))) {
       await firstValueFrom(this.api.deleteFaqGroup(group.translation_group));
       await this.reload();
     }

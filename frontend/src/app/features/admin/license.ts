@@ -11,6 +11,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { firstValueFrom } from 'rxjs';
 import { LicenseInfo, LicenseRecord } from '../../core/api-types';
 import { AdminApiService } from './admin-api.service';
+import { ConfirmService } from '../../core/confirm.service';
 
 @Component({
   selector: 'app-license',
@@ -201,6 +202,7 @@ import { AdminApiService } from './admin-api.service';
 })
 export class License implements OnInit {
   private readonly api = inject(AdminApiService);
+  private readonly confirm = inject(ConfirmService);
   private readonly snackBar = inject(MatSnackBar);
 
   protected readonly columns = ['key', 'status', 'expires', 'agent', 'actions'];
@@ -221,7 +223,7 @@ export class License implements OnInit {
 
   protected async release(record: LicenseRecord): Promise<void> {
     const holder = record.assigned_agent?.display_name ?? 'this agent';
-    if (!confirm(`Release this license from ${holder}? They will not be able to work until they hold one again.`)) {
+    if (!(await this.confirm.ask({ message: `Release this license from ${holder}? They will not be able to work until they hold one again.`, danger: true }))) {
       return;
     }
 

@@ -8,6 +8,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { firstValueFrom } from 'rxjs';
 import { TrashedConversation } from '../../core/api-types';
 import { AdminApiService } from './admin-api.service';
+import { ConfirmService } from '../../core/confirm.service';
 
 @Component({
   selector: 'app-recycle-bin',
@@ -78,6 +79,7 @@ import { AdminApiService } from './admin-api.service';
 })
 export class RecycleBin implements OnInit {
   private readonly api = inject(AdminApiService);
+  private readonly confirm = inject(ConfirmService);
   private readonly snackBar = inject(MatSnackBar);
 
   protected readonly columns = ['visitor', 'inbox', 'status', 'deleted_at', 'deleted_by', 'actions'];
@@ -113,7 +115,7 @@ export class RecycleBin implements OnInit {
   }
 
   protected async purge(row: TrashedConversation): Promise<void> {
-    if (!window.confirm('Permanently delete this conversation? This cannot be undone.')) {
+    if (!(await this.confirm.ask({ message: 'Permanently delete this conversation? This cannot be undone.', danger: true }))) {
       return;
     }
     this.busy.set(true);

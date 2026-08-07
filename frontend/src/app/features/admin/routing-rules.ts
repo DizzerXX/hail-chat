@@ -10,6 +10,7 @@ import { MatTableModule } from '@angular/material/table';
 import { firstValueFrom } from 'rxjs';
 import { AdminInbox, RoutingRule } from '../../core/api-types';
 import { AdminApiService } from './admin-api.service';
+import { ConfirmService } from '../../core/confirm.service';
 import { RoutingRuleDialog } from './routing-rule-dialog';
 
 @Component({
@@ -113,6 +114,7 @@ import { RoutingRuleDialog } from './routing-rule-dialog';
 })
 export class RoutingRules implements OnInit {
   private readonly api = inject(AdminApiService);
+  private readonly confirm = inject(ConfirmService);
   private readonly dialog = inject(MatDialog);
 
   protected readonly columns = ['priority', 'name', 'conditions', 'target', 'active', 'actions'];
@@ -142,7 +144,7 @@ export class RoutingRules implements OnInit {
   }
 
   protected async remove(rule: RoutingRule): Promise<void> {
-    if (confirm(`Delete rule "${rule.name}"?`)) {
+    if ((await this.confirm.ask({ message: `Delete rule "${rule.name}"?`, danger: true }))) {
       await firstValueFrom(this.api.deleteRoutingRule(rule.id));
       await this.reload();
     }

@@ -8,6 +8,7 @@ import { MatTableModule } from '@angular/material/table';
 import { firstValueFrom } from 'rxjs';
 import { AdminInbox } from '../../core/api-types';
 import { AdminApiService } from './admin-api.service';
+import { ConfirmService } from '../../core/confirm.service';
 import { InboxDialog } from './inbox-dialog';
 
 @Component({
@@ -85,6 +86,7 @@ import { InboxDialog } from './inbox-dialog';
 })
 export class Inboxes implements OnInit {
   private readonly api = inject(AdminApiService);
+  private readonly confirm = inject(ConfirmService);
   private readonly dialog = inject(MatDialog);
   private readonly snackBar = inject(MatSnackBar);
 
@@ -107,7 +109,7 @@ export class Inboxes implements OnInit {
   }
 
   protected async remove(inbox: AdminInbox): Promise<void> {
-    if (!confirm(`Delete inbox "${inbox.name}"?`)) {
+    if (!(await this.confirm.ask({ message: `Delete inbox "${inbox.name}"?`, danger: true }))) {
       return;
     }
 

@@ -9,6 +9,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { firstValueFrom } from 'rxjs';
 import { Webhook } from '../../core/api-types';
 import { AdminApiService } from './admin-api.service';
+import { ConfirmService } from '../../core/confirm.service';
 import { WebhookDeliveriesDialog } from './webhook-deliveries-dialog';
 import { WebhookDialog } from './webhook-dialog';
 
@@ -109,6 +110,7 @@ import { WebhookDialog } from './webhook-dialog';
 })
 export class Webhooks implements OnInit {
   private readonly api = inject(AdminApiService);
+  private readonly confirm = inject(ConfirmService);
   private readonly dialog = inject(MatDialog);
   private readonly snackBar = inject(MatSnackBar);
 
@@ -140,7 +142,7 @@ export class Webhooks implements OnInit {
   }
 
   protected async remove(webhook: Webhook): Promise<void> {
-    if (confirm(`Delete webhook "${webhook.name}"? Its delivery log goes with it.`)) {
+    if ((await this.confirm.ask({ message: `Delete webhook "${webhook.name}"? Its delivery log goes with it.`, danger: true }))) {
       await firstValueFrom(this.api.deleteWebhook(webhook.id));
       await this.reload();
     }

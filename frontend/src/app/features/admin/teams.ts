@@ -7,6 +7,7 @@ import { MatTableModule } from '@angular/material/table';
 import { firstValueFrom } from 'rxjs';
 import { Team } from '../../core/api-types';
 import { AdminApiService } from './admin-api.service';
+import { ConfirmService } from '../../core/confirm.service';
 import { TeamDialog } from './team-dialog';
 
 @Component({
@@ -72,6 +73,7 @@ import { TeamDialog } from './team-dialog';
 })
 export class Teams implements OnInit {
   private readonly api = inject(AdminApiService);
+  private readonly confirm = inject(ConfirmService);
   private readonly dialog = inject(MatDialog);
 
   protected readonly columns = ['name', 'members', 'active', 'actions'];
@@ -93,7 +95,7 @@ export class Teams implements OnInit {
   }
 
   protected async remove(team: Team): Promise<void> {
-    if (confirm(`Delete team "${team.name}"?`)) {
+    if ((await this.confirm.ask({ message: `Delete team "${team.name}"?`, danger: true }))) {
       await firstValueFrom(this.api.deleteTeam(team.id));
       await this.reload();
     }

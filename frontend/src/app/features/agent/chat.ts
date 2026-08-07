@@ -21,6 +21,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AdminApiService } from '../admin/admin-api.service';
+import { ConfirmService } from '../../core/confirm.service';
 import { firstValueFrom } from 'rxjs';
 import {
   CannedResponse,
@@ -1031,6 +1032,7 @@ export class Chat implements OnInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly adminApi = inject(AdminApiService);
+  private readonly confirm = inject(ConfirmService);
   private readonly dialog = inject(MatDialog);
   private readonly snackBar = inject(MatSnackBar);
   protected readonly deleting = signal(false);
@@ -1507,7 +1509,7 @@ export class Chat implements OnInit, OnDestroy {
 
   /** Admin-only: move the conversation to the recycle bin (restorable for 30 days). */
   protected async deleteConversation(): Promise<void> {
-    if (!window.confirm('Move this conversation to the recycle bin? It can be restored for 30 days.')) {
+    if (!(await this.confirm.ask({ message: 'Move this conversation to the recycle bin? It can be restored for 30 days.', danger: true }))) {
       return;
     }
     this.deleting.set(true);
