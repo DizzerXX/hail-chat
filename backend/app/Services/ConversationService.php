@@ -13,6 +13,7 @@ use App\Http\Resources\ConversationResource;
 use App\Models\Agent;
 use App\Models\ChatSettings;
 use App\Models\Contact;
+use App\Models\Attachment;
 use App\Models\Conversation;
 use App\Models\Inbox;
 use App\Models\Message;
@@ -22,6 +23,7 @@ use App\Services\WorkItems\WorkItemProviderResolver;
 use App\Services\Webhooks\WebhookDispatcher;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class ConversationService
@@ -172,6 +174,28 @@ class ConversationService
             ->count();
 
         return $ahead + 1;
+    }
+
+    /**
+     * Delete the stored attachment blobs for the given conversations. The DB
+     * cascade drops attachment rows on forceDelete but not the files on disk, so
+     * this must run first. Shared by the recycle-bin purge and manual erase.
+     *
+     * @param  iterable<int>  $conversationIds
+     */
+    public function deleteAttachmentFiles(iterable $conversationIds): void
+    {
+        Attachment::query()
+            ->whereHas('message', fn ($query) => $query->whereIn('conversation_id', $conversationIds))
+            ->get(['disk', 'path'])
+            ->each(fn (Attachment $attachment) => Storage::disk($attachment->disk)->delete($attachment->path));
+    }
+
+    /** Permanently remove a conversation (files + rows). Irreversible. */
+    public function permanentlyDelete(Conversation $conversation): void
+    {
+        $this->deleteAttachmentFiles([$conversation->id]);
+        $conversation->forceDelete();
     }
 
     public function accept(Conversation $conversation, Agent $agent): Conversation

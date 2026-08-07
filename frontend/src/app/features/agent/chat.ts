@@ -19,7 +19,8 @@ import { MatMenuModule } from '@angular/material/menu';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { AdminApiService } from '../admin/admin-api.service';
 import { firstValueFrom } from 'rxjs';
 import {
   CannedResponse,
@@ -388,6 +389,13 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
                 </a>
               }
             </div>
+          }
+
+          @if (auth.hasPermission('conversations.delete')) {
+            <button matButton class="delete-conversation" [disabled]="deleting()" (click)="deleteConversation()">
+              <mat-icon>delete</mat-icon>
+              Delete conversation
+            </button>
           }
         </aside>
       </div>
@@ -832,6 +840,10 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
         color: var(--tde-muted);
       }
     }
+    .delete-conversation {
+      margin-top: 20px;
+      color: var(--tde-red);
+    }
     .history-item {
       display: flex;
       flex-direction: column;
@@ -1017,8 +1029,11 @@ export class Chat implements OnInit, OnDestroy {
   private readonly echoService = inject(EchoService);
   protected readonly notifications = inject(NotificationService);
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
+  private readonly adminApi = inject(AdminApiService);
   private readonly dialog = inject(MatDialog);
   private readonly snackBar = inject(MatSnackBar);
+  protected readonly deleting = signal(false);
 
   private readonly thread = viewChild<ElementRef<HTMLElement>>('thread');
 
@@ -1488,6 +1503,23 @@ export class Chat implements OnInit, OnDestroy {
 
   protected async accept(): Promise<void> {
     await this.action(() => firstValueFrom(this.api.accept(this.uuid)), 'Conversation accepted');
+  }
+
+  /** Admin-only: move the conversation to the recycle bin (restorable for 30 days). */
+  protected async deleteConversation(): Promise<void> {
+    if (!window.confirm('Move this conversation to the recycle bin? It can be restored for 30 days.')) {
+      return;
+    }
+    this.deleting.set(true);
+    try {
+      await firstValueFrom(this.adminApi.deleteConversation(this.uuid));
+      this.snackBar.open('Conversation moved to the recycle bin.', 'Dismiss', { duration: 3000 });
+      await this.router.navigateByUrl('/agent');
+    } catch {
+      this.snackBar.open('Could not delete the conversation.', 'Dismiss', { duration: 4000 });
+    } finally {
+      this.deleting.set(false);
+    }
   }
 
   /** Navigate the embed tab to the CMS (the chat has ended). */

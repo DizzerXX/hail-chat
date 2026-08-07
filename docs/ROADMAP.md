@@ -22,8 +22,9 @@ _Current: `main` = v1.0.0 · safety net staged on `release/1.1` → v1.1.0_
 - [ ] Deploy safety guard (bail if not on `main` / dirty working tree)
 
 ## 🟠 Compliance (gov / PDPA)
-- [x] System Settings + data retention (hard delete, opt-in, min-days floor)
+- [x] System Settings + data retention (opt-in, min-days floor)
 - [x] Per-user audit log + "View" dialog
+- [~] Recycle bin — admin delete → soft-delete (restorable), auto-purge after 30 days; retention now **archives** into the bin instead of hard-deleting
 - [ ] Retention v1.1: legal-hold exclusion + anonymize-instead-of-delete option
 - [ ] Widget consent notice (data-collection disclosure before a chat starts)
 - [ ] Audit-log retention + wider coverage (inbox / chat-settings / license changes)

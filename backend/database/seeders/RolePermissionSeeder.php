@@ -25,6 +25,7 @@ class RolePermissionSeeder extends Seeder
         'conversations.accept' => 'Accept offered conversations',
         'conversations.assign' => 'Assign or reroute conversations',
         'conversations.close' => 'Close conversations',
+        'conversations.delete' => 'Delete conversations to the recycle bin, restore and purge them',
         'messages.send' => 'Send messages in conversations',
         'analytics.view' => 'View dashboards and reports',
         'license.manage' => 'View and manage the installation license',

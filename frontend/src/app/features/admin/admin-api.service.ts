@@ -21,6 +21,7 @@ import {
   SystemSettings,
   SystemStatus,
   Team,
+  TrashedConversation,
   UserDetail,
   Webhook,
   WebhookDelivery,
@@ -220,6 +221,25 @@ export class AdminApiService {
 
   systemStatus(): Observable<{ data: SystemStatus }> {
     return this.http.get<{ data: SystemStatus }>(`${api}/system/status`);
+  }
+
+  // Conversation recycle bin
+  trashedConversations(page = 1): Observable<Paginated<TrashedConversation>> {
+    return this.http.get<Paginated<TrashedConversation>>(`${api}/conversations/trashed`, {
+      params: { page },
+    });
+  }
+
+  deleteConversation(uuid: string): Observable<unknown> {
+    return this.http.delete(`${api}/conversations/${uuid}`);
+  }
+
+  restoreConversation(uuid: string): Observable<unknown> {
+    return this.http.post(`${api}/conversations/${uuid}/restore`, {});
+  }
+
+  purgeConversation(uuid: string): Observable<unknown> {
+    return this.http.delete(`${api}/conversations/${uuid}/force`);
   }
 
   // User detail + audit trail (the users-list "View" dialog)

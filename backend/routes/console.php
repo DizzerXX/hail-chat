@@ -3,7 +3,8 @@
 use App\Jobs\IdleSweepJob;
 use App\Jobs\LicenseSyncJob;
 use App\Jobs\PollOpenMediaWorkItems;
-use App\Jobs\PurgeExpiredConversationsJob;
+use App\Jobs\ArchiveExpiredConversationsJob;
+use App\Jobs\PurgeRecycleBinJob;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -27,9 +28,11 @@ if (config('license.url') !== '' && (string) config('license.platform_id') !== '
 // nudge idle agents. Runs every minute; the job itself honours idle_enabled.
 Schedule::job(new IdleSweepJob())->everyMinute()->withoutOverlapping();
 
-// Data-retention sweep: permanently deletes old closed conversations. Runs
-// daily; the job itself honours retention_enabled and the minimum-age floor.
-Schedule::job(new PurgeExpiredConversationsJob())->dailyAt('03:30')->withoutOverlapping();
+// Retention archives expired conversations into the recycle bin; the bin purge
+// permanently deletes anything that has sat there past recycle_bin_days.
+// Both honour their settings/floors and are safe to run daily.
+Schedule::job(new ArchiveExpiredConversationsJob())->dailyAt('03:30')->withoutOverlapping();
+Schedule::job(new PurgeRecycleBinJob())->dailyAt('03:45')->withoutOverlapping();
 
 if (config('mitel.enabled')) {
     $poll = Schedule::job(new PollOpenMediaWorkItems())->withoutOverlapping();

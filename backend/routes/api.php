@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\V1\Admin\AgentDirectoryController;
 use App\Http\Controllers\Api\V1\Admin\AnalyticsController;
 use App\Http\Controllers\Api\V1\Admin\CannedResponseController as AdminCannedResponseController;
+use App\Http\Controllers\Api\V1\Admin\ConversationController as AdminConversationController;
 use App\Http\Controllers\Api\V1\Admin\FaqGroupController;
 use App\Http\Controllers\Api\V1\Admin\InboxController as AdminInboxController;
 use App\Http\Controllers\Api\V1\Admin\LicenseController;
@@ -137,6 +138,14 @@ Route::prefix('v1')->group(function () {
             Route::get('/system-settings', [SystemSettingsController::class, 'show']);
             Route::put('/system-settings', [SystemSettingsController::class, 'update']);
             Route::get('/system/status', [SystemStatusController::class, 'show']);
+        });
+
+        // Conversation recycle bin (admin only): delete → bin, restore, purge.
+        Route::middleware('permission:conversations.delete')->group(function () {
+            Route::get('/conversations/trashed', [AdminConversationController::class, 'trashed']);
+            Route::delete('/conversations/{conversation}', [AdminConversationController::class, 'destroy']);
+            Route::post('/conversations/{conversation}/restore', [AdminConversationController::class, 'restore'])->withTrashed();
+            Route::delete('/conversations/{conversation}/force', [AdminConversationController::class, 'forceDelete'])->withTrashed();
         });
 
         Route::middleware('permission:license.manage')->group(function () {

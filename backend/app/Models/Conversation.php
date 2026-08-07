@@ -7,16 +7,19 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
 class Conversation extends Model
 {
     /** @use HasFactory<\Database\Factories\ConversationFactory> */
     use HasFactory;
+    use SoftDeletes;
 
     protected $fillable = [
         'inbox_id',
         'contact_id',
+        'deleted_by',
         'status',
         'language',
         'visitor_name',
@@ -91,6 +94,12 @@ class Conversation extends Model
     public function events(): HasMany
     {
         return $this->hasMany(ConversationEvent::class)->orderBy('id');
+    }
+
+    /** The admin who moved this conversation to the recycle bin (null = the retention sweep). */
+    public function deletedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'deleted_by');
     }
 
     /**

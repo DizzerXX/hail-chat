@@ -284,6 +284,16 @@ export interface AuditEntry {
   created_at: string;
 }
 
+export interface TrashedConversation {
+  uuid: string;
+  status: ConversationStatus;
+  visitor_name: string | null;
+  inbox: string | null;
+  closed_at: string | null;
+  deleted_at: string;
+  deleted_by: string;
+}
+
 export interface ChatSettings {
   idle_enabled: boolean;
   customer_warn1_minutes: number;

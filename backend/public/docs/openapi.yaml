@@ -230,6 +230,45 @@ paths:
         '200': { description: OK }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /api/v1/admin/conversations/{conversationUuid}:
+    delete:
+      tags: [Admin]
+      summary: Move a conversation to the recycle bin
+      description: Requires `conversations.delete`. Soft-deletes (restorable); auto-purged after `recycle_bin_days` (30). Audited.
+      operationId: deleteConversation
+      responses:
+        '204': { description: Moved to bin }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/v1/admin/conversations/trashed:
+    get:
+      tags: [Admin]
+      summary: List the recycle bin
+      description: Requires `conversations.delete`. Soft-deleted conversations, newest first; `deleted_by` is the admin's name or "Retention".
+      operationId: trashedConversations
+      responses:
+        '200': { description: OK }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/v1/admin/conversations/{conversationUuid}/restore:
+    post:
+      tags: [Admin]
+      summary: Restore a conversation from the recycle bin
+      operationId: restoreConversation
+      responses:
+        '204': { description: Restored }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/v1/admin/conversations/{conversationUuid}/force:
+    delete:
+      tags: [Admin]
+      summary: Permanently delete a conversation from the bin
+      description: Requires `conversations.delete`. Irreversible — removes rows + attachment files. Audited.
+      operationId: purgeConversation
+      responses:
+        '204': { description: Permanently deleted }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
   /api/v1/admin/users/{userId}/activity:
     get:
       tags: [Admin]

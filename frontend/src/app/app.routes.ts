@@ -103,6 +103,11 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./features/admin/system-settings').then((m) => m.SystemSettingsPage),
       },
+      {
+        path: 'recycle-bin',
+        canActivate: [permissionGuard('conversations.delete')],
+        loadComponent: () => import('./features/admin/recycle-bin').then((m) => m.RecycleBin),
+      },
     ],
   },
   { path: '**', redirectTo: 'agent' },

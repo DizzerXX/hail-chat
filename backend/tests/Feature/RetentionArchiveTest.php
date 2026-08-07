@@ -3,13 +3,18 @@
 namespace Tests\Feature;
 
 use App\Enums\ConversationStatus;
-use App\Jobs\PurgeExpiredConversationsJob;
+use App\Jobs\ArchiveExpiredConversationsJob;
 use App\Models\Conversation;
 use App\Models\SystemSettings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
-class RetentionPurgeTest extends TestCase
+/**
+ * Retention now *archives* expired conversations into the recycle bin
+ * (soft-delete) rather than deleting them outright; the recycle-bin purge does
+ * the permanent removal later. See RecycleBinTest.
+ */
+class RetentionArchiveTest extends TestCase
 {
     use RefreshDatabase;
 
@@ -26,12 +31,12 @@ class RetentionPurgeTest extends TestCase
         SystemSettings::forgetCurrent();
     }
 
-    private function sweep(): void
+    private function archive(): void
     {
-        (new PurgeExpiredConversationsJob())->handle();
+        (new ArchiveExpiredConversationsJob())->handle();
     }
 
-    public function test_it_purges_old_closed_conversations_and_keeps_recent_and_open_ones(): void
+    public function test_it_archives_old_closed_conversations_and_leaves_recent_and_open_ones(): void
     {
         $this->enableRetention(30);
 
@@ -41,24 +46,22 @@ class RetentionPurgeTest extends TestCase
         $recentClosed = Conversation::factory()->create([
             'status' => ConversationStatus::Closed, 'closed_at' => now()->subDays(5),
         ]);
-        $oldAbandoned = Conversation::factory()->create([
-            'status' => ConversationStatus::Abandoned, 'closed_at' => now()->subDays(60),
-        ]);
         $active = Conversation::factory()->create([
             'status' => ConversationStatus::Active, 'closed_at' => null,
         ]);
 
-        $this->sweep();
+        $this->archive();
 
-        $this->assertDatabaseMissing('conversations', ['id' => $oldClosed->id]);
-        $this->assertDatabaseMissing('conversations', ['id' => $oldAbandoned->id]);
-        $this->assertDatabaseHas('conversations', ['id' => $recentClosed->id]);
-        $this->assertDatabaseHas('conversations', ['id' => $active->id]);
+        // Old one is in the bin (soft-deleted), tagged as a system archive.
+        $this->assertSoftDeleted('conversations', ['id' => $oldClosed->id]);
+        $this->assertNull(Conversation::withTrashed()->find($oldClosed->id)->deleted_by);
 
-        $this->assertSame(2, SystemSettings::current()->fresh()->last_purge_count);
+        // Recent + active are untouched.
+        $this->assertNotSoftDeleted('conversations', ['id' => $recentClosed->id]);
+        $this->assertNotSoftDeleted('conversations', ['id' => $active->id]);
     }
 
-    public function test_it_cascades_messages_when_purging(): void
+    public function test_archiving_keeps_the_messages_until_the_bin_is_purged(): void
     {
         $this->enableRetention(30);
         $conversation = Conversation::factory()->create([
@@ -66,20 +69,20 @@ class RetentionPurgeTest extends TestCase
         ]);
         $conversation->messages()->create(['sender_type' => 'visitor', 'body' => 'Hi']);
 
-        $this->sweep();
+        $this->archive();
 
-        $this->assertDatabaseMissing('messages', ['conversation_id' => $conversation->id]);
+        // Soft delete doesn't cascade — the transcript is still recoverable.
+        $this->assertDatabaseHas('messages', ['conversation_id' => $conversation->id]);
     }
 
-    public function test_disabled_retention_purges_nothing(): void
+    public function test_disabled_retention_archives_nothing(): void
     {
-        // enabled defaults to false
         $old = Conversation::factory()->create([
             'status' => ConversationStatus::Closed, 'closed_at' => now()->subYears(2),
         ]);
 
-        $this->sweep();
+        $this->archive();
 
-        $this->assertDatabaseHas('conversations', ['id' => $old->id]);
+        $this->assertNotSoftDeleted('conversations', ['id' => $old->id]);
     }
 }
