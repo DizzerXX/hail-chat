@@ -332,5 +332,38 @@ const agentMessage = { id: 3, sender_type: 'agent', agent: { id: 1, display_name
   check(!('tdechat.website' in storage), 'closing the panel clears the stored uuid');
 }
 
+// ---------- scenario 5: a queued visitor sees their place in line ----------
+{
+  const { panel } = makeSandbox({
+    responses: [
+      {
+        status: 201,
+        body: {
+          data: {
+            uuid: 'uuid-1',
+            status: 'awaiting_acceptance',
+            language: 'ms',
+            visitor: { name: 'Danish', email: null, phone: null },
+            assigned_agent: null,
+            queue_position: 3,
+            messages: [],
+          },
+        },
+      },
+    ],
+  });
+
+  await new Promise((r) => setTimeout(r, 0));
+  const refs = {
+    first: panel.querySelector('.tdec-first'),
+    start: panel.querySelector('.tdec-start'),
+    status: panel.querySelector('.tdec-status'),
+  };
+
+  refs.first.value = 'hello';
+  await refs.start.fire('click');
+  check(refs.status.textContent.includes('#3 in queue'), 'queued visitor sees their position in line');
+}
+
 console.log(failures === 0 ? '\nWIDGET SMOKE: ALL PASS' : `\nWIDGET SMOKE: ${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

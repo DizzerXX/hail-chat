@@ -2,7 +2,9 @@
 
 namespace App\Http\Resources;
 
+use App\Enums\ConversationStatus;
 use App\Services\CmsUrlResolver;
+use App\Services\ConversationService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -46,6 +48,12 @@ class ConversationResource extends JsonResource
                 'name' => $this->team->name,
             ]),
             'meta' => $this->meta,
+            // The visitor's place in line, computed only for the widget path
+            // (the public controller opts in) so agent list views don't pay for it.
+            'queue_position' => $this->when(
+                (bool) $request->attributes->get('with_queue_position') && $this->status === ConversationStatus::AwaitingAcceptance,
+                fn () => app(ConversationService::class)->queuePosition($this->resource),
+            ),
             'last_activity_at' => $this->last_activity_at,
             'accepted_at' => $this->accepted_at,
             'closed_at' => $this->closed_at,

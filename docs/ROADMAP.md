@@ -39,6 +39,8 @@ _Current: `main` = v1.0.0 · safety net staged on `release/1.1` → v1.1.0_
 - [ ] Widget bot / rate protection (CAPTCHA / throttle on chat-start)
 
 ## 🔵 Product / UX
+- [~] Queue position — a waiting visitor sees "#N in queue" (standalone counts ahead; Mitel uses MiCC's position)
+- [ ] Estimated wait time (our-side estimate) + "no agents online" fallback — the follow-on to queue position
 - [ ] Post-chat CSAT survey (highest-value visible win)
 - [ ] Conversation / transcript search
 - [ ] Richer analytics (per-agent volume, resolution time, abandonment)

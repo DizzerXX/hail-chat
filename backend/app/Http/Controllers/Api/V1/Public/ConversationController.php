@@ -15,6 +15,7 @@ use App\Models\Conversation;
 use App\Models\Inbox;
 use App\Services\ConversationService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 
 class ConversationController extends Controller
@@ -33,16 +34,21 @@ class ConversationController extends Controller
             $request->validated('message'),
         );
 
+        // The widget shows the visitor their place in line while queued.
+        $request->attributes->set('with_queue_position', true);
+
         return ConversationResource::make($conversation)->response()->setStatusCode(201);
     }
 
-    public function show(Conversation $conversation): ConversationResource
+    public function show(Request $request, Conversation $conversation): ConversationResource
     {
         // Internal notes are agent-only and must never reach the widget.
         $conversation->load(['inbox', 'assignedAgent', 'team'])
             ->load(['messages' => function ($query) {
                 $query->where('sender_type', '!=', SenderType::Note)->with('agent', 'attachments');
             }]);
+
+        $request->attributes->set('with_queue_position', true);
 
         return ConversationResource::make($conversation);
     }
@@ -87,8 +93,10 @@ class ConversationController extends Controller
         return response()->noContent();
     }
 
-    public function escalate(Conversation $conversation): ConversationResource
+    public function escalate(Request $request, Conversation $conversation): ConversationResource
     {
+        $request->attributes->set('with_queue_position', true);
+
         return ConversationResource::make(
             $this->conversations->escalate($conversation)->load(['inbox', 'assignedAgent', 'team'])
         );

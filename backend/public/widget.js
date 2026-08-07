@@ -35,6 +35,7 @@
     let conversation = null;
     let socket = null;
     let pollTimer = null;
+    let queueTimer = null;
     let typingTimer = null;
     let visitorTypingActive = false;
     let visitorTypingTimer = null;
@@ -628,15 +629,23 @@
         if (conversation) conversation.status = status;
 
         const agent = conversation && conversation.assigned_agent;
+        const position = conversation && conversation.queue_position;
         const labels = {
             pending: 'Connecting\u2026',
             bot: 'Chatbot \u2014 ask anything',
-            awaiting_acceptance: 'Waiting for an agent\u2026',
+            awaiting_acceptance: position
+                ? 'Waiting for an agent \u2014 #' + position + ' in queue'
+                : 'Waiting for an agent\u2026',
             active: agent ? 'Chatting with ' + agent.display_name : 'Agent connected',
             closed: 'Conversation ended',
             abandoned: 'Conversation ended',
         };
         refs.status.textContent = labels[status] || status;
+
+        // Keep the queue position fresh while waiting \u2014 the realtime channel
+        // doesn't carry it, so poll the conversation on a slow cadence.
+        if (status === 'awaiting_acceptance') startQueuePoll();
+        else stopQueuePoll();
 
         const openNow = isOpenStatus(status);
         refs.input.disabled = !openNow;
@@ -754,6 +763,7 @@
 
     function disconnect() {
         stopPolling();
+        stopQueuePoll();
         if (socket) {
             socket.onclose = null;
             socket.close();
@@ -779,6 +789,22 @@
     function stopPolling() {
         clearInterval(pollTimer);
         pollTimer = null;
+    }
+
+    // Refresh the queued visitor's place in line on a slow cadence. Runs
+    // independently of the message poll (which only fires when the socket is
+    // down) because queue position isn't pushed over the realtime channel.
+    function startQueuePoll() {
+        if (queueTimer) return;
+        queueTimer = setInterval(function () {
+            if (conversation && conversation.status === 'awaiting_acceptance') refresh();
+            else stopQueuePoll();
+        }, 12000);
+    }
+
+    function stopQueuePoll() {
+        clearInterval(queueTimer);
+        queueTimer = null;
     }
 
     // ---------- helpers ----------

@@ -141,6 +141,39 @@ class ConversationService
         return $conversation;
     }
 
+    /**
+     * The visitor's place in line while queued (1-based), or null when not
+     * queued. Mitel reports it (polled from MiCC); standalone counts the queued
+     * conversations ahead in the same team/inbox queue.
+     */
+    public function queuePosition(Conversation $conversation): ?int
+    {
+        if ($conversation->status !== ConversationStatus::AwaitingAcceptance) {
+            return null;
+        }
+
+        if ($conversation->inbox->channel_type === ChannelType::MitelOpenMedia) {
+            $position = $conversation->meta['mitel']['position_in_queue'] ?? null;
+
+            return is_numeric($position) ? (int) $position : null;
+        }
+
+        $ahead = Conversation::query()
+            ->where('status', ConversationStatus::AwaitingAcceptance)
+            ->where('inbox_id', $conversation->inbox_id)
+            // An agent of another team won't pick a team-routed chat, so scope to
+            // the same team when routed, else the inbox-wide unrouted queue.
+            ->when(
+                $conversation->team_id !== null,
+                fn ($query) => $query->where('team_id', $conversation->team_id),
+                fn ($query) => $query->whereNull('team_id'),
+            )
+            ->where('id', '<', $conversation->id)
+            ->count();
+
+        return $ahead + 1;
+    }
+
     public function accept(Conversation $conversation, Agent $agent): Conversation
     {
         abort_unless(
