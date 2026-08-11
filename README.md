@@ -182,13 +182,15 @@ chooses; a started selection must be finished to a leaf. The answer is stored wi
 `path` (`[{key,label}]` per level) so each level is addressable — e.g. for a CMS/CRM URL below.
 
 **FAQ deflection** (**Admin → Chat settings → FAQ deflection**). The widget *opens* on a
-**"Quick answers"** screen — an accordion of the inbox's FAQs (from `/public/inboxes/{slug}/faqs`
-in the embed's default `data-language`) — so visitors can self-serve before any personal data is
-collected or a conversation is created. A **"Chat with a live agent"** button below the list
-leads to the pre-chat form, and submitting that starts the chat. The screen is skipped
-automatically (opening straight to the pre-chat form) when deflection is off or the inbox has no
-FAQs for that language. The toggle, heading, prompt, and button label are admin-editable
-(surfaced via `/public/app-config`); FAQs themselves are managed under **Admin → FAQs**.
+**"Quick answers"** screen — an accordion of the inbox's FAQs (from `/public/inboxes/{slug}/faqs`)
+— so visitors can self-serve before any personal data is collected or a conversation is created.
+**Bahasa Malaysia / English tabs** switch the questions and answers between languages (lazy-loaded
+and cached; picking a tab also preselects that language in the pre-chat form). A **"Chat with a
+live agent"** button below the list leads to the pre-chat form, and submitting that starts the
+chat. The screen is skipped automatically (opening straight to the pre-chat form) when deflection
+is off or the inbox has no FAQs for the default language. The toggle, heading, prompt, and button
+label are admin-editable (surfaced via `/public/app-config`); FAQs themselves are managed under
+**Admin → FAQs**.
 
 Prefer driving the API directly? It needs no authentication — the conversation UUID returned
 on start is the capability that authorizes all later calls for that conversation:

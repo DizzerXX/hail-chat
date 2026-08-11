@@ -56,6 +56,13 @@
     // has FAQs for the chosen language, the pre-chat form leads to a "Quick
     // answers" screen before the chat starts.
     let faqConfig = { enabled: true, title: 'Quick answers', prompt: "Didn't find what you were looking for?", button: 'Chat with a live agent' };
+    // Languages offered in the pre-chat form and the FAQ tabs (mirrors the <select>).
+    const languages = [
+        { code: 'ms', label: 'Bahasa Malaysia' },
+        { code: 'en', label: 'English' },
+    ];
+    let faqLang = config.language; // language shown on the FAQ screen
+    const faqCache = {}; // language -> FAQ list, so switching tabs doesn't refetch
 
     // ---------- styles ----------
     const css = `
@@ -110,6 +117,11 @@
   .tdec-faq{flex:1;overflow-y:auto;padding:18px;background:#f7f7f5;display:none;flex-direction:column}
   .tdec-faq.open{display:flex}
   .tdec-faq-title{font-size:22px;font-weight:800;margin:0 0 14px;line-height:1.15}
+  .tdec-faq-tabs{display:flex;gap:6px;margin:0 0 14px}
+  .tdec-faq-tab{flex:1;padding:8px 10px;border:1px solid #d5d4cc;background:#fff;border-radius:8px;cursor:pointer;
+    font:inherit;font-weight:600;font-size:13px;color:#52514e;text-align:center}
+  .tdec-faq-tab.active{background:var(--tdec-accent,#2a78d6);color:#fff;border-color:var(--tdec-accent,#2a78d6)}
+  .tdec-faq-empty{color:#898781;font-size:13px;padding:10px 12px}
   .tdec-faq-list{display:flex;flex-direction:column;gap:2px}
   .tdec-faq-item{border-radius:10px}
   .tdec-faq-item.open{background:#ececec}
@@ -162,6 +174,7 @@
     </div>
     <div class="tdec-faq">
       <h2 class="tdec-faq-title">Quick answers</h2>
+      <div class="tdec-faq-tabs"></div>
       <div class="tdec-faq-list"></div>
       <div class="tdec-faq-foot">
         <p class="tdec-faq-prompt">Didn't find what you were looking for?</p>
@@ -191,6 +204,7 @@
         pre: panel.querySelector('.tdec-pre'),
         faq: panel.querySelector('.tdec-faq'),
         faqTitle: panel.querySelector('.tdec-faq-title'),
+        faqTabs: panel.querySelector('.tdec-faq-tabs'),
         faqList: panel.querySelector('.tdec-faq-list'),
         faqPrompt: panel.querySelector('.tdec-faq-prompt'),
         faqProceed: panel.querySelector('.tdec-faq-proceed'),
@@ -533,11 +547,19 @@
         if (!faqConfig.enabled) return;
         if (conversation || localStorage.getItem(storageKey)) return;
 
-        const faqs = await loadFaqs(config.language);
+        faqLang = config.language;
+        const faqs = await cachedFaqs(faqLang);
         if (!faqs.length) return;
 
+        renderFaqTabs();
         renderFaqList(faqs);
         if (!conversation) show('faq');
+    }
+
+    // FAQs for a language, fetched once and memoised so switching tabs is instant.
+    async function cachedFaqs(language) {
+        if (!faqCache[language]) faqCache[language] = await loadFaqs(language);
+        return faqCache[language];
     }
 
     // Fetch the inbox's active FAQs for a language. Failures (or none) leave the
@@ -557,9 +579,42 @@
         return [];
     }
 
-    // Build the accordion of question/answer items.
+    // The language switcher (one tab per configured language).
+    function renderFaqTabs() {
+        refs.faqTabs.innerHTML = '';
+        languages.forEach(function (lang) {
+            const tab = element('button', 'tdec-faq-tab' + (lang.code === faqLang ? ' active' : ''), lang.label);
+            tab.type = 'button';
+            tab.dataset.lang = lang.code;
+            tab.addEventListener('click', function () {
+                return selectFaqLang(lang.code);
+            });
+            refs.faqTabs.appendChild(tab);
+        });
+    }
+
+    // Switch the FAQ language; also preselects it in the pre-chat form so the
+    // visitor keeps the language they were reading in.
+    async function selectFaqLang(language) {
+        if (language === faqLang) return;
+        faqLang = language;
+        refs.lang.value = language;
+
+        const tabs = refs.faqTabs.children;
+        for (let i = 0; i < tabs.length; i++) {
+            tabs[i].classList.toggle('active', tabs[i].dataset.lang === language);
+        }
+
+        renderFaqList(await cachedFaqs(language));
+    }
+
+    // Build the accordion of question/answer items (or an empty note).
     function renderFaqList(faqs) {
         refs.faqList.innerHTML = '';
+        if (!faqs.length) {
+            refs.faqList.appendChild(element('div', 'tdec-faq-empty', 'No answers in this language yet.'));
+            return;
+        }
         faqs.forEach(function (faq) {
             const item = element('div', 'tdec-faq-item');
 

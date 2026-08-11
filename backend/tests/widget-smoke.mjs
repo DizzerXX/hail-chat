@@ -42,7 +42,9 @@ class FakeNode {
   }
 
   set innerHTML(_html) {
-    /* template markup — children are resolved via querySelector stubs */
+    // Template markup isn't parsed (refs resolve via querySelector stubs), but
+    // clearing to '' must empty children so re-renders replace, not accumulate.
+    this.children = [];
   }
 
   appendChild(node) {
@@ -111,10 +113,13 @@ function makeSandbox({ storage = {}, responses, faqs = [] }) {
       if (String(url).includes('/public/app-config')) {
         return { ok: true, status: 200, json: async () => ({ data: { bubble_color: '#2f80ed' } }) };
       }
-      // FAQ-deflection list is fetched when the pre-chat form is submitted;
-      // answer out-of-band (empty by default = skip straight to the chat).
+      // FAQ-deflection list is fetched to build the opening screen; answer
+      // out-of-band (empty by default = skip straight to the pre-chat form).
+      // `faqs` may be an array (same for every language) or a {lang: [...]} map.
       if (String(url).includes('/faqs')) {
-        return { ok: true, status: 200, json: async () => ({ data: faqs }) };
+        const lang = (String(url).match(/language=([a-z]+)/) || [])[1];
+        const list = Array.isArray(faqs) ? faqs : faqs[lang] || [];
+        return { ok: true, status: 200, json: async () => ({ data: list }) };
       }
       // Presence pings (markPresent) are fire-and-forget; answer out-of-band so
       // scenarios don't have to thread them through their response queues.
@@ -381,10 +386,13 @@ const agentMessage = { id: 3, sender_type: 'agent', agent: { id: 1, display_name
 // ---------- scenario 6: FAQ deflection is the opening screen ----------
 {
   const { panel, storage } = makeSandbox({
-    faqs: [
-      { id: 1, language: 'ms', question: 'Adakah ia percuma?', answer: 'Ya. Lihat https://example.com/harga.' },
-      { id: 2, language: 'ms', question: 'Bagaimana ia berfungsi?', answer: 'Isi borang dan mula sembang.' },
-    ],
+    faqs: {
+      ms: [
+        { id: 1, language: 'ms', question: 'Adakah ia percuma?', answer: 'Ya. Lihat https://example.com/harga.' },
+        { id: 2, language: 'ms', question: 'Bagaimana ia berfungsi?', answer: 'Isi borang dan mula sembang.' },
+      ],
+      en: [{ id: 3, language: 'en', question: 'Is it free?', answer: 'Yes it is.' }],
+    },
     responses: [
       { status: 201, body: { data: conversation('bot', [visitorMessage, botMessage]) } }, // start (from the form)
     ],
@@ -398,7 +406,9 @@ const agentMessage = { id: 3, sender_type: 'agent', agent: { id: 1, display_name
     pre: panel.querySelector('.tdec-pre'),
     first: panel.querySelector('.tdec-first'),
     start: panel.querySelector('.tdec-start'),
+    lang: panel.querySelector('.tdec-lang'),
     faq: panel.querySelector('.tdec-faq'),
+    faqTabs: panel.querySelector('.tdec-faq-tabs'),
     faqList: panel.querySelector('.tdec-faq-list'),
     faqProceed: panel.querySelector('.tdec-faq-proceed'),
     status: panel.querySelector('.tdec-status'),
@@ -406,17 +416,24 @@ const agentMessage = { id: 3, sender_type: 'agent', agent: { id: 1, display_name
   };
 
   check(refs.faq.classes.has('open'), 'the widget opens on the FAQ screen');
-  check(refs.faqList.children.length === 2, 'the FAQ list renders one item per question');
+  check(refs.faqList.children.length === 2, 'the FAQ list renders the default-language questions');
   check(!('tdechat.website' in storage), 'no conversation exists while browsing FAQs');
+
+  // A language switcher offers one tab per configured language; BM is active.
+  check(refs.faqTabs.children.length === 2, 'a tab is shown per language');
+  check(refs.faqTabs.children[0].classes.has('active'), 'the default language tab starts active');
 
   // Expanding a question reveals its answer (an accordion item toggles open).
   const firstItem = refs.faqList.children[0];
-  const questionBtn = firstItem.children[0];
-  await questionBtn.fire('click');
+  await firstItem.children[0].fire('click');
   check(firstItem.classes.has('open'), 'clicking a question expands its answer');
-  // The answer with a URL is linkified into an anchor node (not raw text).
-  const answerNode = firstItem.children[1];
-  check(answerNode.children.some((n) => n.tag === 'a'), 'a URL in the answer becomes a link');
+  check(firstItem.children[1].children.some((n) => n.tag === 'a'), 'a URL in the answer becomes a link');
+
+  // Switching to English re-renders the list and preselects EN in the form.
+  await refs.faqTabs.children[1].fire('click');
+  check(refs.faqTabs.children[1].classes.has('active') && !refs.faqTabs.children[0].classes.has('active'), 'the English tab becomes active');
+  check(refs.faqList.children.length === 1 && refs.faqList.children[0].children[0].children[0].textContent === 'Is it free?', 'switching language re-renders with that language FAQs');
+  check(refs.lang.value === 'en', 'switching the FAQ language preselects it in the pre-chat form');
 
   // "Chat with a live agent" moves on to the pre-chat form (still no conversation).
   await refs.faqProceed.fire('click');
