@@ -67,6 +67,8 @@ class FakeNode {
 
   setAttribute() {}
 
+  focus() {}
+
   fire(type, event = {}) {
     return Promise.all((this.handlers[type] || []).map((h) => h({ key: '', ...event })));
   }
@@ -376,7 +378,7 @@ const agentMessage = { id: 3, sender_type: 'agent', agent: { id: 1, display_name
   check(refs.status.textContent.includes('#3 in queue'), 'queued visitor sees their position in line');
 }
 
-// ---------- scenario 6: FAQ deflection before the chat starts ----------
+// ---------- scenario 6: FAQ deflection is the opening screen ----------
 {
   const { panel, storage } = makeSandbox({
     faqs: [
@@ -384,13 +386,16 @@ const agentMessage = { id: 3, sender_type: 'agent', agent: { id: 1, display_name
       { id: 2, language: 'ms', question: 'Bagaimana ia berfungsi?', answer: 'Isi borang dan mula sembang.' },
     ],
     responses: [
-      { status: 201, body: { data: conversation('bot', [visitorMessage, botMessage]) } }, // start (deferred)
+      { status: 201, body: { data: conversation('bot', [visitorMessage, botMessage]) } }, // start (from the form)
     ],
   });
 
+  // Let app-config resolve, then the FAQ fetch it triggers.
+  await new Promise((r) => setTimeout(r, 0));
   await new Promise((r) => setTimeout(r, 0));
 
   const refs = {
+    pre: panel.querySelector('.tdec-pre'),
     first: panel.querySelector('.tdec-first'),
     start: panel.querySelector('.tdec-start'),
     faq: panel.querySelector('.tdec-faq'),
@@ -400,12 +405,9 @@ const agentMessage = { id: 3, sender_type: 'agent', agent: { id: 1, display_name
     msgs: panel.querySelector('.tdec-msgs'),
   };
 
-  refs.first.value = 'hello';
-  await refs.start.fire('click');
-
-  check(refs.faq.classes.has('open'), 'submitting the pre-chat form shows the FAQ screen');
+  check(refs.faq.classes.has('open'), 'the widget opens on the FAQ screen');
   check(refs.faqList.children.length === 2, 'the FAQ list renders one item per question');
-  check(!('tdechat.website' in storage), 'no conversation is created until the visitor proceeds');
+  check(!('tdechat.website' in storage), 'no conversation exists while browsing FAQs');
 
   // Expanding a question reveals its answer (an accordion item toggles open).
   const firstItem = refs.faqList.children[0];
@@ -416,10 +418,40 @@ const agentMessage = { id: 3, sender_type: 'agent', agent: { id: 1, display_name
   const answerNode = firstItem.children[1];
   check(answerNode.children.some((n) => n.tag === 'a'), 'a URL in the answer becomes a link');
 
+  // "Chat with a live agent" moves on to the pre-chat form (still no conversation).
   await refs.faqProceed.fire('click');
-  check(storage['tdechat.website'] === 'uuid-1', 'proceeding creates the conversation');
-  check(refs.msgs.children.length >= 2, 'the chat thread renders after proceeding');
-  check(refs.status.textContent.includes('Chatbot'), 'status reflects the chat after proceeding');
+  check(refs.pre.style.display === 'flex' && !refs.faq.classes.has('open'), 'the CTA opens the pre-chat form');
+  check(!('tdechat.website' in storage), 'the pre-chat form still has no conversation');
+
+  // Submitting the form starts the chat.
+  refs.first.value = 'hello';
+  await refs.start.fire('click');
+  check(storage['tdechat.website'] === 'uuid-1', 'submitting the form creates the conversation');
+  check(refs.msgs.children.length >= 2, 'the chat thread renders after starting');
+  check(refs.status.textContent.includes('Chatbot'), 'status reflects the chat after starting');
+}
+
+// ---------- scenario 7: no FAQs -> widget opens on the pre-chat form ----------
+{
+  const { panel, storage } = makeSandbox({
+    faqs: [], // deflection on by default, but nothing to show
+    responses: [{ status: 201, body: { data: conversation('bot', [visitorMessage, botMessage]) } }],
+  });
+
+  await new Promise((r) => setTimeout(r, 0));
+  await new Promise((r) => setTimeout(r, 0));
+
+  const refs = {
+    pre: panel.querySelector('.tdec-pre'),
+    faq: panel.querySelector('.tdec-faq'),
+    first: panel.querySelector('.tdec-first'),
+    start: panel.querySelector('.tdec-start'),
+  };
+
+  check(!refs.faq.classes.has('open'), 'with no FAQs the FAQ screen is skipped');
+  refs.first.value = 'hello';
+  await refs.start.fire('click');
+  check(storage['tdechat.website'] === 'uuid-1', 'the form starts the chat directly');
 }
 
 console.log(failures === 0 ? '\nWIDGET SMOKE: ALL PASS' : `\nWIDGET SMOKE: ${failures} FAILURE(S)`);

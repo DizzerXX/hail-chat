@@ -56,7 +56,6 @@
     // has FAQs for the chosen language, the pre-chat form leads to a "Quick
     // answers" screen before the chat starts.
     let faqConfig = { enabled: true, title: 'Quick answers', prompt: "Didn't find what you were looking for?", button: 'Chat with a live agent' };
-    let pendingStart = null; // deferred conversation payload while the FAQ screen shows
 
     // ---------- styles ----------
     const css = `
@@ -250,7 +249,7 @@
     refs.input.addEventListener('blur', stopVisitorTyping);
     refs.escalate.addEventListener('click', escalate);
     refs.end.addEventListener('click', endChat);
-    refs.faqProceed.addEventListener('click', proceedToChat);
+    refs.faqProceed.addEventListener('click', goToPreChat);
     refs.attach.addEventListener('click', () => refs.file.click());
     refs.file.addEventListener('change', uploadFile);
 
@@ -275,6 +274,7 @@
             applyBranding(data.widget);
             applyFaq(data.faq);
             applyFields(data.fields);
+            await initFaqScreen();
         } catch (e) {
             /* keep the default accent + hardcoded copy */
         }
@@ -499,9 +499,9 @@
             }
         }
 
-        // Hold the conversation payload; it's sent when the visitor proceeds past
-        // the FAQ screen (or immediately when deflection is off / has no FAQs).
-        pendingStart = {
+        // Use request() (not api()) so we can surface a validation error instead of
+        // silently resyncing.
+        const result = await request('POST', `/api/v1/public/inboxes/${config.inbox}/conversations`, {
             message: message,
             visitor_name: visitor.visitor_name,
             visitor_email: visitor.visitor_email,
@@ -509,22 +509,39 @@
             language: refs.lang.value,
             fields: fields,
             meta: { page: location.href },
-        };
+        });
 
-        if (faqConfig.enabled) {
-            const faqs = await loadFaqs(pendingStart.language);
-            if (faqs.length) {
-                renderFaqList(faqs);
-                show('faq');
-                return;
-            }
+        if (result.status === 422) {
+            refs.status.textContent = 'Please check your details and try again.';
+            return;
+        }
+        if (result.status < 200 || result.status >= 300 || !result.data) {
+            refs.status.textContent = 'Connection problem, please try again.';
+            return;
         }
 
-        await proceedToChat();
+        setConversation(result.data.data);
+        localStorage.setItem(storageKey, conversation.uuid);
+        (conversation.messages || []).forEach(render);
+        connect();
     }
 
-    // Fetch the inbox's active FAQs for the chosen language. Failures (or none)
-    // fall through to starting the chat directly.
+    // Opening screen: when deflection is on and the inbox has FAQs for the
+    // widget's default language, greet the visitor with "Quick answers" before
+    // the pre-chat form. Skipped while an existing conversation is resuming.
+    async function initFaqScreen() {
+        if (!faqConfig.enabled) return;
+        if (conversation || localStorage.getItem(storageKey)) return;
+
+        const faqs = await loadFaqs(config.language);
+        if (!faqs.length) return;
+
+        renderFaqList(faqs);
+        if (!conversation) show('faq');
+    }
+
+    // Fetch the inbox's active FAQs for a language. Failures (or none) leave the
+    // FAQ screen off, so the widget opens straight to the pre-chat form.
     async function loadFaqs(language) {
         try {
             const result = await request(
@@ -564,37 +581,17 @@
         refs.faq.scrollTop = 0;
     }
 
-    // Send the deferred conversation payload and switch to the chat view.
-    async function proceedToChat() {
-        if (!pendingStart) return;
-        refs.faqProceed.disabled = true;
+    // The FAQ screen's CTA: move on to the pre-chat form.
+    function goToPreChat() {
+        show('pre');
+        refs.first.focus();
+    }
 
-        // Use request() (not api()) so we can surface a validation error instead of
-        // silently resyncing.
-        const result = await request(
-            'POST',
-            `/api/v1/public/inboxes/${config.inbox}/conversations`,
-            pendingStart,
-        );
-
-        refs.faqProceed.disabled = false;
-
-        if (result.status === 422) {
-            refs.status.textContent = 'Please check your details and try again.';
-            show('pre');
-            return;
-        }
-        if (result.status < 200 || result.status >= 300 || !result.data) {
-            refs.status.textContent = 'Connection problem, please try again.';
-            show('pre');
-            return;
-        }
-
-        pendingStart = null;
-        setConversation(result.data.data);
-        localStorage.setItem(storageKey, conversation.uuid);
-        (conversation.messages || []).forEach(render);
-        connect();
+    // The opening view for a visitor with no active chat: the FAQ screen when
+    // one is available, otherwise the pre-chat form.
+    function showStart() {
+        if (faqConfig.enabled && refs.faqList.children.length) show('faq');
+        else show('pre');
     }
 
     async function resume(uuid) {
@@ -739,7 +736,7 @@
         seenMessages.clear();
         messageNodes.clear();
         refs.msgs.innerHTML = '';
-        show('pre');
+        showStart();
         refs.status.textContent = 'TDEChat';
     }
 
