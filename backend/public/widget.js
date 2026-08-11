@@ -88,7 +88,10 @@
   .tdec-head-icon img{width:auto;height:34px;border-radius:6px;object-fit:cover;display:block}
   .tdec-btn img{width:26px;height:26px;border-radius:6px;object-fit:cover;display:block}
   .tdec-status{font-size:12px;opacity:.85;margin-top:2px}
-  .tdec-msgs{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:8px;background:#f7f7f5}
+  .tdec-msgs{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:8px;background:#f7f7f5;position:relative}
+  .tdec-msgs.drag{outline:2px dashed var(--tdec-accent,#2a78d6);outline-offset:-6px}
+  .tdec-msgs.drag::after{content:'Drop to upload';position:absolute;inset:0;display:flex;align-items:center;
+    justify-content:center;background:rgba(247,247,245,.9);color:var(--tdec-accent,#2a78d6);font-weight:600;pointer-events:none}
   .tdec-msg{max-width:80%;padding:8px 12px;border-radius:12px;white-space:pre-wrap;word-break:break-word;line-height:1.35}
   .tdec-msg.visitor{align-self:flex-end;background:var(--tdec-accent,#2a78d6);color:#fff;border-bottom-right-radius:4px}
   .tdec-msg.agent,.tdec-msg.bot{align-self:flex-start;background:#fff;border:1px solid #e1e0d9;border-bottom-left-radius:4px}
@@ -273,6 +276,11 @@
     refs.faqProceed.addEventListener('click', goToPreChat);
     refs.attach.addEventListener('click', () => refs.file.click());
     refs.file.addEventListener('change', uploadFile);
+    refs.input.addEventListener('paste', onComposerPaste);
+    // Drag-and-drop uploads onto the chat thread.
+    panel.addEventListener('dragover', onPanelDragOver);
+    panel.addEventListener('dragleave', onPanelDragLeave);
+    panel.addEventListener('drop', onPanelDrop);
 
     renderFields(); // default fields until app-config resolves
     loadTheme();
@@ -751,9 +759,26 @@
         updateStatus(response.status);
     }
 
-    async function uploadFile(e) {
-        const file = e.target.files && e.target.files[0];
+    function uploadFile(e) {
+        const files = e.target.files;
         e.target.value = ''; // let the same file be re-picked later
+        return uploadFiles(files);
+    }
+
+    // Whether a file dropped/pasted now would be accepted (a chat is open).
+    function chatUploadReady() {
+        return !!conversation && isOpenStatus(conversation.status);
+    }
+
+    // Upload one or more files sequentially through the same endpoint.
+    async function uploadFiles(files) {
+        if (!files || !chatUploadReady()) return;
+        for (let i = 0; i < files.length; i++) {
+            await uploadOneFile(files[i]);
+        }
+    }
+
+    async function uploadOneFile(file) {
         if (!file || !conversation) return;
 
         // Multipart, so let the browser set the boundary - can't use api().
@@ -775,6 +800,45 @@
             }
         } catch (err) {
             refs.status.textContent = 'Upload problem \u2014 try again.';
+        }
+    }
+
+    // Dragging files over the panel: prevent the browser from opening them, and
+    // show a drop hint over the thread while a chat is open.
+    function onPanelDragOver(e) {
+        if (!e.dataTransfer || Array.prototype.indexOf.call(e.dataTransfer.types || [], 'Files') === -1) return;
+        e.preventDefault();
+        if (chatUploadReady()) {
+            e.dataTransfer.dropEffect = 'copy';
+            refs.msgs.classList.add('drag');
+        }
+    }
+
+    function onPanelDragLeave(e) {
+        if (!panel.contains(e.relatedTarget)) refs.msgs.classList.remove('drag');
+    }
+
+    function onPanelDrop(e) {
+        if (!e.dataTransfer || Array.prototype.indexOf.call(e.dataTransfer.types || [], 'Files') === -1) return;
+        e.preventDefault();
+        refs.msgs.classList.remove('drag');
+        return uploadFiles(e.dataTransfer.files);
+    }
+
+    // Pasting an image (e.g. a screenshot) into the composer uploads it.
+    function onComposerPaste(e) {
+        if (!chatUploadReady() || !e.clipboardData) return;
+        const files = [];
+        const items = e.clipboardData.items || [];
+        for (let i = 0; i < items.length; i++) {
+            if (items[i].kind === 'file') {
+                const file = items[i].getAsFile();
+                if (file) files.push(file);
+            }
+        }
+        if (files.length) {
+            e.preventDefault();
+            return uploadFiles(files);
         }
     }
 

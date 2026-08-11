@@ -174,6 +174,9 @@ function makeSandbox({ storage = {}, responses, faqs = [] }) {
     URL,
     JSON,
     Promise,
+    FormData: class {
+      append() {}
+    },
   };
   sandbox.globalThis = sandbox;
 
@@ -494,6 +497,50 @@ const agentMessage = { id: 3, sender_type: 'agent', agent: { id: 1, display_name
   refs.first.value = 'hello';
   await refs.start.fire('click');
   check(storage['tdechat.website'] === 'uuid-1', 'the form starts the chat directly');
+}
+
+// ---------- scenario 8: drag-and-drop upload onto the chat thread ----------
+{
+  const { panel, storage } = makeSandbox({
+    responses: [
+      { status: 201, body: { data: conversation('bot', [visitorMessage, botMessage]) } }, // start
+      {
+        status: 201,
+        body: {
+          message: {
+            id: 9,
+            sender_type: 'visitor',
+            body: '',
+            attachments: [{ id: 1, name: 'photo.png', url: 'http://x/photo.png', is_image: true }],
+          },
+        },
+      }, // attachment upload
+    ],
+  });
+
+  await new Promise((r) => setTimeout(r, 0));
+  await new Promise((r) => setTimeout(r, 0));
+
+  const refs = {
+    first: panel.querySelector('.tdec-first'),
+    start: panel.querySelector('.tdec-start'),
+    msgs: panel.querySelector('.tdec-msgs'),
+  };
+
+  refs.first.value = 'hello';
+  await refs.start.fire('click');
+
+  const drag = { types: ['Files'], files: [{ name: 'photo.png' }], dropEffect: '' };
+
+  // Dragging files over the thread shows the drop hint.
+  await panel.fire('dragover', { preventDefault() {}, dataTransfer: drag });
+  check(refs.msgs.classes.has('drag'), 'dragging files over the chat shows the drop hint');
+
+  // Dropping uploads them and renders the returned attachment message.
+  await panel.fire('drop', { preventDefault() {}, dataTransfer: drag });
+  check(!refs.msgs.classes.has('drag'), 'the drop hint clears after dropping');
+  const hasImage = refs.msgs.children.some((n) => (n.children || []).some((c) => c.tag === 'a'));
+  check(hasImage, 'a dropped image is uploaded and rendered in the thread');
 }
 
 console.log(failures === 0 ? '\nWIDGET SMOKE: ALL PASS' : `\nWIDGET SMOKE: ${failures} FAILURE(S)`);

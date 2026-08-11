@@ -60,7 +60,18 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
       </div>
     } @else if (conversation(); as conversation) {
       <div class="workspace">
-        <section class="chat">
+        <section
+          class="chat"
+          (dragover)="onDragOver($event)"
+          (dragleave)="onDragLeave($event)"
+          (drop)="onDrop($event)"
+        >
+          @if (dragActive()) {
+            <div class="drop-overlay">
+              <mat-icon>upload_file</mat-icon>
+              <span>Drop to upload</span>
+            </div>
+          }
           <header>
             <span class="avatar header-avatar">{{ visitorInitial() }}</span>
             <div class="who">
@@ -259,6 +270,7 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
               [(ngModel)]="draft"
               (ngModelChange)="onTyping()"
               (keydown.enter)="onEnter($event)"
+              (paste)="onPaste($event)"
               [disabled]="!canSend()"
             ></textarea>
 
@@ -424,6 +436,29 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
       border-radius: 14px;
       box-shadow: 0 1px 3px rgba(24, 39, 75, 0.06);
       overflow: hidden;
+      position: relative;
+    }
+    .drop-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 5;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      background: color-mix(in srgb, var(--tde-panel) 82%, transparent);
+      border: 2px dashed var(--tde-accent);
+      border-radius: 14px;
+      color: var(--tde-accent);
+      font-weight: 600;
+      pointer-events: none;
+
+      mat-icon {
+        width: 40px;
+        height: 40px;
+        font-size: 40px;
+      }
     }
     header {
       display: flex;
@@ -1056,6 +1091,7 @@ export class Chat implements OnInit, OnDestroy {
   protected readonly history = signal<ContactHistory | null>(null);
   protected readonly busy = signal(false);
   protected readonly uploading = signal(false);
+  protected readonly dragActive = signal(false);
   protected readonly loadError = signal<string | null>(null);
 
   protected draft = '';
@@ -1622,14 +1658,73 @@ export class Chat implements OnInit, OnDestroy {
 
   protected async onFilePicked(event: Event): Promise<void> {
     const input = event.target as HTMLInputElement;
-    const file = input.files?.[0];
+    const files = input.files;
     input.value = ''; // let the same file be re-picked later
-    if (file === undefined || !this.canSend()) {
+    await this.uploadFiles(files);
+  }
+
+  /** Drag a file anywhere over the chat, or paste an image, to upload it. */
+  protected onDragOver(event: DragEvent): void {
+    if (!event.dataTransfer || !Array.from(event.dataTransfer.types).includes('Files')) {
+      return;
+    }
+    event.preventDefault();
+    if (this.canSend()) {
+      event.dataTransfer.dropEffect = 'copy';
+      this.dragActive.set(true);
+    }
+  }
+
+  protected onDragLeave(event: DragEvent): void {
+    // Only clear when the pointer leaves the chat, not when crossing child nodes.
+    const related = event.relatedTarget as Node | null;
+    const current = event.currentTarget as HTMLElement;
+    if (!related || !current.contains(related)) {
+      this.dragActive.set(false);
+    }
+  }
+
+  protected onDrop(event: DragEvent): void {
+    if (!event.dataTransfer || !Array.from(event.dataTransfer.types).includes('Files')) {
+      return;
+    }
+    event.preventDefault();
+    this.dragActive.set(false);
+    void this.uploadFiles(event.dataTransfer.files);
+  }
+
+  protected onPaste(event: ClipboardEvent): void {
+    if (!this.canSend() || !event.clipboardData) {
+      return;
+    }
+    const files = Array.from(event.clipboardData.items)
+      .filter((item) => item.kind === 'file')
+      .map((item) => item.getAsFile())
+      .filter((file): file is File => file !== null);
+    if (files.length > 0) {
+      event.preventDefault();
+      void this.uploadFiles(files);
+    }
+  }
+
+  private async uploadFiles(files: FileList | File[] | null | undefined): Promise<void> {
+    const list = files ? Array.from(files) : [];
+    if (list.length === 0 || !this.canSend()) {
       return;
     }
 
     this.uploading.set(true);
     this.notifications.dismiss();
+    try {
+      for (const file of list) {
+        await this.uploadOne(file);
+      }
+    } finally {
+      this.uploading.set(false);
+    }
+  }
+
+  private async uploadOne(file: File): Promise<void> {
     try {
       const response = await firstValueFrom(this.api.uploadAttachment(this.uuid, file));
       if (this.messages().every((message) => message.id !== response.data.id)) {
@@ -1640,8 +1735,6 @@ export class Chat implements OnInit, OnDestroy {
         .error;
       const text = body?.errors?.['file']?.[0] ?? body?.message ?? 'Upload failed.';
       this.snackBar.open(text, 'Dismiss', { duration: 4000 });
-    } finally {
-      this.uploading.set(false);
     }
   }
 

@@ -439,10 +439,12 @@ the OpenAPI document below.
 
 ## Attachments
 
-Visitors and agents can attach files to a message (with an optional caption). Uploads go to
-`POST {…}/conversations/{uuid}/attachments` (public for the widget, `/agent/…` for the
-dashboard — the latter under `messages.send` + `seat.valid`), and are stored privately on the
-`local` disk under `attachments/{conversation-uuid}/`.
+Visitors and agents can attach files to a message (with an optional caption) — via the paperclip
+button, by **dragging files onto the chat** (a "Drop to upload" hint appears), or by **pasting**
+an image (e.g. a screenshot) into the composer. Drag/paste can carry several files, uploaded one
+after another. Uploads go to `POST {…}/conversations/{uuid}/attachments` (public for the widget,
+`/agent/…` for the dashboard — the latter under `messages.send` + `seat.valid`), and are stored
+privately on the `local` disk under `attachments/{conversation-uuid}/`.
 
 Each attachment gets an **unguessable uuid** and is served **inline** from
 `GET /api/v1/public/attachments/{uuid}` — the uuid is the download capability, matching the
