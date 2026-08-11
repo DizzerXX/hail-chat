@@ -166,6 +166,13 @@ import { AdminApiService } from './admin-api.service';
           </mat-card-header>
           <mat-card-content>
             <mat-slide-toggle [(ngModel)]="s.faq_deflection_enabled">Show the FAQ screen</mat-slide-toggle>
+            <mat-slide-toggle
+              class="skip-bot"
+              [(ngModel)]="s.faq_skip_bot"
+              [disabled]="!s.faq_deflection_enabled"
+            >
+              Skip the bot — "Chat with a live agent" connects straight to a human
+            </mat-slide-toggle>
 
             <div class="grid faq-copy">
               @for (row of faqCopyRows; track row.ms) {
@@ -314,6 +321,10 @@ import { AdminApiService } from './admin-api.service';
     .timers {
       grid-template-columns: repeat(4, minmax(140px, 1fr));
       margin-top: 12px;
+    }
+    .skip-bot {
+      display: block;
+      margin-top: 10px;
     }
     .faq-copy {
       margin-top: 12px;

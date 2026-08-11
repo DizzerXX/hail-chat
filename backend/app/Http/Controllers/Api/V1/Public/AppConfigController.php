@@ -24,6 +24,7 @@ class AppConfigController extends Controller
             'widget' => $settings->only(ChatSettings::BRANDING),
             'faq' => [
                 'enabled' => $settings->faq_deflection_enabled,
+                'skip_bot' => $settings->faq_skip_bot,
                 'title' => ['ms' => $settings->widget_faq_title_ms, 'en' => $settings->widget_faq_title_en],
                 'prompt' => ['ms' => $settings->widget_faq_prompt_ms, 'en' => $settings->widget_faq_prompt_en],
                 'button' => ['ms' => $settings->widget_faq_button_ms, 'en' => $settings->widget_faq_button_en],

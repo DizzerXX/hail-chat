@@ -50,6 +50,7 @@ class ChatSettingsRequest extends FormRequest
 
             // FAQ-deflection opening screen — bilingual chrome (switches with tabs).
             'faq_deflection_enabled' => ['required', 'boolean'],
+            'faq_skip_bot' => ['required', 'boolean'],
             'widget_faq_title_ms' => ['required', 'string', 'max:120'],
             'widget_faq_title_en' => ['required', 'string', 'max:120'],
             'widget_faq_prompt_ms' => ['required', 'string', 'max:200'],

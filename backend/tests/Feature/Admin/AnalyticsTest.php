@@ -69,6 +69,43 @@ class AnalyticsTest extends TestCase
         $this->assertSame(2, $response->json('top_missed_queries.0.count'));
     }
 
+    public function test_per_agent_volume_resolution_and_abandonment_rate(): void
+    {
+        $this->travelTo('2026-07-08 12:00:00');
+
+        $agent = \App\Models\Agent::factory()->create(['display_name' => 'Aina']);
+
+        // Two conversations Aina closed: 200s and 400s → avg 300s.
+        Conversation::factory()->closed()->create([
+            'assigned_agent_id' => $agent->id,
+            'created_at' => '2026-07-07 10:00:00',
+            'accepted_at' => '2026-07-07 10:00:00',
+            'closed_at' => '2026-07-07 10:03:20',
+        ]);
+        Conversation::factory()->closed()->create([
+            'assigned_agent_id' => $agent->id,
+            'created_at' => '2026-07-07 11:00:00',
+            'accepted_at' => '2026-07-07 11:00:00',
+            'closed_at' => '2026-07-07 11:06:40',
+        ]);
+
+        // Plus one abandoned → 1 of 3 total in range abandoned.
+        Conversation::factory()->create([
+            'status' => \App\Enums\ConversationStatus::Abandoned,
+            'created_at' => '2026-07-07 09:00:00',
+        ]);
+
+        $response = $this->getJson('/api/v1/admin/analytics?from=2026-07-07&to=2026-07-08')->assertOk();
+
+        $this->assertSame('Aina', $response->json('per_agent.0.agent'));
+        $this->assertSame(2, $response->json('per_agent.0.handled'));
+        $this->assertEquals(300, $response->json('per_agent.0.avg_resolution_seconds'));
+
+        $this->assertSame(3, $response->json('totals.conversations'));
+        $this->assertSame(1, $response->json('totals.abandoned'));
+        $this->assertSame(0.3333, $response->json('totals.abandonment_rate'));
+    }
+
     public function test_range_is_zero_filled_and_defaults_to_14_days(): void
     {
         $response = $this->getJson('/api/v1/admin/analytics')->assertOk();

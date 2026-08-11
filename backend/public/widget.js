@@ -59,10 +59,12 @@
     // FAQ language tabs; app-config overrides these defaults.
     let faqConfig = {
         enabled: true,
+        skipBot: false, // proceed straight to a human after the FAQ screen
         title: { ms: 'Jawapan Pantas', en: 'Quick answers' },
         prompt: { ms: 'Tidak menemui apa yang anda cari?', en: "Didn't find what you were looking for?" },
         button: { ms: 'Sembang dengan ejen', en: 'Chat with a live agent' },
     };
+    let cameFromFaq = false; // the visitor reached the form via the FAQ screen
     // Languages offered in the pre-chat form and the FAQ tabs (mirrors the <select>).
     const languages = [
         { code: 'ms', label: 'Bahasa Malaysia' },
@@ -314,6 +316,7 @@
     function applyFaq(f) {
         if (!f) return;
         faqConfig.enabled = f.enabled !== false;
+        faqConfig.skipBot = f.skip_bot === true;
         ['title', 'prompt', 'button'].forEach(function (key) {
             const map = f[key];
             if (map && typeof map === 'object') {
@@ -569,6 +572,13 @@
         localStorage.setItem(storageKey, conversation.uuid);
         (conversation.messages || []).forEach(render);
         connect();
+
+        // Came here via the FAQ screen and the admin wants to skip the bot: jump
+        // straight to the human queue (the FAQ already served the self-service role).
+        if (faqConfig.skipBot && cameFromFaq && conversation.status === 'bot') {
+            escalate();
+        }
+        cameFromFaq = false;
     }
 
     // Opening screen: when deflection is on and the inbox has FAQs for the
@@ -670,6 +680,7 @@
 
     // The FAQ screen's CTA: move on to the pre-chat form.
     function goToPreChat() {
+        cameFromFaq = true;
         show('pre');
         refs.first.focus();
     }
@@ -770,12 +781,17 @@
         return !!conversation && isOpenStatus(conversation.status);
     }
 
-    // Upload one or more files sequentially through the same endpoint.
+    // Upload one or more files sequentially through the same endpoint, showing
+    // per-file progress in the status line.
     async function uploadFiles(files) {
-        if (!files || !chatUploadReady()) return;
-        for (let i = 0; i < files.length; i++) {
+        if (!files || !files.length || !chatUploadReady()) return;
+        const total = files.length;
+        for (let i = 0; i < total; i++) {
+            refs.status.textContent = total > 1 ? 'Uploading ' + (i + 1) + '/' + total + '\u2026' : 'Uploading\u2026';
             await uploadOneFile(files[i]);
         }
+        // Restore the normal status once every file is done.
+        if (conversation) updateStatus(conversation.status);
     }
 
     async function uploadOneFile(file) {
@@ -876,6 +892,7 @@
         localStorage.removeItem(storageKey);
         disconnect();
         conversation = null;
+        cameFromFaq = false;
         seenMessages.clear();
         messageNodes.clear();
         refs.msgs.innerHTML = '';

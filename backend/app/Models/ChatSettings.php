@@ -32,6 +32,7 @@ class ChatSettings extends Model
     /** FAQ-deflection screen (toggle + bilingual copy), surfaced to the widget. */
     public const FAQ_CONFIG = [
         'faq_deflection_enabled',
+        'faq_skip_bot',
         'widget_faq_title_ms', 'widget_faq_title_en',
         'widget_faq_prompt_ms', 'widget_faq_prompt_en',
         'widget_faq_button_ms', 'widget_faq_button_en',
@@ -55,6 +56,7 @@ class ChatSettings extends Model
         return [
             'idle_enabled' => 'boolean',
             'faq_deflection_enabled' => 'boolean',
+            'faq_skip_bot' => 'boolean',
             'customer_warn1_minutes' => 'integer',
             'customer_warn2_minutes' => 'integer',
             'customer_close_minutes' => 'integer',

@@ -1,3 +1,4 @@
+import { DATE_PIPE_DEFAULT_OPTIONS } from '@angular/common';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { ApplicationConfig, provideBrowserGlobalErrorListeners } from '@angular/core';
 import { MAT_BUTTON_TOGGLE_DEFAULT_OPTIONS } from '@angular/material/button-toggle';
@@ -16,6 +17,12 @@ export const appConfig: ApplicationConfig = {
     {
       provide: MAT_BUTTON_TOGGLE_DEFAULT_OPTIONS,
       useValue: { hideSingleSelectionIndicator: true },
+    },
+    // Render every `| date` in Malaysia time (MYT, UTC+8) regardless of the
+    // viewer's machine clock — the deployment is Malaysia-only.
+    {
+      provide: DATE_PIPE_DEFAULT_OPTIONS,
+      useValue: { timezone: '+0800' },
     },
   ],
 };

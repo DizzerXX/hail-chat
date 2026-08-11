@@ -252,6 +252,9 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
               accept="image/jpeg,image/png,image/gif,image/webp,application/pdf"
               (change)="onFilePicked($event)"
             />
+            @if (uploadProgress(); as p) {
+              <span class="upload-progress">Uploading {{ p.done }} of {{ p.total }}…</span>
+            }
 
             <button
               matIconButton
@@ -437,6 +440,12 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
       box-shadow: 0 1px 3px rgba(24, 39, 75, 0.06);
       overflow: hidden;
       position: relative;
+    }
+    .upload-progress {
+      align-self: center;
+      font-size: 12px;
+      color: var(--tde-muted);
+      white-space: nowrap;
     }
     .drop-overlay {
       position: absolute;
@@ -1091,6 +1100,7 @@ export class Chat implements OnInit, OnDestroy {
   protected readonly history = signal<ContactHistory | null>(null);
   protected readonly busy = signal(false);
   protected readonly uploading = signal(false);
+  protected readonly uploadProgress = signal<{ done: number; total: number } | null>(null);
   protected readonly dragActive = signal(false);
   protected readonly loadError = signal<string | null>(null);
 
@@ -1716,11 +1726,13 @@ export class Chat implements OnInit, OnDestroy {
     this.uploading.set(true);
     this.notifications.dismiss();
     try {
-      for (const file of list) {
-        await this.uploadOne(file);
+      for (let i = 0; i < list.length; i++) {
+        this.uploadProgress.set({ done: i + 1, total: list.length });
+        await this.uploadOne(list[i]);
       }
     } finally {
       this.uploading.set(false);
+      this.uploadProgress.set(null);
     }
   }
 

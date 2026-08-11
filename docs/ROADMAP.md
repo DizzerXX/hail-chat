@@ -43,9 +43,14 @@ _Current: `main` = v1.0.0 · safety net staged on `release/1.1` → v1.1.0_
 - [~] Queue position — a waiting visitor sees "#N in queue" (standalone counts ahead; Mitel uses MiCC's position)
 - [ ] Estimated wait time (our-side estimate) + "no agents online" fallback — the follow-on to queue position
 - [ ] Post-chat CSAT survey (highest-value visible win)
-- [ ] Conversation / transcript search
-- [ ] Richer analytics (per-agent volume, resolution time, abandonment)
-- [ ] Timezone (MYT) display
+- [x] Conversation / transcript search — server-side, matches the message body (v1.3)
+- [x] Richer analytics (per-agent volume, resolution time, abandonment rate) (v1.3)
+- [x] Timezone (MYT) display — global date-pipe default, UTC+8 (v1.3)
+
+## 🟣 v1.3 polish (shipped on `release/1.3`)
+- [x] FAQ "Chat with a live agent" bot-skip — admin toggle, default off
+- [x] Per-file upload progress ("Uploading N of M…") on widget + agent
+- [ ] Deploy safety guard — dropped for v1.3 (manual deploy; boxes differ)
 
 ---
 

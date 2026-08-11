@@ -46,6 +46,8 @@ return [
         // Skipped automatically when there are no FAQs for the chosen language.
         // FAQ chrome is bilingual — it switches with the FAQ language tabs.
         'faq_deflection_enabled' => true,
+        // When on, proceeding from the FAQ screen skips the bot and connects to a human.
+        'faq_skip_bot' => false,
         'widget_faq_title_ms' => 'Jawapan Pantas',
         'widget_faq_title_en' => 'Quick answers',
         'widget_faq_prompt_ms' => 'Tidak menemui apa yang anda cari?',

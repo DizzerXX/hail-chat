@@ -76,7 +76,7 @@ class FakeNode {
   }
 }
 
-function makeSandbox({ storage = {}, responses, faqs = [] }) {
+function makeSandbox({ storage = {}, responses, faqs = [], faqSkipBot = false }) {
   const body = new FakeNode('body');
   const windowNode = new FakeNode('window');
   const beacons = [];
@@ -119,6 +119,7 @@ function makeSandbox({ storage = {}, responses, faqs = [] }) {
               bubble_color: '#2f80ed',
               faq: {
                 enabled: true,
+                skip_bot: faqSkipBot,
                 title: { ms: 'Jawapan Pantas', en: 'Quick answers' },
                 prompt: { ms: 'Tidak jumpa?', en: 'Not found?' },
                 button: { ms: 'Sembang dengan ejen', en: 'Chat with a live agent' },
@@ -501,20 +502,23 @@ const agentMessage = { id: 3, sender_type: 'agent', agent: { id: 1, display_name
 
 // ---------- scenario 8: drag-and-drop upload onto the chat thread ----------
 {
+  const attachment = (id, name) => ({
+    status: 201,
+    body: {
+      message: {
+        id,
+        sender_type: 'visitor',
+        body: '',
+        attachments: [{ id, name, url: 'http://x/' + name, is_image: true }],
+      },
+    },
+  });
+
   const { panel, storage } = makeSandbox({
     responses: [
       { status: 201, body: { data: conversation('bot', [visitorMessage, botMessage]) } }, // start
-      {
-        status: 201,
-        body: {
-          message: {
-            id: 9,
-            sender_type: 'visitor',
-            body: '',
-            attachments: [{ id: 1, name: 'photo.png', url: 'http://x/photo.png', is_image: true }],
-          },
-        },
-      }, // attachment upload
+      attachment(9, 'a.png'), // first dropped file
+      attachment(10, 'b.png'), // second dropped file (uploaded sequentially)
     ],
   });
 
@@ -530,17 +534,46 @@ const agentMessage = { id: 3, sender_type: 'agent', agent: { id: 1, display_name
   refs.first.value = 'hello';
   await refs.start.fire('click');
 
-  const drag = { types: ['Files'], files: [{ name: 'photo.png' }], dropEffect: '' };
+  // Drop TWO files at once — they upload sequentially (per-file progress path).
+  const drag = { types: ['Files'], files: [{ name: 'a.png' }, { name: 'b.png' }], dropEffect: '' };
 
-  // Dragging files over the thread shows the drop hint.
   await panel.fire('dragover', { preventDefault() {}, dataTransfer: drag });
   check(refs.msgs.classes.has('drag'), 'dragging files over the chat shows the drop hint');
 
-  // Dropping uploads them and renders the returned attachment message.
   await panel.fire('drop', { preventDefault() {}, dataTransfer: drag });
   check(!refs.msgs.classes.has('drag'), 'the drop hint clears after dropping');
-  const hasImage = refs.msgs.children.some((n) => (n.children || []).some((c) => c.tag === 'a'));
-  check(hasImage, 'a dropped image is uploaded and rendered in the thread');
+  const images = refs.msgs.children.filter((n) => (n.children || []).some((c) => c.tag === 'a'));
+  check(images.length === 2, 'both dropped images upload sequentially and render');
+}
+
+// ---------- scenario 9: FAQ bot-skip escalates straight to a human ----------
+{
+  const { panel, storage } = makeSandbox({
+    faqSkipBot: true,
+    faqs: { ms: [{ id: 1, language: 'ms', question: 'Soalan?', answer: 'Jawapan.' }], en: [] },
+    responses: [
+      { status: 201, body: { data: conversation('bot', [visitorMessage, botMessage]) } }, // start
+      { status: 200, body: { data: conversation('awaiting_acceptance', [visitorMessage]) } }, // escalate
+    ],
+  });
+
+  await new Promise((r) => setTimeout(r, 0));
+  await new Promise((r) => setTimeout(r, 0));
+
+  const refs = {
+    first: panel.querySelector('.tdec-first'),
+    start: panel.querySelector('.tdec-start'),
+    faqProceed: panel.querySelector('.tdec-faq-proceed'),
+    status: panel.querySelector('.tdec-status'),
+  };
+
+  await refs.faqProceed.fire('click'); // FAQ CTA -> pre-chat form (cameFromFaq)
+  refs.first.value = 'hello';
+  await refs.start.fire('click'); // creates the chat, then auto-escalates
+  await new Promise((r) => setTimeout(r, 0)); // let the escalate call resolve
+
+  check(storage['tdechat.website'] === 'uuid-1', 'the chat is created');
+  check(refs.status.textContent.includes('Waiting for an agent'), 'skip-bot escalates straight to the human queue');
 }
 
 console.log(failures === 0 ? '\nWIDGET SMOKE: ALL PASS' : `\nWIDGET SMOKE: ${failures} FAILURE(S)`);

@@ -67,6 +67,21 @@ import { BarChart } from './bar-chart';
 
           <mat-card appearance="outlined">
             <mat-card-content>
+              <div class="value">
+                @if (summary.totals.abandonment_rate !== null) {
+                  {{ summary.totals.abandonment_rate * 100 | number: '1.0-1' }}%
+                } @else {
+                  —
+                }
+              </div>
+              <div class="label muted">
+                Abandonment rate ({{ summary.totals.abandoned }}/{{ summary.totals.conversations }})
+              </div>
+            </mat-card-content>
+          </mat-card>
+
+          <mat-card appearance="outlined">
+            <mat-card-content>
               <div class="value">{{ summary.totals.active_now }} / {{ summary.totals.awaiting_now }}</div>
               <div class="label muted">Active / awaiting now</div>
             </mat-card-content>
@@ -80,6 +95,34 @@ import { BarChart } from './bar-chart';
           </mat-card-header>
           <mat-card-content>
             <app-bar-chart [data]="summary.conversations_per_day" />
+          </mat-card-content>
+        </mat-card>
+
+        <mat-card appearance="outlined">
+          <mat-card-header>
+            <mat-card-title>Per-agent</mat-card-title>
+            <mat-card-subtitle>Closed conversations handled in this range</mat-card-subtitle>
+          </mat-card-header>
+          <mat-card-content>
+            <table mat-table [dataSource]="summary.per_agent">
+              <ng-container matColumnDef="agent">
+                <th mat-header-cell *matHeaderCellDef>Agent</th>
+                <td mat-cell *matCellDef="let row">{{ row.agent }}</td>
+              </ng-container>
+              <ng-container matColumnDef="handled">
+                <th mat-header-cell *matHeaderCellDef class="count-col">Handled</th>
+                <td mat-cell *matCellDef="let row" class="count-col">{{ row.handled }}</td>
+              </ng-container>
+              <ng-container matColumnDef="resolution">
+                <th mat-header-cell *matHeaderCellDef class="count-col">Avg resolution</th>
+                <td mat-cell *matCellDef="let row" class="count-col">{{ handleTime(row.avg_resolution_seconds) }}</td>
+              </ng-container>
+              <tr mat-header-row *matHeaderRowDef="['agent', 'handled', 'resolution']"></tr>
+              <tr mat-row *matRowDef="let row; columns: ['agent', 'handled', 'resolution']"></tr>
+            </table>
+            @if (summary.per_agent.length === 0) {
+              <p class="muted">No closed conversations in this range.</p>
+            }
           </mat-card-content>
         </mat-card>
 

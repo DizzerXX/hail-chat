@@ -48,6 +48,7 @@ class ChatSettingsTest extends TestCase
             'widget_start_label' => 'Start chat',
             'widget_input_placeholder' => 'Type a message',
             'faq_deflection_enabled' => true,
+            'faq_skip_bot' => false,
             'widget_faq_title_ms' => 'Jawapan Pantas',
             'widget_faq_title_en' => 'Quick answers',
             'widget_faq_prompt_ms' => 'Tidak menemui apa yang anda cari?',
@@ -216,6 +217,7 @@ class ChatSettingsTest extends TestCase
     {
         $this->putJson('/api/v1/admin/chat-settings', $this->payload([
             'faq_deflection_enabled' => false,
+            'faq_skip_bot' => true,
             'widget_faq_title_ms' => 'Soalan lazim',
             'widget_faq_title_en' => 'Common questions',
             'widget_faq_button_ms' => 'Sembang dengan ejen',
@@ -223,11 +225,13 @@ class ChatSettingsTest extends TestCase
 
         ChatSettings::forgetCurrent();
         $this->assertFalse(ChatSettings::current()->faq_deflection_enabled);
+        $this->assertTrue(ChatSettings::current()->faq_skip_bot);
 
         // The widget receives each copy as an { ms, en } pair so it can switch with the tabs.
         $this->getJson('/api/v1/public/app-config')
             ->assertOk()
             ->assertJsonPath('data.faq.enabled', false)
+            ->assertJsonPath('data.faq.skip_bot', true)
             ->assertJsonPath('data.faq.title.ms', 'Soalan lazim')
             ->assertJsonPath('data.faq.title.en', 'Common questions')
             ->assertJsonPath('data.faq.button.ms', 'Sembang dengan ejen');

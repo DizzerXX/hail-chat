@@ -31,12 +31,14 @@ export class AgentApiService {
     scope: ListScope,
     status?: ConversationStatus,
     inboxId?: number,
+    q?: string,
   ): Observable<Paginated<Conversation>> {
     return this.http.get<Paginated<Conversation>>(`${api}/agent/conversations`, {
       params: {
         scope,
         ...(status ? { status } : {}),
         ...(inboxId ? { inbox_id: inboxId } : {}),
+        ...(q ? { q } : {}),
       },
     });
   }

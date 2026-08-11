@@ -34,6 +34,7 @@ class ConversationController extends Controller
             'scope' => ['sometimes', Rule::in(['mine', 'queue', 'all'])],
             'status' => ['sometimes', Rule::enum(ConversationStatus::class)],
             'inbox_id' => ['sometimes', 'integer'],
+            'q' => ['sometimes', 'string', 'max:120'],
         ]);
 
         $scope = $validated['scope'] ?? 'mine';
@@ -54,6 +55,19 @@ class ConversationController extends Controller
 
         if (isset($validated['inbox_id'])) {
             $query->where('inbox_id', $validated['inbox_id']);
+        }
+
+        $term = trim($validated['q'] ?? '');
+        if (mb_strlen($term) >= 2) {
+            // Match the visitor's details or any message body (the transcript).
+            // Grouped so it never widens the scope constraints above.
+            $like = '%'.str_replace(['%', '_'], ['\%', '\_'], $term).'%';
+            $query->where(function (Builder $sub) use ($like): void {
+                $sub->where('visitor_name', 'ilike', $like)
+                    ->orWhere('visitor_email', 'ilike', $like)
+                    ->orWhere('visitor_phone', 'ilike', $like)
+                    ->orWhereHas('messages', fn (Builder $m) => $m->where('body', 'ilike', $like));
+            });
         }
 
         return ConversationResource::collection($query->paginate(25));

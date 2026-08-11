@@ -191,7 +191,9 @@ live agent"** button below the list leads to the pre-chat form, and submitting t
 chat. The screen is skipped automatically (opening straight to the pre-chat form) when deflection
 is off or the inbox has no FAQs for the default language. The toggle, heading, prompt, and button
 label are admin-editable (surfaced via `/public/app-config`); FAQs themselves are managed under
-**Admin → FAQs**.
+**Admin → FAQs**. An optional **"skip the bot"** toggle (off by default) makes the button escalate
+straight to the human queue instead of entering the FAQ bot — the FAQ screen already served the
+self-service role.
 
 Prefer driving the API directly? It needs no authentication — the conversation UUID returned
 on start is the capability that authorizes all later calls for that conversation:
@@ -324,11 +326,17 @@ needed), `ng build --configuration production`.
   switcher on the avatar menu), a searchable sidebar with Queue/Mine/All conversation
   groups updating in realtime, the chat thread with bubble-style messages (agent messages
   right-aligned in blue), and a details panel with visitor info and a CMS shortcut. FAQ
-  quick replies, accept/close/reroute as before.
+  quick replies, accept/close/reroute as before. The sidebar **search** is server-side: a
+  term of 2+ chars matches the visitor's name/email/phone **or any message body**
+  (transcript), across the widest scope the account may see (`GET /agent/conversations?q=`).
 - **Admin** (`/admin`) — inbox management (incl. MiCC queue mapping), teams, users & agent
   profiles, the FAQ CMS with a BM/EN language toggle, webhook configuration with a
   delivery log, per-inbox routing rules, and analytics (conversations/day, average handle
-  time, FAQ hit rate, top missed queries).
+  time, FAQ hit rate, top missed queries, **abandonment rate**, and a **per-agent** table of
+  handled volume + average resolution time).
+
+Dashboard timestamps render in **Malaysia time (MYT, UTC+8)** regardless of the viewer's
+machine clock (a global `DATE_PIPE_DEFAULT_OPTIONS` provider).
 
 ### One chat per agent
 
@@ -442,7 +450,8 @@ the OpenAPI document below.
 Visitors and agents can attach files to a message (with an optional caption) — via the paperclip
 button, by **dragging files onto the chat** (a "Drop to upload" hint appears), or by **pasting**
 an image (e.g. a screenshot) into the composer. Drag/paste can carry several files, uploaded one
-after another. Uploads go to `POST {…}/conversations/{uuid}/attachments` (public for the widget,
+after another with a per-file **"Uploading N of M…"** indicator. Uploads go to
+`POST {…}/conversations/{uuid}/attachments` (public for the widget,
 `/agent/…` for the dashboard — the latter under `messages.send` + `seat.valid`), and are stored
 privately on the `local` disk under `attachments/{conversation-uuid}/`.
 

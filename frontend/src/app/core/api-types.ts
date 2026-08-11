@@ -324,6 +324,7 @@ export interface ChatSettings {
   widget_input_placeholder: string;
   // FAQ-deflection screen (bilingual chrome)
   faq_deflection_enabled: boolean;
+  faq_skip_bot: boolean;
   widget_faq_title_ms: string;
   widget_faq_title_en: string;
   widget_faq_prompt_ms: string;
@@ -405,8 +406,10 @@ export interface AnalyticsSummary {
     conversations: number;
     closed: number;
     abandoned: number;
+    abandonment_rate: number | null;
     active_now: number;
     awaiting_now: number;
   };
+  per_agent: { agent: string; handled: number; avg_resolution_seconds: number | null }[];
   top_missed_queries: { query: string; count: number }[];
 }

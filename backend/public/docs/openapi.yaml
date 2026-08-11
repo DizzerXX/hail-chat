@@ -135,6 +135,7 @@ paths:
                         description: FAQ-deflection opening screen. When `enabled` and the inbox has FAQs for the widget's default language, the widget opens on a "Quick answers" screen before the pre-chat form so visitors can self-serve first. The `title`/`prompt`/`button` are bilingual maps that switch with the screen's language tabs.
                         properties:
                           enabled: { type: boolean, example: true }
+                          skip_bot: { type: boolean, example: false, description: When true, proceeding from the FAQ screen escalates straight to a human (skips the bot). }
                           title: { $ref: '#/components/schemas/BilingualText' }
                           prompt: { $ref: '#/components/schemas/BilingualText' }
                           button: { $ref: '#/components/schemas/BilingualText' }
@@ -419,6 +420,10 @@ paths:
         - name: inbox_id
           in: query
           schema: { type: integer }
+        - name: q
+          in: query
+          description: Search term (≥2 chars) matching the visitor name/email/phone or any message body (transcript). Applied within the chosen scope.
+          schema: { type: string, maxLength: 120 }
         - name: page
           in: query
           schema: { type: integer, default: 1 }
@@ -1891,8 +1896,18 @@ components:
             conversations: { type: integer }
             closed: { type: integer }
             abandoned: { type: integer }
+            abandonment_rate: { type: [number, 'null'], description: abandoned / conversations, 0–1 }
             active_now: { type: integer }
             awaiting_now: { type: integer }
+        per_agent:
+          type: array
+          description: Closed-conversation volume and average resolution per agent (top 20 by volume).
+          items:
+            type: object
+            properties:
+              agent: { type: string }
+              handled: { type: integer }
+              avg_resolution_seconds: { type: [number, 'null'] }
         top_missed_queries:
           type: array
           items:
@@ -1951,6 +1966,9 @@ components:
         faq_deflection_enabled:
           type: boolean
           description: Open the widget on the "Quick answers" FAQ screen before the pre-chat form.
+        faq_skip_bot:
+          type: boolean
+          description: When true, proceeding from the FAQ screen connects straight to a human (skips the bot).
         widget_faq_title_ms: { type: string, example: 'Jawapan Pantas' }
         widget_faq_title_en: { type: string, example: 'Quick answers' }
         widget_faq_prompt_ms: { type: string, example: 'Tidak menemui apa yang anda cari?' }

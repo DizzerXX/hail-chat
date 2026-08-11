@@ -1,4 +1,4 @@
-import { DatePipe } from '@angular/common';
+import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import {
   Component,
   OnDestroy,
@@ -26,69 +26,95 @@ interface Section {
 
 @Component({
   selector: 'app-conversation-list',
-  imports: [DatePipe, FormsModule, MatIconModule, MatProgressBarModule, RouterLink, RouterLinkActive],
+  imports: [
+    DatePipe,
+    FormsModule,
+    MatIconModule,
+    MatProgressBarModule,
+    NgTemplateOutlet,
+    RouterLink,
+    RouterLinkActive,
+  ],
   template: `
     <div class="search">
       <mat-icon>search</mat-icon>
-      <input type="text" placeholder="Search" [ngModel]="search()" (ngModelChange)="search.set($event)" />
+      <input
+        type="text"
+        placeholder="Search name or message…"
+        [ngModel]="search()"
+        (ngModelChange)="onSearchInput($event)"
+      />
     </div>
 
-    @if (loading()) {
+    @if (loading() || searching()) {
       <mat-progress-bar mode="indeterminate" />
     }
 
-    <div class="sections">
-      @if (sections().length === 0) {
-        <p class="empty">
-          This account has no agent profile and cannot view conversations.
-        </p>
-      }
-
-      @for (section of sections(); track section.key) {
+    @if (searchResults(); as results) {
+      <div class="sections">
         <div class="section">
-          <div class="section-header">
-            <span>{{ section.label }} ({{ filtered(section.key).length }})</span>
-            @if (section.key === 'all') {
-              <select
-                class="status-filter"
-                [ngModel]="statusFilter()"
-                (ngModelChange)="setStatusFilter($event)"
-                aria-label="Status filter"
-              >
-                <option [ngValue]="undefined">any</option>
-                @for (status of statuses; track status) {
-                  <option [ngValue]="status">{{ status }}</option>
-                }
-              </select>
-            }
-          </div>
-
-          @for (conversation of filtered(section.key); track conversation.uuid) {
-            <a
-              class="item"
-              [routerLink]="['/agent/chat', conversation.uuid]"
-              routerLinkActive="active"
-            >
-              <span class="avatar" [style.background]="avatarColor(conversation)">
-                {{ initial(conversation) }}
-                <span class="dot" [class]="conversation.status"></span>
-              </span>
-              <span class="item-body">
-                <span class="item-title">{{ conversation.visitor.name || 'Anonymous visitor' }}</span>
-                <span class="item-sub">
-                  {{ conversation.inbox?.name }} · {{ conversation.last_activity_at | date: 'HH:mm' }}
-                </span>
-              </span>
-              @if (conversation.status === 'awaiting_acceptance') {
-                <span class="badge">new</span>
-              }
-            </a>
+          <div class="section-header"><span>SEARCH RESULTS ({{ results.length }})</span></div>
+          @for (conversation of results; track conversation.uuid) {
+            <ng-container [ngTemplateOutlet]="row" [ngTemplateOutletContext]="{ $implicit: conversation }" />
           } @empty {
-            <p class="empty">Nothing here.</p>
+            <p class="empty">No matches.</p>
           }
         </div>
-      }
-    </div>
+      </div>
+    } @else {
+      <div class="sections">
+        @if (sections().length === 0) {
+          <p class="empty">
+            This account has no agent profile and cannot view conversations.
+          </p>
+        }
+
+        @for (section of sections(); track section.key) {
+          <div class="section">
+            <div class="section-header">
+              <span>{{ section.label }} ({{ filtered(section.key).length }})</span>
+              @if (section.key === 'all') {
+                <select
+                  class="status-filter"
+                  [ngModel]="statusFilter()"
+                  (ngModelChange)="setStatusFilter($event)"
+                  aria-label="Status filter"
+                >
+                  <option [ngValue]="undefined">any</option>
+                  @for (status of statuses; track status) {
+                    <option [ngValue]="status">{{ status }}</option>
+                  }
+                </select>
+              }
+            </div>
+
+            @for (conversation of filtered(section.key); track conversation.uuid) {
+              <ng-container [ngTemplateOutlet]="row" [ngTemplateOutletContext]="{ $implicit: conversation }" />
+            } @empty {
+              <p class="empty">Nothing here.</p>
+            }
+          </div>
+        }
+      </div>
+    }
+
+    <ng-template #row let-conversation>
+      <a class="item" [routerLink]="['/agent/chat', conversation.uuid]" routerLinkActive="active">
+        <span class="avatar" [style.background]="avatarColor(conversation)">
+          {{ initial(conversation) }}
+          <span class="dot" [class]="conversation.status"></span>
+        </span>
+        <span class="item-body">
+          <span class="item-title">{{ conversation.visitor.name || 'Anonymous visitor' }}</span>
+          <span class="item-sub">
+            {{ conversation.inbox?.name }} · {{ conversation.last_activity_at | date: 'HH:mm' }}
+          </span>
+        </span>
+        @if (conversation.status === 'awaiting_acceptance') {
+          <span class="badge">new</span>
+        }
+      </a>
+    </ng-template>
   `,
   styles: `
     :host {
@@ -264,6 +290,12 @@ export class ConversationList implements OnInit, OnDestroy {
   protected readonly statusFilter = signal<ConversationStatus | undefined>(undefined);
   protected readonly loading = signal(false);
 
+  // Server-side search across all accessible conversations (incl. transcript
+  // text). Null = not searching, so the live sections show instead.
+  protected readonly searchResults = signal<Conversation[] | null>(null);
+  protected readonly searching = signal(false);
+  private searchTimer: ReturnType<typeof setTimeout> | null = null;
+
   private readonly queue = signal<Conversation[]>([]);
   private readonly mine = signal<Conversation[]>([]);
   private readonly all = signal<Conversation[]>([]);
@@ -322,8 +354,42 @@ export class ConversationList implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.stopPolling();
+    if (this.searchTimer !== null) {
+      clearTimeout(this.searchTimer);
+    }
     for (const inbox of this.inboxes) {
       this.echoService.echo.leave(`inbox.${inbox.id}`);
+    }
+  }
+
+  protected onSearchInput(term: string): void {
+    this.search.set(term);
+    if (this.searchTimer !== null) {
+      clearTimeout(this.searchTimer);
+    }
+
+    const trimmed = term.trim();
+    if (trimmed.length < 2) {
+      this.searchResults.set(null);
+      this.searching.set(false);
+      return;
+    }
+
+    this.searchTimer = setTimeout(() => void this.runSearch(trimmed), 300);
+  }
+
+  private async runSearch(term: string): Promise<void> {
+    // Search the widest scope this account may see; fall back to their own.
+    const scope: Section['key'] = this.auth.hasPermission('conversations.view_all') ? 'all' : 'mine';
+    this.searching.set(true);
+    try {
+      const response = await firstValueFrom(this.api.conversations(scope, undefined, undefined, term));
+      // Ignore a stale response if the box moved on to a different term.
+      if (this.search().trim() === term) {
+        this.searchResults.set(response.data);
+      }
+    } finally {
+      this.searching.set(false);
     }
   }
 
