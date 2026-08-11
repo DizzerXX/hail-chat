@@ -116,7 +116,7 @@
   .tdec-att-file .tdec-att-size{opacity:.7;font-size:11px}
   .tdec-bar{display:flex;gap:8px;padding:8px 10px;background:#fff;border-top:1px solid #e1e0d9}
   .tdec-link{background:none;border:none;color:var(--tdec-accent,#2a78d6);cursor:pointer;font-size:12px;padding:4px}
-  .tdec-pre{padding:18px;display:flex;flex-direction:column;gap:10px;background:#f7f7f5;flex:1}
+  .tdec-pre{padding:18px;display:flex;flex-direction:column;gap:10px;background:#f7f7f5;flex:1;overflow:auto}
   .tdec-fields{display:flex;flex-direction:column;gap:10px}
   .tdec-field{display:flex;flex-direction:column;gap:4px}
   .tdec-field-label{font-size:12px;color:#52514e}
