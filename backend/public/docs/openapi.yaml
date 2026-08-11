@@ -132,12 +132,12 @@ paths:
                       bubble_color: { type: string, example: '#2f80ed' }
                       faq:
                         type: object
-                        description: FAQ-deflection opening screen. When `enabled` and the inbox has FAQs for the widget's default language, the widget opens on a "Quick answers" screen before the pre-chat form so visitors can self-serve first.
+                        description: FAQ-deflection opening screen. When `enabled` and the inbox has FAQs for the widget's default language, the widget opens on a "Quick answers" screen before the pre-chat form so visitors can self-serve first. The `title`/`prompt`/`button` are bilingual maps that switch with the screen's language tabs.
                         properties:
                           enabled: { type: boolean, example: true }
-                          title: { type: string, example: 'Quick answers' }
-                          prompt: { type: string, example: "Didn't find what you were looking for?" }
-                          button: { type: string, example: 'Chat with a live agent' }
+                          title: { $ref: '#/components/schemas/BilingualText' }
+                          prompt: { $ref: '#/components/schemas/BilingualText' }
+                          button: { $ref: '#/components/schemas/BilingualText' }
 
   /api/v1/public/conversations/{conversationUuid}:
     get:
@@ -1925,6 +1925,13 @@ components:
             - $ref: '#/components/schemas/Agent'
             - type: 'null'
 
+    BilingualText:
+      type: object
+      description: A string in each supported language.
+      properties:
+        ms: { type: string }
+        en: { type: string }
+
     ChatSettings:
       type: object
       properties:
@@ -1943,10 +1950,13 @@ components:
         closed_en: { type: string }
         faq_deflection_enabled:
           type: boolean
-          description: Show the "Quick answers" FAQ screen after the pre-chat form, before the chat starts.
-        widget_faq_title: { type: string, example: 'Quick answers' }
-        widget_faq_prompt: { type: string, example: "Didn't find what you were looking for?" }
-        widget_faq_button: { type: string, example: 'Chat with a live agent' }
+          description: Open the widget on the "Quick answers" FAQ screen before the pre-chat form.
+        widget_faq_title_ms: { type: string, example: 'Jawapan Pantas' }
+        widget_faq_title_en: { type: string, example: 'Quick answers' }
+        widget_faq_prompt_ms: { type: string, example: 'Tidak menemui apa yang anda cari?' }
+        widget_faq_prompt_en: { type: string, example: "Didn't find what you were looking for?" }
+        widget_faq_button_ms: { type: string, example: 'Sembang dengan ejen' }
+        widget_faq_button_en: { type: string, example: 'Chat with a live agent' }
         available_sounds:
           type: array
           items: { type: string }

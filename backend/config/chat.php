@@ -44,10 +44,14 @@ return [
         // FAQ deflection: after the pre-chat form, show a "Quick answers" screen
         // with the inbox's FAQs before the visitor proceeds to a live chat.
         // Skipped automatically when there are no FAQs for the chosen language.
+        // FAQ chrome is bilingual — it switches with the FAQ language tabs.
         'faq_deflection_enabled' => true,
-        'widget_faq_title' => 'Quick answers',
-        'widget_faq_prompt' => "Didn't find what you were looking for?",
-        'widget_faq_button' => 'Chat with a live agent',
+        'widget_faq_title_ms' => 'Jawapan Pantas',
+        'widget_faq_title_en' => 'Quick answers',
+        'widget_faq_prompt_ms' => 'Tidak menemui apa yang anda cari?',
+        'widget_faq_prompt_en' => "Didn't find what you were looking for?",
+        'widget_faq_button_ms' => 'Sembang dengan ejen',
+        'widget_faq_button_en' => 'Chat with a live agent',
 
         // Pre-chat fields. Tier 1: the three first-class fields (name shows by
         // default; collecting email is what makes contact history useful).

@@ -322,11 +322,14 @@ export interface ChatSettings {
   widget_greeting_placeholder: string;
   widget_start_label: string;
   widget_input_placeholder: string;
-  // FAQ-deflection screen
+  // FAQ-deflection screen (bilingual chrome)
   faq_deflection_enabled: boolean;
-  widget_faq_title: string;
-  widget_faq_prompt: string;
-  widget_faq_button: string;
+  widget_faq_title_ms: string;
+  widget_faq_title_en: string;
+  widget_faq_prompt_ms: string;
+  widget_faq_prompt_en: string;
+  widget_faq_button_ms: string;
+  widget_faq_button_en: string;
   // Pre-chat fields (tier 1 toggles/labels + tier 2 custom)
   field_name_enabled: boolean;
   field_name_required: boolean;

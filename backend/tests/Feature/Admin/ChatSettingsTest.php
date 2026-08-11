@@ -48,9 +48,12 @@ class ChatSettingsTest extends TestCase
             'widget_start_label' => 'Start chat',
             'widget_input_placeholder' => 'Type a message',
             'faq_deflection_enabled' => true,
-            'widget_faq_title' => 'Quick answers',
-            'widget_faq_prompt' => "Didn't find what you were looking for?",
-            'widget_faq_button' => 'Chat with a live agent',
+            'widget_faq_title_ms' => 'Jawapan Pantas',
+            'widget_faq_title_en' => 'Quick answers',
+            'widget_faq_prompt_ms' => 'Tidak menemui apa yang anda cari?',
+            'widget_faq_prompt_en' => "Didn't find what you were looking for?",
+            'widget_faq_button_ms' => 'Sembang dengan ejen',
+            'widget_faq_button_en' => 'Chat with a live agent',
             'field_name_enabled' => true,
             'field_name_required' => false,
             'field_email_enabled' => false,
@@ -209,28 +212,31 @@ class ChatSettingsTest extends TestCase
         ]))->assertUnprocessable()->assertJsonValidationErrors('custom_fields.0.tree');
     }
 
-    public function test_faq_deflection_persists_and_is_exposed_to_the_widget(): void
+    public function test_faq_deflection_persists_and_is_exposed_bilingually(): void
     {
         $this->putJson('/api/v1/admin/chat-settings', $this->payload([
             'faq_deflection_enabled' => false,
-            'widget_faq_title' => 'Soalan lazim',
-            'widget_faq_button' => 'Sembang dengan ejen',
-        ]))->assertOk()->assertJsonPath('data.widget_faq_title', 'Soalan lazim');
+            'widget_faq_title_ms' => 'Soalan lazim',
+            'widget_faq_title_en' => 'Common questions',
+            'widget_faq_button_ms' => 'Sembang dengan ejen',
+        ]))->assertOk()->assertJsonPath('data.widget_faq_title_ms', 'Soalan lazim');
 
         ChatSettings::forgetCurrent();
         $this->assertFalse(ChatSettings::current()->faq_deflection_enabled);
 
+        // The widget receives each copy as an { ms, en } pair so it can switch with the tabs.
         $this->getJson('/api/v1/public/app-config')
             ->assertOk()
             ->assertJsonPath('data.faq.enabled', false)
-            ->assertJsonPath('data.faq.title', 'Soalan lazim')
-            ->assertJsonPath('data.faq.button', 'Sembang dengan ejen');
+            ->assertJsonPath('data.faq.title.ms', 'Soalan lazim')
+            ->assertJsonPath('data.faq.title.en', 'Common questions')
+            ->assertJsonPath('data.faq.button.ms', 'Sembang dengan ejen');
     }
 
     public function test_faq_copy_is_required(): void
     {
-        $this->putJson('/api/v1/admin/chat-settings', $this->payload(['widget_faq_button' => '']))
-            ->assertUnprocessable()->assertJsonValidationErrors('widget_faq_button');
+        $this->putJson('/api/v1/admin/chat-settings', $this->payload(['widget_faq_button_en' => '']))
+            ->assertUnprocessable()->assertJsonValidationErrors('widget_faq_button_en');
     }
 
     public function test_public_app_config_exposes_the_fields_block(): void

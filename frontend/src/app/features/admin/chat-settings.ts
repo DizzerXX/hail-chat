@@ -168,20 +168,21 @@ import { AdminApiService } from './admin-api.service';
             <mat-slide-toggle [(ngModel)]="s.faq_deflection_enabled">Show the FAQ screen</mat-slide-toggle>
 
             <div class="grid faq-copy">
-              <mat-form-field appearance="outline">
-                <mat-label>Screen title</mat-label>
-                <input matInput [(ngModel)]="s.widget_faq_title" [disabled]="!s.faq_deflection_enabled" />
-              </mat-form-field>
-              <mat-form-field appearance="outline">
-                <mat-label>Proceed button label</mat-label>
-                <input matInput [(ngModel)]="s.widget_faq_button" [disabled]="!s.faq_deflection_enabled" />
-              </mat-form-field>
-              <mat-form-field appearance="outline" class="wide">
-                <mat-label>Prompt above the button</mat-label>
-                <input matInput [(ngModel)]="s.widget_faq_prompt" [disabled]="!s.faq_deflection_enabled" />
-              </mat-form-field>
+              @for (row of faqCopyRows; track row.ms) {
+                <mat-form-field appearance="outline">
+                  <mat-label>{{ row.label }} (BM)</mat-label>
+                  <input matInput [(ngModel)]="s[row.ms]" [disabled]="!s.faq_deflection_enabled" />
+                </mat-form-field>
+                <mat-form-field appearance="outline">
+                  <mat-label>{{ row.label }} (EN)</mat-label>
+                  <input matInput [(ngModel)]="s[row.en]" [disabled]="!s.faq_deflection_enabled" />
+                </mat-form-field>
+              }
             </div>
-            <p class="muted hint">FAQs are managed on the FAQs page; the widget shows those matching the visitor's language.</p>
+            <p class="muted hint">
+              The title, prompt, and button switch with the widget's language tabs. FAQs themselves
+              are managed on the FAQs page.
+            </p>
           </mat-card-content>
         </mat-card>
 
@@ -429,6 +430,12 @@ export class ChatSettingsPage implements OnInit {
     { key: 'warn1', label: '1st warning', ms: 'warn1_ms', en: 'warn1_en' },
     { key: 'warn2', label: '2nd warning', ms: 'warn2_ms', en: 'warn2_en' },
     { key: 'closed', label: 'Auto-close notice', ms: 'closed_ms', en: 'closed_en' },
+  ] as const;
+
+  protected readonly faqCopyRows = [
+    { label: 'Screen title', ms: 'widget_faq_title_ms', en: 'widget_faq_title_en' },
+    { label: 'Prompt above the button', ms: 'widget_faq_prompt_ms', en: 'widget_faq_prompt_en' },
+    { label: 'Proceed button label', ms: 'widget_faq_button_ms', en: 'widget_faq_button_en' },
   ] as const;
 
   protected readonly tier1Rows = [

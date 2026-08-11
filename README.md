@@ -184,8 +184,9 @@ chooses; a started selection must be finished to a leaf. The answer is stored wi
 **FAQ deflection** (**Admin → Chat settings → FAQ deflection**). The widget *opens* on a
 **"Quick answers"** screen — an accordion of the inbox's FAQs (from `/public/inboxes/{slug}/faqs`)
 — so visitors can self-serve before any personal data is collected or a conversation is created.
-**Bahasa Malaysia / English tabs** switch the questions and answers between languages (lazy-loaded
-and cached; picking a tab also preselects that language in the pre-chat form). A **"Chat with a
+**Bahasa Malaysia / English tabs** switch the questions and answers between languages — along with
+the screen's title, prompt, and button (all bilingual and admin-editable). Lists are lazy-loaded
+and cached, and picking a tab also preselects that language in the pre-chat form. A **"Chat with a
 live agent"** button below the list leads to the pre-chat form, and submitting that starts the
 chat. The screen is skipped automatically (opening straight to the pre-chat form) when deflection
 is off or the inbox has no FAQs for the default language. The toggle, heading, prompt, and button

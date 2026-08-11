@@ -111,7 +111,21 @@ function makeSandbox({ storage = {}, responses, faqs = [] }) {
       // The widget fetches public theme config on init; answer it out-of-band
       // so scenarios don't have to account for it in their response queues.
       if (String(url).includes('/public/app-config')) {
-        return { ok: true, status: 200, json: async () => ({ data: { bubble_color: '#2f80ed' } }) };
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            data: {
+              bubble_color: '#2f80ed',
+              faq: {
+                enabled: true,
+                title: { ms: 'Jawapan Pantas', en: 'Quick answers' },
+                prompt: { ms: 'Tidak jumpa?', en: 'Not found?' },
+                button: { ms: 'Sembang dengan ejen', en: 'Chat with a live agent' },
+              },
+            },
+          }),
+        };
       }
       // FAQ-deflection list is fetched to build the opening screen; answer
       // out-of-band (empty by default = skip straight to the pre-chat form).
@@ -408,8 +422,10 @@ const agentMessage = { id: 3, sender_type: 'agent', agent: { id: 1, display_name
     start: panel.querySelector('.tdec-start'),
     lang: panel.querySelector('.tdec-lang'),
     faq: panel.querySelector('.tdec-faq'),
+    faqTitle: panel.querySelector('.tdec-faq-title'),
     faqTabs: panel.querySelector('.tdec-faq-tabs'),
     faqList: panel.querySelector('.tdec-faq-list'),
+    faqPrompt: panel.querySelector('.tdec-faq-prompt'),
     faqProceed: panel.querySelector('.tdec-faq-proceed'),
     status: panel.querySelector('.tdec-status'),
     msgs: panel.querySelector('.tdec-msgs'),
@@ -423,6 +439,11 @@ const agentMessage = { id: 3, sender_type: 'agent', agent: { id: 1, display_name
   check(refs.faqTabs.children.length === 2, 'a tab is shown per language');
   check(refs.faqTabs.children[0].classes.has('active'), 'the default language tab starts active');
 
+  // The chrome (title/prompt/button) starts in the default language (BM).
+  check(refs.faqTitle.textContent === 'Jawapan Pantas', 'the FAQ title starts in Malay');
+  check(refs.faqPrompt.textContent === 'Tidak jumpa?', 'the prompt starts in Malay');
+  check(refs.faqProceed.textContent === 'Sembang dengan ejen', 'the button starts in Malay');
+
   // Expanding a question reveals its answer (an accordion item toggles open).
   const firstItem = refs.faqList.children[0];
   await firstItem.children[0].fire('click');
@@ -434,6 +455,10 @@ const agentMessage = { id: 3, sender_type: 'agent', agent: { id: 1, display_name
   check(refs.faqTabs.children[1].classes.has('active') && !refs.faqTabs.children[0].classes.has('active'), 'the English tab becomes active');
   check(refs.faqList.children.length === 1 && refs.faqList.children[0].children[0].children[0].textContent === 'Is it free?', 'switching language re-renders with that language FAQs');
   check(refs.lang.value === 'en', 'switching the FAQ language preselects it in the pre-chat form');
+  // The chrome switches language too.
+  check(refs.faqTitle.textContent === 'Quick answers', 'the title switches to English');
+  check(refs.faqPrompt.textContent === 'Not found?', 'the prompt switches to English');
+  check(refs.faqProceed.textContent === 'Chat with a live agent', 'the button switches to English');
 
   // "Chat with a live agent" moves on to the pre-chat form (still no conversation).
   await refs.faqProceed.fire('click');

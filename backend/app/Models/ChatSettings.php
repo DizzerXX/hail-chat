@@ -29,12 +29,12 @@ class ChatSettings extends Model
         'widget_input_placeholder',
     ];
 
-    /** FAQ-deflection screen (toggle + editable copy), surfaced to the widget. */
+    /** FAQ-deflection screen (toggle + bilingual copy), surfaced to the widget. */
     public const FAQ_CONFIG = [
         'faq_deflection_enabled',
-        'widget_faq_title',
-        'widget_faq_prompt',
-        'widget_faq_button',
+        'widget_faq_title_ms', 'widget_faq_title_en',
+        'widget_faq_prompt_ms', 'widget_faq_prompt_en',
+        'widget_faq_button_ms', 'widget_faq_button_en',
     ];
 
     /** Pre-chat field configuration (tier 1 toggles/labels + tier 2 custom fields). */

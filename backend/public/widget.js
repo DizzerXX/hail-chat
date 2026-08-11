@@ -55,7 +55,14 @@
     // FAQ deflection (admin-driven via app-config). When enabled and the inbox
     // has FAQs for the chosen language, the pre-chat form leads to a "Quick
     // answers" screen before the chat starts.
-    let faqConfig = { enabled: true, title: 'Quick answers', prompt: "Didn't find what you were looking for?", button: 'Chat with a live agent' };
+    // Title/prompt/button are bilingual maps ({ ms, en }) that switch with the
+    // FAQ language tabs; app-config overrides these defaults.
+    let faqConfig = {
+        enabled: true,
+        title: { ms: 'Jawapan Pantas', en: 'Quick answers' },
+        prompt: { ms: 'Tidak menemui apa yang anda cari?', en: "Didn't find what you were looking for?" },
+        button: { ms: 'Sembang dengan ejen', en: 'Chat with a live agent' },
+    };
     // Languages offered in the pre-chat form and the FAQ tabs (mirrors the <select>).
     const languages = [
         { code: 'ms', label: 'Bahasa Malaysia' },
@@ -294,16 +301,32 @@
         }
     }
 
-    // Merge admin FAQ-deflection config and apply the static copy.
+    // Merge admin FAQ-deflection config (bilingual maps) and apply the copy for
+    // the current language.
     function applyFaq(f) {
         if (!f) return;
         faqConfig.enabled = f.enabled !== false;
-        if (f.title) faqConfig.title = f.title;
-        if (f.prompt) faqConfig.prompt = f.prompt;
-        if (f.button) faqConfig.button = f.button;
-        refs.faqTitle.textContent = faqConfig.title;
-        refs.faqPrompt.textContent = faqConfig.prompt;
-        refs.faqProceed.textContent = faqConfig.button;
+        ['title', 'prompt', 'button'].forEach(function (key) {
+            const map = f[key];
+            if (map && typeof map === 'object') {
+                if (map.ms) faqConfig[key].ms = map.ms;
+                if (map.en) faqConfig[key].en = map.en;
+            }
+        });
+        applyFaqText();
+    }
+
+    // Pick a bilingual value for the language currently shown on the FAQ screen.
+    function faqText(key) {
+        const map = faqConfig[key];
+        return map[faqLang] || map[config.language] || map.en;
+    }
+
+    // Set the FAQ title/prompt/button to the current language.
+    function applyFaqText() {
+        refs.faqTitle.textContent = faqText('title');
+        refs.faqPrompt.textContent = faqText('prompt');
+        refs.faqProceed.textContent = faqText('button');
     }
 
     // Merge admin field config and re-render the pre-chat form.
@@ -605,6 +628,7 @@
             tabs[i].classList.toggle('active', tabs[i].dataset.lang === language);
         }
 
+        applyFaqText();
         renderFaqList(await cachedFaqs(language));
     }
 
