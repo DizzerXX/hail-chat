@@ -31,7 +31,8 @@ class FakeNode {
     this.classList = {
       add: (c) => this.classes.add(c),
       remove: (c) => this.classes.delete(c),
-      toggle: (c, on) => (on ? this.classes.add(c) : this.classes.delete(c)),
+      toggle: (c, on) =>
+        (on ?? !this.classes.has(c)) ? this.classes.add(c) : this.classes.delete(c),
       contains: (c) => this.classes.has(c),
     };
   }
@@ -71,7 +72,7 @@ class FakeNode {
   }
 }
 
-function makeSandbox({ storage = {}, responses }) {
+function makeSandbox({ storage = {}, responses, faqs = [] }) {
   const body = new FakeNode('body');
   const windowNode = new FakeNode('window');
   const beacons = [];
@@ -87,6 +88,11 @@ function makeSandbox({ storage = {}, responses }) {
         src: 'http://localhost:8010/widget.js',
       },
       createElement: (tag) => new FakeNode(tag),
+      createTextNode: (text) => {
+        const node = new FakeNode('#text');
+        node.textContent = text;
+        return node;
+      },
       head: new FakeNode('head'),
       body,
       documentElement: { style: { props: {}, setProperty(k, v) { this.props[k] = v; } } },
@@ -102,6 +108,11 @@ function makeSandbox({ storage = {}, responses }) {
       // so scenarios don't have to account for it in their response queues.
       if (String(url).includes('/public/app-config')) {
         return { ok: true, status: 200, json: async () => ({ data: { bubble_color: '#2f80ed' } }) };
+      }
+      // FAQ-deflection list is fetched when the pre-chat form is submitted;
+      // answer out-of-band (empty by default = skip straight to the chat).
+      if (String(url).includes('/faqs')) {
+        return { ok: true, status: 200, json: async () => ({ data: faqs }) };
       }
       // Presence pings (markPresent) are fire-and-forget; answer out-of-band so
       // scenarios don't have to thread them through their response queues.
@@ -363,6 +374,52 @@ const agentMessage = { id: 3, sender_type: 'agent', agent: { id: 1, display_name
   refs.first.value = 'hello';
   await refs.start.fire('click');
   check(refs.status.textContent.includes('#3 in queue'), 'queued visitor sees their position in line');
+}
+
+// ---------- scenario 6: FAQ deflection before the chat starts ----------
+{
+  const { panel, storage } = makeSandbox({
+    faqs: [
+      { id: 1, language: 'ms', question: 'Adakah ia percuma?', answer: 'Ya. Lihat https://example.com/harga.' },
+      { id: 2, language: 'ms', question: 'Bagaimana ia berfungsi?', answer: 'Isi borang dan mula sembang.' },
+    ],
+    responses: [
+      { status: 201, body: { data: conversation('bot', [visitorMessage, botMessage]) } }, // start (deferred)
+    ],
+  });
+
+  await new Promise((r) => setTimeout(r, 0));
+
+  const refs = {
+    first: panel.querySelector('.tdec-first'),
+    start: panel.querySelector('.tdec-start'),
+    faq: panel.querySelector('.tdec-faq'),
+    faqList: panel.querySelector('.tdec-faq-list'),
+    faqProceed: panel.querySelector('.tdec-faq-proceed'),
+    status: panel.querySelector('.tdec-status'),
+    msgs: panel.querySelector('.tdec-msgs'),
+  };
+
+  refs.first.value = 'hello';
+  await refs.start.fire('click');
+
+  check(refs.faq.classes.has('open'), 'submitting the pre-chat form shows the FAQ screen');
+  check(refs.faqList.children.length === 2, 'the FAQ list renders one item per question');
+  check(!('tdechat.website' in storage), 'no conversation is created until the visitor proceeds');
+
+  // Expanding a question reveals its answer (an accordion item toggles open).
+  const firstItem = refs.faqList.children[0];
+  const questionBtn = firstItem.children[0];
+  await questionBtn.fire('click');
+  check(firstItem.classes.has('open'), 'clicking a question expands its answer');
+  // The answer with a URL is linkified into an anchor node (not raw text).
+  const answerNode = firstItem.children[1];
+  check(answerNode.children.some((n) => n.tag === 'a'), 'a URL in the answer becomes a link');
+
+  await refs.faqProceed.fire('click');
+  check(storage['tdechat.website'] === 'uuid-1', 'proceeding creates the conversation');
+  check(refs.msgs.children.length >= 2, 'the chat thread renders after proceeding');
+  check(refs.status.textContent.includes('Chatbot'), 'status reflects the chat after proceeding');
 }
 
 console.log(failures === 0 ? '\nWIDGET SMOKE: ALL PASS' : `\nWIDGET SMOKE: ${failures} FAILURE(S)`);

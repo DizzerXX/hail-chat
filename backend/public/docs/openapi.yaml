@@ -130,6 +130,14 @@ paths:
                     type: object
                     properties:
                       bubble_color: { type: string, example: '#2f80ed' }
+                      faq:
+                        type: object
+                        description: FAQ-deflection screen shown after the pre-chat form. When `enabled` and the inbox has FAQs for the chosen language, the widget shows a "Quick answers" screen before starting the chat.
+                        properties:
+                          enabled: { type: boolean, example: true }
+                          title: { type: string, example: 'Quick answers' }
+                          prompt: { type: string, example: "Didn't find what you were looking for?" }
+                          button: { type: string, example: 'Chat with a live agent' }
 
   /api/v1/public/conversations/{conversationUuid}:
     get:
@@ -1933,6 +1941,12 @@ components:
         warn2_en: { type: string }
         closed_ms: { type: string }
         closed_en: { type: string }
+        faq_deflection_enabled:
+          type: boolean
+          description: Show the "Quick answers" FAQ screen after the pre-chat form, before the chat starts.
+        widget_faq_title: { type: string, example: 'Quick answers' }
+        widget_faq_prompt: { type: string, example: "Didn't find what you were looking for?" }
+        widget_faq_button: { type: string, example: 'Chat with a live agent' }
         available_sounds:
           type: array
           items: { type: string }

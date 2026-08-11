@@ -29,6 +29,14 @@ class ChatSettings extends Model
         'widget_input_placeholder',
     ];
 
+    /** FAQ-deflection screen (toggle + editable copy), surfaced to the widget. */
+    public const FAQ_CONFIG = [
+        'faq_deflection_enabled',
+        'widget_faq_title',
+        'widget_faq_prompt',
+        'widget_faq_button',
+    ];
+
     /** Pre-chat field configuration (tier 1 toggles/labels + tier 2 custom fields). */
     public const FIELD_CONFIG = [
         'field_name_enabled',
@@ -46,6 +54,7 @@ class ChatSettings extends Model
     {
         return [
             'idle_enabled' => 'boolean',
+            'faq_deflection_enabled' => 'boolean',
             'customer_warn1_minutes' => 'integer',
             'customer_warn2_minutes' => 'integer',
             'customer_close_minutes' => 'integer',

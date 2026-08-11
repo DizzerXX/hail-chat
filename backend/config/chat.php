@@ -41,6 +41,14 @@ return [
         'widget_start_label' => 'Start chat',
         'widget_input_placeholder' => 'Type a message…',
 
+        // FAQ deflection: after the pre-chat form, show a "Quick answers" screen
+        // with the inbox's FAQs before the visitor proceeds to a live chat.
+        // Skipped automatically when there are no FAQs for the chosen language.
+        'faq_deflection_enabled' => true,
+        'widget_faq_title' => 'Quick answers',
+        'widget_faq_prompt' => "Didn't find what you were looking for?",
+        'widget_faq_button' => 'Chat with a live agent',
+
         // Pre-chat fields. Tier 1: the three first-class fields (name shows by
         // default; collecting email is what makes contact history useful).
         'field_name_enabled' => true,

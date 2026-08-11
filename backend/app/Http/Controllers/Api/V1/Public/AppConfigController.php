@@ -22,6 +22,12 @@ class AppConfigController extends Controller
             'brand' => SystemSettings::current()->only(SystemSettings::BRANDING),
             'bubble_color' => $settings->bubble_color,
             'widget' => $settings->only(ChatSettings::BRANDING),
+            'faq' => [
+                'enabled' => $settings->faq_deflection_enabled,
+                'title' => $settings->widget_faq_title,
+                'prompt' => $settings->widget_faq_prompt,
+                'button' => $settings->widget_faq_button,
+            ],
             'fields' => [
                 'name' => [
                     'enabled' => $settings->field_name_enabled,

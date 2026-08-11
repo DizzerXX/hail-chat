@@ -39,6 +39,7 @@ class ChatSettingsController extends Controller
                 'warn2_ms', 'warn2_en',
                 'closed_ms', 'closed_en',
                 ...ChatSettings::BRANDING,
+                ...ChatSettings::FAQ_CONFIG,
                 ...ChatSettings::FIELD_CONFIG,
             ]),
             // Options the settings screen renders the sound picker from.

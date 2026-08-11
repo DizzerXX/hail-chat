@@ -181,6 +181,15 @@ A **`cascade`** field is a dependent-dropdown tree (defined as pasted JSON,
 chooses; a started selection must be finished to a leaf. The answer is stored with its full
 `path` (`[{key,label}]` per level) so each level is addressable — e.g. for a CMS/CRM URL below.
 
+**FAQ deflection** (**Admin → Chat settings → FAQ deflection**). After the pre-chat form is
+submitted, the widget can show a **"Quick answers"** screen — an accordion of the inbox's FAQs
+in the visitor's language (from `/public/inboxes/{slug}/faqs`) — before any conversation is
+created. A **"Chat with a live agent"** button below the list proceeds to the chat (the message
+and fields entered on the pre-chat form are sent then). The screen is skipped automatically when
+deflection is off or there are no FAQs for the chosen language, and the toggle, heading, prompt,
+and button label are admin-editable (surfaced via `/public/app-config`). FAQs themselves are
+managed under **Admin → FAQs**.
+
 Prefer driving the API directly? It needs no authentication — the conversation UUID returned
 on start is the capability that authorizes all later calls for that conversation:
 

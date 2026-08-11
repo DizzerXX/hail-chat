@@ -48,6 +48,12 @@ class ChatSettingsRequest extends FormRequest
             'widget_start_label' => ['required', 'string', 'max:60'],
             'widget_input_placeholder' => ['required', 'string', 'max:120'],
 
+            // FAQ-deflection screen shown between the pre-chat form and the chat.
+            'faq_deflection_enabled' => ['required', 'boolean'],
+            'widget_faq_title' => ['required', 'string', 'max:120'],
+            'widget_faq_prompt' => ['required', 'string', 'max:200'],
+            'widget_faq_button' => ['required', 'string', 'max:60'],
+
             // Pre-chat fields — tier 1 toggles/labels.
             'field_name_enabled' => ['required', 'boolean'],
             'field_name_required' => ['required', 'boolean'],

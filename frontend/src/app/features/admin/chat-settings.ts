@@ -158,6 +158,35 @@ import { AdminApiService } from './admin-api.service';
 
         <mat-card appearance="outlined" class="section">
           <mat-card-header>
+            <mat-card-title>FAQ deflection</mat-card-title>
+            <mat-card-subtitle>
+              After the pre-chat form, show a "Quick answers" screen with this inbox's FAQs before the
+              visitor proceeds to a live chat. Skipped automatically when there are no FAQs.
+            </mat-card-subtitle>
+          </mat-card-header>
+          <mat-card-content>
+            <mat-slide-toggle [(ngModel)]="s.faq_deflection_enabled">Show the FAQ screen</mat-slide-toggle>
+
+            <div class="grid faq-copy">
+              <mat-form-field appearance="outline">
+                <mat-label>Screen title</mat-label>
+                <input matInput [(ngModel)]="s.widget_faq_title" [disabled]="!s.faq_deflection_enabled" />
+              </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>Proceed button label</mat-label>
+                <input matInput [(ngModel)]="s.widget_faq_button" [disabled]="!s.faq_deflection_enabled" />
+              </mat-form-field>
+              <mat-form-field appearance="outline" class="wide">
+                <mat-label>Prompt above the button</mat-label>
+                <input matInput [(ngModel)]="s.widget_faq_prompt" [disabled]="!s.faq_deflection_enabled" />
+              </mat-form-field>
+            </div>
+            <p class="muted hint">FAQs are managed on the FAQs page; the widget shows those matching the visitor's language.</p>
+          </mat-card-content>
+        </mat-card>
+
+        <mat-card appearance="outlined" class="section">
+          <mat-card-header>
             <mat-card-title>Pre-chat form</mat-card-title>
             <mat-card-subtitle>What the widget asks before a chat starts</mat-card-subtitle>
           </mat-card-header>
@@ -284,6 +313,12 @@ import { AdminApiService } from './admin-api.service';
     .timers {
       grid-template-columns: repeat(4, minmax(140px, 1fr));
       margin-top: 12px;
+    }
+    .faq-copy {
+      margin-top: 12px;
+    }
+    .faq-copy .wide {
+      grid-column: 1 / -1;
     }
     .color {
       display: flex;

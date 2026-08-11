@@ -52,6 +52,12 @@
     };
     let fieldInputs = []; // [{ key, builtin, required, el }]
 
+    // FAQ deflection (admin-driven via app-config). When enabled and the inbox
+    // has FAQs for the chosen language, the pre-chat form leads to a "Quick
+    // answers" screen before the chat starts.
+    let faqConfig = { enabled: true, title: 'Quick answers', prompt: "Didn't find what you were looking for?", button: 'Chat with a live agent' };
+    let pendingStart = null; // deferred conversation payload while the FAQ screen shows
+
     // ---------- styles ----------
     const css = `
   .tdec-btn{position:fixed;right:20px;bottom:20px;width:56px;height:56px;border-radius:50%;
@@ -102,6 +108,27 @@
   .tdec-pre label{font-size:12px;color:#52514e;display:flex;flex-direction:column;gap:4px}
   .tdec-pre input,.tdec-pre select{border:1px solid #c3c2b7;border-radius:8px;padding:9px 12px;font:inherit;width:100%;box-sizing:border-box}
   .tdec-pre .tdec-start{background:var(--tdec-accent,#2a78d6);color:#fff;border:none;border-radius:8px;padding:11px;cursor:pointer;font:inherit;margin-top:4px}
+  .tdec-faq{flex:1;overflow-y:auto;padding:18px;background:#f7f7f5;display:none;flex-direction:column}
+  .tdec-faq.open{display:flex}
+  .tdec-faq-title{font-size:22px;font-weight:800;margin:0 0 14px;line-height:1.15}
+  .tdec-faq-list{display:flex;flex-direction:column;gap:2px}
+  .tdec-faq-item{border-radius:10px}
+  .tdec-faq-item.open{background:#ececec}
+  .tdec-faq-q{display:flex;width:100%;box-sizing:border-box;justify-content:space-between;align-items:center;gap:10px;
+    background:none;border:none;cursor:pointer;font:inherit;font-weight:700;font-size:14px;text-align:left;
+    padding:13px 12px;color:#1c1b1f;border-radius:10px}
+  .tdec-faq-q:hover{background:rgba(0,0,0,.04)}
+  .tdec-faq-item.open .tdec-faq-q:hover{background:none}
+  .tdec-faq-chev{flex-shrink:0;font-size:12px;color:#52514e;transition:transform .15s ease}
+  .tdec-faq-item.open .tdec-faq-chev{transform:rotate(180deg)}
+  .tdec-faq-a{display:none;padding:0 12px 14px;line-height:1.5;color:#1c1b1f;white-space:pre-wrap;word-break:break-word;font-size:13.5px}
+  .tdec-faq-item.open .tdec-faq-a{display:block}
+  .tdec-faq-a a{color:var(--tdec-accent,#2a78d6);word-break:break-all}
+  .tdec-faq-foot{margin-top:auto;padding-top:16px}
+  .tdec-faq-prompt{text-align:center;color:#52514e;font-size:13px;margin:0 0 10px}
+  .tdec-faq-proceed{width:100%;background:var(--tdec-accent,#2a78d6);color:#fff;border:none;border-radius:10px;
+    padding:14px;cursor:pointer;font:inherit;font-weight:700;font-size:15px}
+  .tdec-faq-proceed:disabled{opacity:.5;cursor:default}
   `;
 
     // ---------- DOM ----------
@@ -134,6 +161,14 @@
       </label>
       <button class="tdec-start">Start chat</button>
     </div>
+    <div class="tdec-faq">
+      <h2 class="tdec-faq-title">Quick answers</h2>
+      <div class="tdec-faq-list"></div>
+      <div class="tdec-faq-foot">
+        <p class="tdec-faq-prompt">Didn't find what you were looking for?</p>
+        <button class="tdec-faq-proceed">Chat with a live agent</button>
+      </div>
+    </div>
     <div class="tdec-msgs" style="display:none"></div>
     <div class="tdec-typing">Agent is typing\u2026</div>
     <div class="tdec-bar" style="display:none">
@@ -155,6 +190,11 @@
     const refs = {
         status: panel.querySelector('.tdec-status'),
         pre: panel.querySelector('.tdec-pre'),
+        faq: panel.querySelector('.tdec-faq'),
+        faqTitle: panel.querySelector('.tdec-faq-title'),
+        faqList: panel.querySelector('.tdec-faq-list'),
+        faqPrompt: panel.querySelector('.tdec-faq-prompt'),
+        faqProceed: panel.querySelector('.tdec-faq-proceed'),
         msgs: panel.querySelector('.tdec-msgs'),
         typing: panel.querySelector('.tdec-typing'),
         bar: panel.querySelector('.tdec-bar'),
@@ -210,6 +250,7 @@
     refs.input.addEventListener('blur', stopVisitorTyping);
     refs.escalate.addEventListener('click', escalate);
     refs.end.addEventListener('click', endChat);
+    refs.faqProceed.addEventListener('click', proceedToChat);
     refs.attach.addEventListener('click', () => refs.file.click());
     refs.file.addEventListener('change', uploadFile);
 
@@ -232,10 +273,23 @@
             const data = (body && body.data) || {};
             if (data.bubble_color) document.documentElement.style.setProperty('--tdec-accent', data.bubble_color);
             applyBranding(data.widget);
+            applyFaq(data.faq);
             applyFields(data.fields);
         } catch (e) {
             /* keep the default accent + hardcoded copy */
         }
+    }
+
+    // Merge admin FAQ-deflection config and apply the static copy.
+    function applyFaq(f) {
+        if (!f) return;
+        faqConfig.enabled = f.enabled !== false;
+        if (f.title) faqConfig.title = f.title;
+        if (f.prompt) faqConfig.prompt = f.prompt;
+        if (f.button) faqConfig.button = f.button;
+        refs.faqTitle.textContent = faqConfig.title;
+        refs.faqPrompt.textContent = faqConfig.prompt;
+        refs.faqProceed.textContent = faqConfig.button;
     }
 
     // Merge admin field config and re-render the pre-chat form.
@@ -445,9 +499,9 @@
             }
         }
 
-        // Use request() (not api()) so we can surface a validation error instead of
-        // silently resyncing.
-        const result = await request('POST', `/api/v1/public/inboxes/${config.inbox}/conversations`, {
+        // Hold the conversation payload; it's sent when the visitor proceeds past
+        // the FAQ screen (or immediately when deflection is off / has no FAQs).
+        pendingStart = {
             message: message,
             visitor_name: visitor.visitor_name,
             visitor_email: visitor.visitor_email,
@@ -455,17 +509,88 @@
             language: refs.lang.value,
             fields: fields,
             meta: { page: location.href },
+        };
+
+        if (faqConfig.enabled) {
+            const faqs = await loadFaqs(pendingStart.language);
+            if (faqs.length) {
+                renderFaqList(faqs);
+                show('faq');
+                return;
+            }
+        }
+
+        await proceedToChat();
+    }
+
+    // Fetch the inbox's active FAQs for the chosen language. Failures (or none)
+    // fall through to starting the chat directly.
+    async function loadFaqs(language) {
+        try {
+            const result = await request(
+                'GET',
+                `/api/v1/public/inboxes/${config.inbox}/faqs?language=${encodeURIComponent(language)}`,
+            );
+            if (result.status >= 200 && result.status < 300 && result.data && Array.isArray(result.data.data)) {
+                return result.data.data;
+            }
+        } catch (e) {
+            /* fall through - deflection is optional */
+        }
+        return [];
+    }
+
+    // Build the accordion of question/answer items.
+    function renderFaqList(faqs) {
+        refs.faqList.innerHTML = '';
+        faqs.forEach(function (faq) {
+            const item = element('div', 'tdec-faq-item');
+
+            const q = element('button', 'tdec-faq-q');
+            q.type = 'button';
+            q.appendChild(element('span', 'tdec-faq-q-text', faq.question));
+            q.appendChild(element('span', 'tdec-faq-chev', '\u25BE'));
+
+            const a = element('div', 'tdec-faq-a');
+            appendLinkified(a, faq.answer || '');
+
+            q.addEventListener('click', function () {
+                item.classList.toggle('open');
+            });
+
+            item.append(q, a);
+            refs.faqList.appendChild(item);
         });
+        refs.faq.scrollTop = 0;
+    }
+
+    // Send the deferred conversation payload and switch to the chat view.
+    async function proceedToChat() {
+        if (!pendingStart) return;
+        refs.faqProceed.disabled = true;
+
+        // Use request() (not api()) so we can surface a validation error instead of
+        // silently resyncing.
+        const result = await request(
+            'POST',
+            `/api/v1/public/inboxes/${config.inbox}/conversations`,
+            pendingStart,
+        );
+
+        refs.faqProceed.disabled = false;
 
         if (result.status === 422) {
             refs.status.textContent = 'Please check your details and try again.';
+            show('pre');
             return;
         }
         if (result.status < 200 || result.status >= 300 || !result.data) {
             refs.status.textContent = 'Connection problem, please try again.';
+            show('pre');
             return;
         }
 
+        pendingStart = null;
         setConversation(result.data.data);
         localStorage.setItem(storageKey, conversation.uuid);
         (conversation.messages || []).forEach(render);
@@ -698,6 +823,7 @@
 
     function show(which) {
         refs.pre.style.display = which === 'pre' ? 'flex' : 'none';
+        refs.faq.classList.toggle('open', which === 'faq');
         refs.msgs.style.display = which === 'chat' ? 'flex' : 'none';
         refs.bar.style.display = which === 'chat' ? 'flex' : 'none';
         refs.foot.style.display = which === 'chat' ? 'flex' : 'none';
@@ -866,6 +992,29 @@
             return JSON.parse(text);
         } catch (error) {
             return {};
+        }
+    }
+
+    // Append plain text to a node, turning bare http(s) URLs into real links.
+    // Built from text + anchor nodes (never innerHTML) so answers can't inject markup.
+    function appendLinkified(node, text) {
+        const pattern = /(https?:\/\/[^\s]+)/g;
+        let lastIndex = 0;
+        let match;
+        while ((match = pattern.exec(text)) !== null) {
+            if (match.index > lastIndex) {
+                node.appendChild(document.createTextNode(text.slice(lastIndex, match.index)));
+            }
+            const link = document.createElement('a');
+            link.href = match[0];
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            link.textContent = match[0];
+            node.appendChild(link);
+            lastIndex = pattern.lastIndex;
+        }
+        if (lastIndex < text.length) {
+            node.appendChild(document.createTextNode(text.slice(lastIndex)));
         }
     }
 })();
