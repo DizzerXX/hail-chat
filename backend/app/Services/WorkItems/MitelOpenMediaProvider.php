@@ -77,6 +77,27 @@ class MitelOpenMediaProvider implements PollableProviderInterface, QueueDirector
     }
 
     /**
+     * Withdraw a still-queued MiCC item after the visitor left before any agent
+     * accepted it. Off by default (see config/mitel.php) because the MiCC
+     * cancel ActionType is unverified; when enabled it PUTs the configured
+     * action so the item leaves the agents' queues instead of routing to
+     * someone who'd find the visitor gone. The caller has already checked the
+     * conversation is unaccepted and still queued.
+     */
+    public function cancelWorkItem(Conversation $conversation): void
+    {
+        if (! config('mitel.cancel_queued_enabled') || $conversation->external_work_item_id === null) {
+            return;
+        }
+
+        $this->client->putActionValue(
+            $conversation->external_work_item_id,
+            (int) config('mitel.cancel_action'),
+            'cancel work item',
+        );
+    }
+
+    /**
      * The OpenMediaUpdateRequestModel carries only the Action — MiCC
      * re-runs its own routing. Team/agent arguments retarget local
      * metadata only.

@@ -93,9 +93,18 @@ class MitelClient
 
     public function putAction(string $id, MitelWorkItemAction $action): void
     {
+        $this->putActionValue($id, $action->value, strtolower($action->name).' work item');
+    }
+
+    /**
+     * PUT a raw ActionType value. Used for actions whose SDK enum value is
+     * operator-configured (e.g. cancel/withdraw) rather than a fixed constant.
+     */
+    public function putActionValue(string $id, int $action, string $label = 'update work item'): void
+    {
         $this->send(
-            fn (PendingRequest $http) => $http->put('/api/v1/openmedia/'.$id, ['Action' => $action->value]),
-            strtolower($action->name).' work item',
+            fn (PendingRequest $http) => $http->put('/api/v1/openmedia/'.$id, ['Action' => $action]),
+            $label,
         );
     }
 

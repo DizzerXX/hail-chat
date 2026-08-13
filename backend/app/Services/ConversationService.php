@@ -358,6 +358,7 @@ class ConversationService
     {
         abort_unless($conversation->status->isOpen(), 409, 'This conversation is already closed.');
 
+        $this->withdrawIfUnaccepted($conversation);
         $this->providers->resolve($conversation->inbox)->completeWorkItem($conversation);
 
         $this->appendMessage($conversation, SenderType::System, 'Conversation closed by '.$closedBy.'.');
@@ -426,8 +427,24 @@ class ConversationService
      * Shared tail for the two visitor-side abandonments: flip to `abandoned`,
      * stamp closed_at, fire the close webhook with the reason and broadcast.
      */
+    /**
+     * The visitor is leaving a conversation that is still waiting in the queue
+     * with no agent yet — ask the provider to withdraw the work item (a no-op
+     * for standalone; a MiCC retract, if enabled, for Mitel). Never touches a
+     * chat an agent has already accepted: that stays theirs to resolve.
+     */
+    private function withdrawIfUnaccepted(Conversation $conversation): void
+    {
+        if ($conversation->status === ConversationStatus::AwaitingAcceptance
+            && $conversation->accepted_at === null) {
+            $this->providers->resolve($conversation->inbox)->cancelWorkItem($conversation);
+        }
+    }
+
     private function abandon(Conversation $conversation, string $reason): Conversation
     {
+        $this->withdrawIfUnaccepted($conversation);
+
         // Record who was handling it when it was abandoned — the audit trail
         // must keep the chat attributed to that agent (e.g. abandoned mid-transfer
         // stays "was with Agent A"), which is why we never clear assigned_agent_id.

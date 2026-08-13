@@ -7,6 +7,7 @@ use App\Exceptions\MitelApiException;
 use App\Models\Conversation;
 use App\Models\Inbox;
 use App\Models\Team;
+use App\Services\ConversationService;
 use App\Services\WorkItems\MitelOpenMediaProvider;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
@@ -138,6 +139,71 @@ class MitelProviderTest extends TestCase
 
         $this->assertSame(ConversationStatus::Closed, $conversation->fresh()->status);
         $this->assertNotNull($conversation->fresh()->closed_at);
+
+        Http::assertNothingSent();
+    }
+
+    private function queuedUnaccepted(): Conversation
+    {
+        return $this->makeMitelConversation([
+            'status' => ConversationStatus::AwaitingAcceptance,
+            'accepted_at' => null,
+            'external_work_item_id' => 'wi-42',
+        ]);
+    }
+
+    private function assertCancelPut(bool $sent): void
+    {
+        $matcher = fn (Request $request) => $request->method() === 'PUT'
+            && $request->url() === 'https://micc.test/miccsdk/api/v1/openmedia/wi-42'
+            && $request->data() === ['Action' => 7];
+
+        $sent ? Http::assertSent($matcher) : Http::assertNotSent($matcher);
+    }
+
+    public function test_visitor_ending_a_queued_chat_withdraws_the_micc_item_when_enabled(): void
+    {
+        config(['mitel.cancel_queued_enabled' => true, 'mitel.cancel_action' => 7]);
+        Http::fake(['micc.test/*' => Http::response(['ok' => true])]);
+
+        app(ConversationService::class)->close($this->queuedUnaccepted(), 'visitor');
+
+        $this->assertCancelPut(true);
+    }
+
+    public function test_visitor_leaving_the_queue_tab_also_withdraws_the_item(): void
+    {
+        config(['mitel.cancel_queued_enabled' => true, 'mitel.cancel_action' => 7]);
+        Http::fake(['micc.test/*' => Http::response(['ok' => true])]);
+
+        app(ConversationService::class)->abandonAfterLeaving($this->queuedUnaccepted());
+
+        $this->assertCancelPut(true);
+    }
+
+    public function test_an_accepted_chat_is_never_withdrawn(): void
+    {
+        config(['mitel.cancel_queued_enabled' => true, 'mitel.cancel_action' => 7]);
+        Http::fake(['micc.test/*' => Http::response(['ok' => true])]);
+
+        // An agent already accepted — closing must not retract from MiCC.
+        $conversation = $this->makeMitelConversation([
+            'status' => ConversationStatus::Active,
+            'accepted_at' => now(),
+            'external_work_item_id' => 'wi-42',
+        ]);
+
+        app(ConversationService::class)->close($conversation, 'agent');
+
+        $this->assertCancelPut(false);
+    }
+
+    public function test_queue_withdrawal_is_off_by_default(): void
+    {
+        Http::fake(['micc.test/*' => Http::response(['ok' => true])]);
+
+        // No config override → disabled → the queued item is left for MiCC's own timers.
+        app(ConversationService::class)->close($this->queuedUnaccepted(), 'visitor');
 
         Http::assertNothingSent();
     }

@@ -40,6 +40,11 @@ class StandaloneProvider implements WorkItemProviderInterface
         $conversation->save();
     }
 
+    public function cancelWorkItem(Conversation $conversation): void
+    {
+        // No external queue — the caller closes/abandons the row directly.
+    }
+
     public function rerouteWorkItem(Conversation $conversation, ?Team $team = null, ?Agent $agent = null): void
     {
         $conversation->team_id = $team?->id;

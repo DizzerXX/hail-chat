@@ -59,4 +59,26 @@ return [
     // bare chat window, which also claims the conversation for whoever opens it.
     'agent_chat_url' => env('MITEL_AGENT_CHAT_URL'),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Withdraw a still-queued work item when the visitor leaves
+    |--------------------------------------------------------------------------
+    |
+    | When a visitor ends the chat (or closes the tab) while still WAITING IN
+    | QUEUE — before any agent has accepted — TDEChat can ask MiCC to withdraw
+    | the work item so it doesn't strand a "ghost" item for an agent to pick up.
+    | It NEVER fires once an agent has accepted (that case stays theirs to
+    | resolve in Ignite).
+    |
+    | OFF by default. The exact MiCC "cancel/withdraw" ActionType is NOT
+    | verified in this codebase (the SDK enum here only confirms Complete=0,
+    | Reroute=1). Confirm the value against your MiCC SDK's ActionType enum,
+    | set MITEL_CANCEL_ACTION to it, then enable with MITEL_CANCEL_QUEUED=true.
+    |
+    */
+    'cancel_queued_enabled' => (bool) env('MITEL_CANCEL_QUEUED', false),
+
+    // [Guessing] placeholder ActionType for cancel/withdraw — verify before enabling.
+    'cancel_action' => (int) env('MITEL_CANCEL_ACTION', 2),
+
 ];
