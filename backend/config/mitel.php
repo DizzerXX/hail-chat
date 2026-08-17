@@ -65,20 +65,20 @@ return [
     |--------------------------------------------------------------------------
     |
     | When a visitor ends the chat (or closes the tab) while still WAITING IN
-    | QUEUE — before any agent has accepted — TDEChat can ask MiCC to withdraw
-    | the work item so it doesn't strand a "ghost" item for an agent to pick up.
-    | It NEVER fires once an agent has accepted (that case stays theirs to
-    | resolve in Ignite).
+    | QUEUE — before any agent has accepted — TDEChat asks MiCC to withdraw the
+    | work item so it doesn't strand a "ghost" item for an agent to pick up. It
+    | NEVER fires once an agent has accepted (that case stays theirs to resolve
+    | in Ignite), so this only ever touches items no agent is handling.
     |
-    | OFF by default. The exact MiCC "cancel/withdraw" ActionType is NOT
-    | verified in this codebase (the SDK enum here only confirms Complete=0,
-    | Reroute=1). Confirm the value against your MiCC SDK's ActionType enum,
-    | set MITEL_CANCEL_ACTION to it, then enable with MITEL_CANCEL_QUEUED=true.
+    | ON by default, using Complete (ActionType 0) — the confirmed "this work
+    | item is finished" action. Complete is safe here precisely because the
+    | guard limits it to unaccepted, still-queued items (there's no Ignite
+    | session to disturb). If a MiCC deployment needs a different ActionType,
+    | override MITEL_CANCEL_ACTION; disable entirely with MITEL_CANCEL_QUEUED=false.
     |
     */
-    'cancel_queued_enabled' => (bool) env('MITEL_CANCEL_QUEUED', false),
+    'cancel_queued_enabled' => (bool) env('MITEL_CANCEL_QUEUED', true),
 
-    // [Guessing] placeholder ActionType for cancel/withdraw — verify before enabling.
-    'cancel_action' => (int) env('MITEL_CANCEL_ACTION', 2),
+    'cancel_action' => (int) env('MITEL_CANCEL_ACTION', 0),
 
 ];

@@ -198,11 +198,23 @@ class MitelProviderTest extends TestCase
         $this->assertCancelPut(false);
     }
 
-    public function test_queue_withdrawal_is_off_by_default(): void
+    public function test_queue_withdrawal_is_on_by_default_using_complete(): void
     {
         Http::fake(['micc.test/*' => Http::response(['ok' => true])]);
 
-        // No config override → disabled → the queued item is left for MiCC's own timers.
+        // No config override → uses the defaults (enabled, Complete=0).
+        app(ConversationService::class)->close($this->queuedUnaccepted(), 'visitor');
+
+        Http::assertSent(fn (Request $request) => $request->method() === 'PUT'
+            && $request->url() === 'https://micc.test/miccsdk/api/v1/openmedia/wi-42'
+            && $request->data() === ['Action' => 0]);
+    }
+
+    public function test_queue_withdrawal_can_be_disabled(): void
+    {
+        config(['mitel.cancel_queued_enabled' => false]);
+        Http::fake(['micc.test/*' => Http::response(['ok' => true])]);
+
         app(ConversationService::class)->close($this->queuedUnaccepted(), 'visitor');
 
         Http::assertNothingSent();

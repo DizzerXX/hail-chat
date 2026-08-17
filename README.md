@@ -272,14 +272,14 @@ in Ignite, and the poller reflects that resolution back — so a visitor ending 
 TDEChat's own record (and fires `conversation.closed`) but leaves the agent's Ignite queue
 untouched for them to resolve manually.
 
-**Withdrawing a still-queued item (opt-in).** The one exception is a visitor who leaves
-**while still waiting in the queue, before any agent accepts** — that would otherwise strand a
-"ghost" item MiCC could route to an agent who then finds the visitor gone. `cancelWorkItem`
-can retract it via a PUT action, guarded so it **never** fires once a chat is accepted
-(`accepted_at` set). It is **off by default** (`MITEL_CANCEL_QUEUED=false`): the MiCC
-cancel/withdraw `ActionType` value is not verified in this codebase (only `Complete=0` /
-`Reroute=1` are), so confirm it against your MiCC SDK, set `MITEL_CANCEL_ACTION` to that value,
-then enable. When off, the queued item is simply left for MiCC's own no-reply timers.
+**Withdrawing a still-queued item.** The one exception is a visitor who leaves **while still
+waiting in the queue, before any agent accepts** — that would otherwise strand a "ghost" item
+MiCC could route to an agent who then finds the visitor gone. `cancelWorkItem` retracts it via a
+PUT `Complete` (ActionType `0`), guarded so it **never** fires once a chat is accepted
+(`accepted_at` set) — Complete is safe here precisely because no agent is handling the item.
+**On by default** (`MITEL_CANCEL_QUEUED=true`); a deployment whose MiCC needs a different
+ActionType can override `MITEL_CANCEL_ACTION`, or disable it entirely with
+`MITEL_CANCEL_QUEUED=false` (leaving the item to MiCC's own no-reply timers).
 
 Live responses use camelCase keys and string state
 names — the client accepts both those and the swagger's PascalCase/integers.
