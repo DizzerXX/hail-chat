@@ -62,7 +62,7 @@
         skipBot: false, // proceed straight to a human after the FAQ screen
         title: { ms: 'Jawapan Pantas', en: 'Quick answers' },
         prompt: { ms: 'Tidak menemui apa yang anda cari?', en: "Didn't find what you were looking for?" },
-        button: { ms: 'Sembang dengan ejen', en: 'Chat with a live agent' },
+        button: { ms: 'Berbual dengan ejen', en: 'Chat with a live agent' },
     };
     let cameFromFaq = false; // the visitor reached the form via the FAQ screen
     // Languages offered in the pre-chat form and the FAQ tabs (mirrors the <select>).

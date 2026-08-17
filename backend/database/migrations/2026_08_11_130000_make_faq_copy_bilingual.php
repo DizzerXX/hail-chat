@@ -16,7 +16,7 @@ return new class extends Migration
             $table->string('widget_faq_title_en')->default('Quick answers');
             $table->string('widget_faq_prompt_ms')->default('Tidak menemui apa yang anda cari?');
             $table->string('widget_faq_prompt_en')->default("Didn't find what you were looking for?");
-            $table->string('widget_faq_button_ms')->default('Sembang dengan ejen');
+            $table->string('widget_faq_button_ms')->default('Berbual dengan ejen');
             $table->string('widget_faq_button_en')->default('Chat with a live agent');
         });
 

@@ -52,7 +52,7 @@ return [
         'widget_faq_title_en' => 'Quick answers',
         'widget_faq_prompt_ms' => 'Tidak menemui apa yang anda cari?',
         'widget_faq_prompt_en' => "Didn't find what you were looking for?",
-        'widget_faq_button_ms' => 'Sembang dengan ejen',
+        'widget_faq_button_ms' => 'Berbual dengan ejen',
         'widget_faq_button_en' => 'Chat with a live agent',
 
         // Pre-chat fields. Tier 1: the three first-class fields (name shows by
