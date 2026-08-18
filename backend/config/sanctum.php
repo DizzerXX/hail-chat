@@ -50,7 +50,11 @@ return [
     |
     */
 
-    'expiration' => null,
+    // Absolute session cap: every token expires this many minutes after it is
+    // issued (default 12h). Sanctum returns 401 once the window passes, which the
+    // frontend interceptor turns into a forced re-login. Idle logout is a
+    // separate, client-side layer (see the Angular IdleService).
+    'expiration' => (int) env('SANCTUM_EXPIRATION', 720),
 
     /*
     |--------------------------------------------------------------------------

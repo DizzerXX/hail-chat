@@ -1,6 +1,7 @@
 import { Component, OnDestroy, OnInit, inject } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { AppConfigService } from '../../core/app-config.service';
+import { IdleService } from '../../core/idle.service';
 import { NavRail } from '../../core/nav-rail';
 import { NotificationService } from '../../core/notification.service';
 import { ConversationList } from './conversation-list';
@@ -59,14 +60,17 @@ import { ConversationList } from './conversation-list';
 export class AgentShell implements OnInit, OnDestroy {
   private readonly notifications = inject(NotificationService);
   private readonly appConfig = inject(AppConfigService);
+  private readonly idle = inject(IdleService);
 
   async ngOnInit(): Promise<void> {
     // Loads the theme (bubble colour) and the sound choices the notifications need.
     await this.appConfig.load();
     this.notifications.start();
+    this.idle.start();
   }
 
   ngOnDestroy(): void {
     this.notifications.stop();
+    this.idle.stop();
   }
 }

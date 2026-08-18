@@ -34,6 +34,10 @@ Schedule::job(new IdleSweepJob())->everyMinute()->withoutOverlapping();
 Schedule::job(new ArchiveExpiredConversationsJob())->dailyAt('03:30')->withoutOverlapping();
 Schedule::job(new PurgeRecycleBinJob())->dailyAt('03:45')->withoutOverlapping();
 
+// Drop expired API tokens (past the absolute cap) so personal_access_tokens
+// doesn't accumulate dead rows.
+Schedule::command('sanctum:prune-expired --hours=24')->daily();
+
 if (config('mitel.enabled')) {
     $poll = Schedule::job(new PollOpenMediaWorkItems())->withoutOverlapping();
 

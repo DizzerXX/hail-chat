@@ -114,9 +114,16 @@ Enum-like columns are stored as strings and cast to PHP backed enums in
 
 ## Authentication & RBAC
 
-API authentication uses Sanctum bearer tokens. Authorisation is a lightweight custom RBAC:
-each user has one role, roles hold permissions, and routes are guarded by the `permission:`
-middleware alias:
+API authentication uses Sanctum bearer tokens. **Tokens expire on two independent layers:** an
+**absolute cap** — every token dies `SANCTUM_EXPIRATION` minutes after login (default **720 = 12 h**,
+[config/sanctum.php](backend/config/sanctum.php)); Sanctum then 401s and the frontend interceptor
+forces a re-login. And a client-side **idle logout** — after **30 min** with no user interaction the
+dashboard warns ("Stay signed in?") and, if unanswered, revokes the token and returns to login
+([idle.service.ts](frontend/src/app/core/idle.service.ts), wired into the agent + admin shells; the
+embedded MiCC window is exempt). Expired tokens are pruned daily (`sanctum:prune-expired`).
+
+Authorisation is a lightweight custom RBAC: each user has one role, roles hold permissions, and
+routes are guarded by the `permission:` middleware alias:
 
 ```php
 Route::post('/faqs', ...)->middleware(['auth:sanctum', 'permission:faqs.manage']);

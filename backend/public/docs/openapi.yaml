@@ -1447,7 +1447,11 @@ components:
     bearerAuth:
       type: http
       scheme: bearer
-      description: Sanctum personal access token from POST /api/v1/auth/login
+      description: >-
+        Sanctum personal access token from POST /api/v1/auth/login. Tokens expire
+        SANCTUM_EXPIRATION minutes after issue (default 720 = 12h); an expired token
+        returns 401 and the client must log in again. (The dashboard also logs out
+        client-side after 30 minutes of inactivity.)
 
   parameters:
     InboxSlug:

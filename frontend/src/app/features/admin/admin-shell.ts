@@ -1,8 +1,9 @@
-import { Component, inject } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { NavRail } from '../../core/nav-rail';
 import { AuthService } from '../../core/auth.service';
+import { IdleService } from '../../core/idle.service';
 
 interface NavItem {
   path: string;
@@ -113,8 +114,17 @@ interface NavItem {
     }
   `,
 })
-export class AdminShell {
+export class AdminShell implements OnInit, OnDestroy {
   protected readonly auth = inject(AuthService);
+  private readonly idle = inject(IdleService);
+
+  ngOnInit(): void {
+    this.idle.start();
+  }
+
+  ngOnDestroy(): void {
+    this.idle.stop();
+  }
 
   private readonly nav: NavItem[] = [
     { path: 'analytics', label: 'Analytics', icon: 'insights', permission: 'analytics.view' },
