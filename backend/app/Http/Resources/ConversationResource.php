@@ -48,12 +48,12 @@ class ConversationResource extends JsonResource
                 'name' => $this->team->name,
             ]),
             'meta' => $this->meta,
-            // The visitor's place in line, computed only for the widget path
-            // (the public controller opts in) so agent list views don't pay for it.
-            'queue_position' => $this->when(
-                (bool) $request->attributes->get('with_queue_position') && $this->status === ConversationStatus::AwaitingAcceptance,
-                fn () => app(ConversationService::class)->queuePosition($this->resource),
-            ),
+            // Queue position + wait estimate + agent presence, computed only for
+            // the widget path (the public controller opts in) so agent list views
+            // don't pay for it. Merged so all three appear as top-level fields.
+            ...($request->attributes->get('with_queue_position') && $this->status === ConversationStatus::AwaitingAcceptance
+                ? app(ConversationService::class)->queueEstimate($this->resource)
+                : []),
             'last_activity_at' => $this->last_activity_at,
             'accepted_at' => $this->accepted_at,
             'closed_at' => $this->closed_at,

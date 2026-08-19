@@ -55,6 +55,9 @@ class ChatSettingsTest extends TestCase
             'widget_faq_prompt_en' => "Didn't find what you were looking for?",
             'widget_faq_button_ms' => 'Sembang dengan ejen',
             'widget_faq_button_en' => 'Chat with a live agent',
+            'wait_time_enabled' => true,
+            'no_agents_ms' => 'Tiada ejen tersedia.',
+            'no_agents_en' => 'No agents available.',
             'field_name_enabled' => true,
             'field_name_required' => false,
             'field_email_enabled' => false,
@@ -241,6 +244,27 @@ class ChatSettingsTest extends TestCase
     {
         $this->putJson('/api/v1/admin/chat-settings', $this->payload(['widget_faq_button_en' => '']))
             ->assertUnprocessable()->assertJsonValidationErrors('widget_faq_button_en');
+    }
+
+    public function test_queue_settings_persist_and_reach_the_widget(): void
+    {
+        $this->putJson('/api/v1/admin/chat-settings', $this->payload([
+            'wait_time_enabled' => false,
+            'no_agents_ms' => 'Tiada ejen.',
+            'no_agents_en' => 'Nobody home.',
+        ]))->assertOk()->assertJsonPath('data.wait_time_enabled', false);
+
+        ChatSettings::forgetCurrent();
+
+        $this->getJson('/api/v1/public/app-config')
+            ->assertOk()
+            ->assertJsonPath('data.queue.wait_time_enabled', false)
+            ->assertJsonPath('data.queue.no_agents.ms', 'Tiada ejen.')
+            ->assertJsonPath('data.queue.no_agents.en', 'Nobody home.');
+
+        // The notice text is required.
+        $this->putJson('/api/v1/admin/chat-settings', $this->payload(['no_agents_en' => '']))
+            ->assertUnprocessable()->assertJsonValidationErrors('no_agents_en');
     }
 
     public function test_public_app_config_exposes_the_fields_block(): void

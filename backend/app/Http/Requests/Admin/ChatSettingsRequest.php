@@ -58,6 +58,11 @@ class ChatSettingsRequest extends FormRequest
             'widget_faq_button_ms' => ['required', 'string', 'max:60'],
             'widget_faq_button_en' => ['required', 'string', 'max:60'],
 
+            // Queue & availability.
+            'wait_time_enabled' => ['required', 'boolean'],
+            'no_agents_ms' => ['required', 'string', 'max:300'],
+            'no_agents_en' => ['required', 'string', 'max:300'],
+
             // Pre-chat fields — tier 1 toggles/labels.
             'field_name_enabled' => ['required', 'boolean'],
             'field_name_required' => ['required', 'boolean'],

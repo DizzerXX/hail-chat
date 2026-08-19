@@ -55,6 +55,12 @@ return [
         'widget_faq_button_ms' => 'Berbual dengan ejen',
         'widget_faq_button_en' => 'Chat with a live agent',
 
+        // Queue & availability: show the estimated wait time on the waiting
+        // screen, and the bilingual notice shown when no agents are online.
+        'wait_time_enabled' => true,
+        'no_agents_ms' => 'Tiada ejen tersedia sekarang. Tinggalkan mesej anda dan kami akan menghubungi anda semula.',
+        'no_agents_en' => "No agents are available right now. Leave your message and we'll get back to you.",
+
         // Pre-chat fields. Tier 1: the three first-class fields (name shows by
         // default; collecting email is what makes contact history useful).
         'field_name_enabled' => true,
@@ -102,5 +108,9 @@ return [
     // flag well within this window. The sweep runs once a minute, so the real
     // end lands between this value and ~60s later.
     'visitor_left_grace_seconds' => (int) env('CHAT_VISITOR_LEFT_GRACE', 30),
+
+    // Fallback mean handle time (seconds) used for the queue wait estimate before
+    // there's enough closed-conversation history to measure one.
+    'wait_time_default_seconds' => (int) env('CHAT_WAIT_TIME_DEFAULT', 300),
 
 ];

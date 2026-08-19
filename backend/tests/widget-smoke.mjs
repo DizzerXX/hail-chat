@@ -576,5 +576,73 @@ const agentMessage = { id: 3, sender_type: 'agent', agent: { id: 1, display_name
   check(refs.status.textContent.includes('Waiting for an agent'), 'skip-bot escalates straight to the human queue');
 }
 
+// ---------- scenario 10: no agents online -> notice, composer stays open ----------
+{
+  const waiting = (extra) => ({
+    uuid: 'uuid-1',
+    status: 'awaiting_acceptance',
+    language: 'ms',
+    visitor: { name: 'Danish', email: null, phone: null },
+    assigned_agent: null,
+    messages: [],
+    ...extra,
+  });
+
+  const { panel } = makeSandbox({
+    responses: [{ status: 201, body: { data: waiting({ agents_online: false }) } }],
+  });
+  await new Promise((r) => setTimeout(r, 0));
+  await new Promise((r) => setTimeout(r, 0));
+
+  const refs = {
+    first: panel.querySelector('.tdec-first'),
+    start: panel.querySelector('.tdec-start'),
+    status: panel.querySelector('.tdec-status'),
+    input: panel.querySelector('.tdec-input'),
+  };
+
+  refs.first.value = 'hello';
+  await refs.start.fire('click');
+  check(refs.status.textContent.includes('Tiada ejen'), 'shows the no-agents-online notice');
+  check(refs.input.disabled === false, 'composer stays open so the visitor can leave a message');
+}
+
+// ---------- scenario 11: queue position + coarse wait estimate ----------
+{
+  const { panel } = makeSandbox({
+    responses: [
+      {
+        status: 201,
+        body: {
+          data: {
+            uuid: 'uuid-1',
+            status: 'awaiting_acceptance',
+            language: 'ms',
+            visitor: { name: 'Danish', email: null, phone: null },
+            assigned_agent: null,
+            queue_position: 1,
+            estimated_wait_seconds: 200,
+            agents_online: true,
+            messages: [],
+          },
+        },
+      },
+    ],
+  });
+  await new Promise((r) => setTimeout(r, 0));
+  await new Promise((r) => setTimeout(r, 0));
+
+  const refs = {
+    first: panel.querySelector('.tdec-first'),
+    start: panel.querySelector('.tdec-start'),
+    status: panel.querySelector('.tdec-status'),
+  };
+
+  refs.first.value = 'hello';
+  await refs.start.fire('click');
+  check(refs.status.textContent.includes('#1 in queue'), 'shows the queue position');
+  check(refs.status.textContent.includes('kurang 5 minit'), 'appends a coarse wait estimate');
+}
+
 console.log(failures === 0 ? '\nWIDGET SMOKE: ALL PASS' : `\nWIDGET SMOKE: ${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

@@ -139,6 +139,12 @@ paths:
                           title: { $ref: '#/components/schemas/BilingualText' }
                           prompt: { $ref: '#/components/schemas/BilingualText' }
                           button: { $ref: '#/components/schemas/BilingualText' }
+                      queue:
+                        type: object
+                        description: Waiting-screen config — whether to show the wait estimate, and the bilingual no-agents-online notice.
+                        properties:
+                          wait_time_enabled: { type: boolean, example: true }
+                          no_agents: { $ref: '#/components/schemas/BilingualText' }
 
   /api/v1/public/conversations/{conversationUuid}:
     get:
@@ -1677,6 +1683,15 @@ components:
                 name: { type: string }
             - type: 'null'
         meta: { type: [object, 'null'] }
+        queue_position:
+          type: [integer, 'null']
+          description: The visitor's place in line while awaiting_acceptance (widget path only).
+        estimated_wait_seconds:
+          type: [integer, 'null']
+          description: Coarse our-side wait estimate (standalone only; null for Mitel or when it can't be estimated).
+        agents_online:
+          type: boolean
+          description: False when no agent is online for a queued standalone conversation — the widget then shows the no-agents notice.
         last_activity_at: { type: string, format: date-time }
         accepted_at: { type: [string, 'null'], format: date-time }
         closed_at: { type: [string, 'null'], format: date-time }
@@ -1967,6 +1982,11 @@ components:
         warn2_en: { type: string }
         closed_ms: { type: string }
         closed_en: { type: string }
+        wait_time_enabled:
+          type: boolean
+          description: Show the estimated wait time on the widget's waiting screen.
+        no_agents_ms: { type: string }
+        no_agents_en: { type: string }
         faq_deflection_enabled:
           type: boolean
           description: Open the widget on the "Quick answers" FAQ screen before the pre-chat form.

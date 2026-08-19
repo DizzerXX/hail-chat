@@ -29,6 +29,10 @@ class AppConfigController extends Controller
                 'prompt' => ['ms' => $settings->widget_faq_prompt_ms, 'en' => $settings->widget_faq_prompt_en],
                 'button' => ['ms' => $settings->widget_faq_button_ms, 'en' => $settings->widget_faq_button_en],
             ],
+            'queue' => [
+                'wait_time_enabled' => $settings->wait_time_enabled,
+                'no_agents' => ['ms' => $settings->no_agents_ms, 'en' => $settings->no_agents_en],
+            ],
             'fields' => [
                 'name' => [
                     'enabled' => $settings->field_name_enabled,

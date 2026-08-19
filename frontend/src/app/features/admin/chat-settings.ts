@@ -259,6 +259,33 @@ import { AdminApiService } from './admin-api.service';
 
         <mat-card appearance="outlined" class="section">
           <mat-card-header>
+            <mat-card-title>Queue &amp; availability</mat-card-title>
+            <mat-card-subtitle>Standalone inboxes only — Mitel/Ignite reports its own queue</mat-card-subtitle>
+          </mat-card-header>
+          <mat-card-content>
+            <mat-slide-toggle [(ngModel)]="s.wait_time_enabled">
+              Show the estimated wait time on the widget's waiting screen
+            </mat-slide-toggle>
+
+            <div class="grid faq-copy">
+              <mat-form-field appearance="outline" class="wide">
+                <mat-label>No-agents-online notice (BM)</mat-label>
+                <input matInput [(ngModel)]="s.no_agents_ms" />
+              </mat-form-field>
+              <mat-form-field appearance="outline" class="wide">
+                <mat-label>No-agents-online notice (EN)</mat-label>
+                <input matInput [(ngModel)]="s.no_agents_en" />
+              </mat-form-field>
+            </div>
+            <p class="muted hint">
+              Shown to a waiting visitor when no agents are online. The composer stays open so they
+              can still leave a message.
+            </p>
+          </mat-card-content>
+        </mat-card>
+
+        <mat-card appearance="outlined" class="section">
+          <mat-card-header>
             <mat-card-title>Idle handling</mat-card-title>
             <mat-card-subtitle>Standalone inboxes only — Mitel/Ignite manages its own timers</mat-card-subtitle>
           </mat-card-header>

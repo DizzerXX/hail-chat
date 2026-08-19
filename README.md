@@ -168,6 +168,15 @@ public API, streams bot/agent replies and typing indicators over Reverb (with HT
 a fallback), offers "Talk to a human" escalation, and resumes the conversation across page
 reloads via localStorage. A demo host page ships at `/widget-demo.html`.
 
+**Waiting screen.** A queued visitor sees their **place in line** ("#N in queue") and — for
+**standalone** inboxes — an our-side **estimated wait** shown as a deliberately coarse range
+("less than 5 minutes", "about 10 minutes", "more than 15 minutes"); the estimate is
+`position × recent-avg-handle-time ÷ online agents` and can be toggled off in Chat settings. When
+**no agents are online** the widget shows an admin-editable bilingual notice and keeps the
+composer open so the visitor can still leave a message for whoever picks it up next. (Mitel
+inboxes get their position from MiCC and no our-side estimate.) The `estimated_wait_seconds` /
+`agents_online` fields ride the same conversation poll as `queue_position`.
+
 **Branding is admin-configurable** (no embed changes): **Admin → Chat settings → Widget
 branding** sets the header title/subtitle, launcher and header icons (an emoji *or* an image
 URL), the bot name, and the pre-chat labels/placeholders. The widget reads them from

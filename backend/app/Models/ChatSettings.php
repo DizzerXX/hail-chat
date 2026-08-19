@@ -38,6 +38,12 @@ class ChatSettings extends Model
         'widget_faq_button_ms', 'widget_faq_button_en',
     ];
 
+    /** Queue & availability: wait-time toggle + bilingual no-agents notice. */
+    public const QUEUE_CONFIG = [
+        'wait_time_enabled',
+        'no_agents_ms', 'no_agents_en',
+    ];
+
     /** Pre-chat field configuration (tier 1 toggles/labels + tier 2 custom fields). */
     public const FIELD_CONFIG = [
         'field_name_enabled',
@@ -57,6 +63,7 @@ class ChatSettings extends Model
             'idle_enabled' => 'boolean',
             'faq_deflection_enabled' => 'boolean',
             'faq_skip_bot' => 'boolean',
+            'wait_time_enabled' => 'boolean',
             'customer_warn1_minutes' => 'integer',
             'customer_warn2_minutes' => 'integer',
             'customer_close_minutes' => 'integer',

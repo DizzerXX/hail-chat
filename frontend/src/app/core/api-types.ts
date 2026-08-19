@@ -331,6 +331,10 @@ export interface ChatSettings {
   widget_faq_prompt_en: string;
   widget_faq_button_ms: string;
   widget_faq_button_en: string;
+  // Queue & availability
+  wait_time_enabled: boolean;
+  no_agents_ms: string;
+  no_agents_en: string;
   // Pre-chat fields (tier 1 toggles/labels + tier 2 custom)
   field_name_enabled: boolean;
   field_name_required: boolean;

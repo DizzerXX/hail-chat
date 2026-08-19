@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\AgentStatus;
 use App\Enums\ChannelType;
 use App\Enums\ConversationStatus;
 use App\Enums\SenderType;
@@ -23,6 +24,7 @@ use App\Services\WorkItems\WorkItemProviderResolver;
 use App\Services\Webhooks\WebhookDispatcher;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -174,6 +176,63 @@ class ConversationService
             ->count();
 
         return $ahead + 1;
+    }
+
+    /**
+     * Queue position + a rough wait estimate + agent presence, for the widget's
+     * waiting screen. Standalone only — Mitel queues are owned by MiCC, so those
+     * carry no estimate and never trigger the "no agents" notice.
+     *
+     * @return array{queue_position: int|null, estimated_wait_seconds: int|null, agents_online: bool}
+     */
+    public function queueEstimate(Conversation $conversation): array
+    {
+        $position = $this->queuePosition($conversation);
+
+        if ($conversation->inbox->channel_type === ChannelType::MitelOpenMedia) {
+            return ['queue_position' => $position, 'estimated_wait_seconds' => null, 'agents_online' => true];
+        }
+
+        // Agents who could pick this up: the routed team, or everyone for the
+        // general queue (mirrors the agent-side queue visibility).
+        $statuses = Agent::query()
+            ->when(
+                $conversation->team_id !== null,
+                fn ($query) => $query->whereHas('teams', fn ($team) => $team->whereKey($conversation->team_id)),
+            )
+            ->pluck('status');
+
+        $online = $statuses->reject(fn (AgentStatus $status) => $status === AgentStatus::Offline)->count();
+        if ($online === 0) {
+            // Nobody is around at all — show the "no agents online" notice.
+            return ['queue_position' => $position, 'estimated_wait_seconds' => null, 'agents_online' => false];
+        }
+
+        // Capacity that actually drains the queue: available now, or busy (they free up).
+        $capacity = $statuses
+            ->filter(fn (AgentStatus $status) => in_array($status, [AgentStatus::Available, AgentStatus::Busy], true))
+            ->count();
+
+        $eta = ($position === null || $capacity === 0)
+            ? null
+            : (int) ceil($position * $this->averageHandleSeconds() / $capacity);
+
+        return ['queue_position' => $position, 'estimated_wait_seconds' => $eta, 'agents_online' => true];
+    }
+
+    /** Recent mean handle time (accept→close), cached; falls back to the configured default. */
+    private function averageHandleSeconds(): float
+    {
+        return Cache::remember('queue.avg_handle_seconds', 60, function (): float {
+            $avg = Conversation::query()
+                ->where('status', ConversationStatus::Closed)
+                ->whereNotNull('accepted_at')
+                ->where('closed_at', '>=', now()->subDays(7))
+                ->selectRaw('avg(extract(epoch from (closed_at - accepted_at))) as seconds')
+                ->value('seconds');
+
+            return $avg !== null ? (float) $avg : (float) config('chat.wait_time_default_seconds', 300);
+        });
     }
 
     /**

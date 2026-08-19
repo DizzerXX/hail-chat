@@ -73,6 +73,16 @@
     let faqLang = config.language; // language shown on the FAQ screen
     const faqCache = {}; // language -> FAQ list, so switching tabs doesn't refetch
 
+    // Queue & availability (admin-driven via app-config): whether to show the
+    // wait-time estimate, and the bilingual "no agents online" notice.
+    let queueConfig = {
+        waitTimeEnabled: true,
+        noAgents: {
+            ms: 'Tiada ejen tersedia sekarang. Tinggalkan mesej anda dan kami akan menghubungi anda semula.',
+            en: "No agents are available right now. Leave your message and we'll get back to you.",
+        },
+    };
+
     // ---------- styles ----------
     const css = `
   .tdec-btn{position:fixed;right:20px;bottom:20px;width:56px;height:56px;border-radius:50%;
@@ -304,6 +314,7 @@
             if (data.bubble_color) document.documentElement.style.setProperty('--tdec-accent', data.bubble_color);
             applyBranding(data.widget);
             applyFaq(data.faq);
+            applyQueue(data.queue);
             applyFields(data.fields);
             await initFaqScreen();
         } catch (e) {
@@ -338,6 +349,29 @@
         refs.faqTitle.textContent = faqText('title');
         refs.faqPrompt.textContent = faqText('prompt');
         refs.faqProceed.textContent = faqText('button');
+    }
+
+    // Merge admin queue/availability config.
+    function applyQueue(q) {
+        if (!q) return;
+        queueConfig.waitTimeEnabled = q.wait_time_enabled !== false;
+        if (q.no_agents && typeof q.no_agents === 'object') {
+            if (q.no_agents.ms) queueConfig.noAgents.ms = q.no_agents.ms;
+            if (q.no_agents.en) queueConfig.noAgents.en = q.no_agents.en;
+        }
+    }
+
+    // A friendly, deliberately-coarse wait estimate. Bilingual; keyed to the
+    // conversation language.
+    function waitLabel(seconds, lang) {
+        if (seconds === null || seconds === undefined) return '';
+        const ms = lang === 'ms';
+        if (seconds < 300) return ms ? 'kurang 5 minit' : 'less than 5 minutes';
+        if (seconds < 900) {
+            const mins = Math.min(15, Math.round(seconds / 60 / 5) * 5) || 5;
+            return ms ? 'kira-kira ' + mins + ' minit' : 'about ' + mins + ' minutes';
+        }
+        return ms ? 'lebih 15 minit' : 'more than 15 minutes';
     }
 
     // Merge admin field config and re-render the pre-chat form.
@@ -912,12 +946,27 @@
 
         const agent = conversation && conversation.assigned_agent;
         const position = conversation && conversation.queue_position;
+        const lang = (conversation && conversation.language) || config.language;
+
+        // Waiting screen: a "no agents online" notice, else the queue position
+        // plus (when enabled) a coarse wait estimate.
+        let awaiting;
+        if (conversation && conversation.agents_online === false) {
+            awaiting = queueConfig.noAgents[lang] || queueConfig.noAgents.en;
+        } else {
+            awaiting = position
+                ? 'Waiting for an agent \u2014 #' + position + ' in queue'
+                : 'Waiting for an agent\u2026';
+            const eta = conversation && conversation.estimated_wait_seconds;
+            if (queueConfig.waitTimeEnabled && eta) {
+                awaiting += ' \u00b7 ' + waitLabel(eta, lang);
+            }
+        }
+
         const labels = {
             pending: 'Connecting\u2026',
             bot: 'Chatbot \u2014 ask anything',
-            awaiting_acceptance: position
-                ? 'Waiting for an agent \u2014 #' + position + ' in queue'
-                : 'Waiting for an agent\u2026',
+            awaiting_acceptance: awaiting,
             active: agent ? 'Chatting with ' + agent.display_name : 'Agent connected',
             closed: 'Conversation ended',
             abandoned: 'Conversation ended',
