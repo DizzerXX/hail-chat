@@ -21,4 +21,23 @@ return [
     // Allowed extensions — kept to images + PDF for a small attack surface.
     'extensions' => ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf'],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Antivirus scanning (ClamAV / clamd)
+    |--------------------------------------------------------------------------
+    |
+    | When enabled, every uploaded file is streamed to clamd (INSTREAM) and an
+    | infected file is rejected before it is stored. Off by default — clamd must
+    | be installed on the box first. `on_error` decides what happens when clamd
+    | is unreachable: `block` (fail-closed, safest) or `allow` (accept + log).
+    |
+    */
+    'av' => [
+        'enabled' => (bool) env('ATTACHMENTS_AV_ENABLED', false),
+        // clamd address: tcp://host:port or unix:///var/run/clamav/clamd.ctl
+        'socket' => env('ATTACHMENTS_AV_SOCKET', 'tcp://127.0.0.1:3310'),
+        'timeout' => (int) env('ATTACHMENTS_AV_TIMEOUT', 30),
+        'on_error' => env('ATTACHMENTS_AV_ON_ERROR', 'block'), // block | allow
+    ],
+
 ];

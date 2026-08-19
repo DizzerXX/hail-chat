@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Rules\NotInfected;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -23,6 +24,7 @@ class StoreAttachmentRequest extends FormRequest
                 'file',
                 'max:'.(int) config('attachments.max_kb'),
                 Rule::file()->extensions(config('attachments.extensions')),
+                new NotInfected(),
             ],
             // A caption alongside the file is optional.
             'body' => ['nullable', 'string', 'max:4000'],

@@ -73,6 +73,25 @@ Override the watched units per box with `TDECHAT_SERVICES` if they're named diff
 systemctl list-timers 'tdechat-*'
 ```
 
+## Attachment antivirus (ClamAV)
+Off until clamd is installed. To turn it on for a box:
+```bash
+sudo apt install -y clamav-daemon clamav-freshclam
+sudo systemctl enable --now clamav-freshclam   # keeps the signature DB fresh
+sudo systemctl enable --now clamav-daemon
+# confirm clamd is listening (TCP 3310 by default, or a unix socket):
+sudo ss -tlnp | grep 3310   # or: ls -l /var/run/clamav/clamd.ctl
+```
+Then in the app `.env`:
+```dotenv
+ATTACHMENTS_AV_ENABLED=true
+ATTACHMENTS_AV_SOCKET=tcp://127.0.0.1:3310   # or unix:///var/run/clamav/clamd.ctl
+ATTACHMENTS_AV_ON_ERROR=block                # block = fail-closed; allow = accept + log
+```
+`php artisan config:cache` + restart php-fpm. Test with the EICAR string (a harmless
+test "virus"): uploading it should be rejected with a 422; a normal image should upload.
+`block` means uploads fail while clamd is down — watch it with the health check.
+
 ## Notes
 - The backup runs as **root** on purpose: dumps contain all PII, so they live in a
   `700` root-only directory. Keep the off-box target locked down the same way.

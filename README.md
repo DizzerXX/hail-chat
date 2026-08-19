@@ -490,6 +490,16 @@ size cap live in [config/attachments.php](backend/config/attachments.php) (`ATTA
 default images + PDF, 10 MB). Attachments ride the existing `message.sent` broadcast, so they
 appear in real time on both sides.
 
+**Antivirus scanning (ClamAV).** With `ATTACHMENTS_AV_ENABLED=true`, every upload — widget and
+agent alike — is streamed to **clamd** (INSTREAM, over `ATTACHMENTS_AV_SOCKET`) and validated
+**before it is stored**; an infected file is rejected with a `422` and never written. It's a
+[validation rule](backend/app/Rules/NotInfected.php) on the shared upload request, so both paths
+are covered with no extra dependency (the [scanner](backend/app/Services/Antivirus/ClamAvScanner.php)
+speaks the clamd socket directly). **Off by default** (clamd must be installed first). When clamd
+is unreachable, `ATTACHMENTS_AV_ON_ERROR` decides: `block` (fail-closed, default) or `allow`
+(accept + log). Install `clamav-daemon`/`clamav-freshclam` on the box, confirm clamd is listening,
+then enable — see [ops/README](ops/README.md).
+
 ## Agent tooling: canned responses, internal notes, contacts
 
 **Canned responses** are an admin-managed, org-wide quick-reply library

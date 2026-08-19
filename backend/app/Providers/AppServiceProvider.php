@@ -22,6 +22,11 @@ class AppServiceProvider extends ServiceProvider
             \App\Contracts\TranslatorInterface::class,
             \App\Services\Translation\CachingTranslator::class,
         );
+        // Attachment antivirus (clamd); tests bind a fake in its place.
+        $this->app->bind(
+            \App\Contracts\VirusScanner::class,
+            fn () => \App\Services\Antivirus\ClamAvScanner::fromConfig(),
+        );
     }
 
     /**
