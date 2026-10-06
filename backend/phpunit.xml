@@ -30,7 +30,7 @@
         <env name="MITEL_TENANT" value=""/>
         <env name="TRANSLATION" value="false"/>
         <env name="TRANSLATION_METHOD" value="none"/>
-        <env name="TRANSLATION_ENDPOINT" value=""/>
+        <env name="TRANSLATION_DRIVER" value="http"/>
         <env name="LICENSE_MANAGER_URL" value=""/>
         <env name="LICENSE_PLATFORM_ID" value=""/>
         <env name="LICENSE_PLATFORM_ACCESS_TOKEN" value=""/>

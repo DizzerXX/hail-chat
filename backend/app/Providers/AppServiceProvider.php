@@ -16,12 +16,16 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(\App\Services\License\LicenseService::class);
-        // CachingTranslator wraps HttpTranslator (resolved by type-hint) to add
-        // the two-level text-keyed cache in front of the AI service.
+        // CachingTranslator wraps the configured driver to add the two-level
+        // text-keyed cache in front of the AI service.
         $this->app->bind(
             \App\Contracts\TranslatorInterface::class,
             \App\Services\Translation\CachingTranslator::class,
         );
+        $this->app->bind(\App\Contracts\TranslationDriver::class, fn () => match (config('translation.driver')) {
+            'ollama' => new \App\Services\Translation\OllamaTranslator(),
+            default => new \App\Services\Translation\HttpTranslator(),
+        });
         // Attachment antivirus (clamd); tests bind a fake in its place.
         $this->app->bind(
             \App\Contracts\VirusScanner::class,

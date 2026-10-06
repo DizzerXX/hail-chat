@@ -2,7 +2,7 @@
 
 namespace App\Services\Translation;
 
-use App\Contracts\TranslatorInterface;
+use App\Contracts\TranslationDriver;
 use App\Exceptions\TranslationException;
 use Illuminate\Support\Facades\Http;
 use Throwable;
@@ -24,7 +24,7 @@ use Throwable;
  * Caching is handled by CachingTranslator, which wraps this class — this class
  * only speaks the wire format.
  */
-class HttpTranslator implements TranslatorInterface
+class HttpTranslator implements TranslationDriver
 {
     public function translate(string $text, string $source, string $target): string
     {

@@ -528,7 +528,10 @@ Optional, env-controlled message translation via an **external SeaLLM/Ollama ser
 |---------|---------|---------|
 | `TRANSLATION` | Master switch | `false` |
 | `TRANSLATION_METHOD` | `manual` (per-message/draft buttons for agents), `auto` (background job translates every visitor/agent message), `none` | `none` |
-| `TRANSLATION_API_URL` | Base URL of the translation service, e.g. `http://172.17.0.1:5555` | — |
+| `TRANSLATION_DRIVER` | `http` (a service exposing `POST {url}/translate`) or `ollama` (an Ollama server direct) | `http` |
+| `TRANSLATION_API_URL` | Base URL: the translation service (`http`), or the Ollama server e.g. `http://172.16.0.25:11434` (`ollama`) | — |
+| `TRANSLATION_MODEL` | `ollama` driver only — model tag, e.g. `hf.co/SeaLLMs/SeaLLM-7B-v2.5-GGUF:Q4_K_M` | — |
+| `TRANSLATION_PATH` | `ollama` driver only — chat-completions path | `/v1/chat/completions` |
 | `TRANSLATION_TIMEOUT` | Client timeout in seconds (the model can be slow) | `60` |
 | `TRANSLATION_CACHE_TTL` | Fast-tier cache lifetime in seconds | `86400` |
 

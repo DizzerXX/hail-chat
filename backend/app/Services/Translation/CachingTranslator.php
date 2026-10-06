@@ -2,6 +2,7 @@
 
 namespace App\Services\Translation;
 
+use App\Contracts\TranslationDriver;
 use App\Contracts\TranslatorInterface;
 use App\Models\TranslationCache;
 use Illuminate\Support\Facades\Cache;
@@ -14,11 +15,11 @@ use Illuminate\Support\Facades\Cache;
  *   2. durable    — a queryable translation_cache table, permanent
  *
  * Both are keyed by the hash of source+target+text. Only a miss in both reaches
- * the wrapped HttpTranslator.
+ * the configured driver (http or ollama).
  */
 class CachingTranslator implements TranslatorInterface
 {
-    public function __construct(private HttpTranslator $inner)
+    public function __construct(private TranslationDriver $inner)
     {
     }
 

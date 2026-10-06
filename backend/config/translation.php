@@ -23,6 +23,18 @@ return [
 
     'method' => env('TRANSLATION_METHOD', 'none'),
 
+    // Which backend speaks to the model:
+    //   http   — a translation microservice exposing POST {url}/translate
+    //   ollama — an Ollama server direct, POST {url}/v1/chat/completions
+    'driver' => env('TRANSLATION_DRIVER', 'http'),
+
+    // Ollama driver only: the model tag to run, e.g.
+    // hf.co/SeaLLMs/SeaLLM-7B-v2.5-GGUF:Q4_K_M
+    'model' => (string) env('TRANSLATION_MODEL', ''),
+
+    // Ollama driver only: the chat-completions path on that server.
+    'path' => env('TRANSLATION_PATH', '/v1/chat/completions'),
+
     // Base URL of the translation service, e.g. http://172.17.0.1:5555.
     // POST {url}/translate is the only endpoint used on the hot path.
     'url' => rtrim((string) env('TRANSLATION_API_URL', ''), '/'),
