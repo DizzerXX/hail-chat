@@ -56,17 +56,58 @@ class OllamaTranslatorTest extends TestCase
                 && $body['model'] === 'seallm:test'
                 && $body['temperature'] === 0
                 && $body['messages'][0]['role'] === 'system'
-                && str_contains($body['messages'][1]['content'], 'from Malay to English')
+                && str_contains($body['messages'][1]['content'], 'into English')
                 && str_contains($body['messages'][1]['content'], 'Selamat pagi, saya perlukan bantuan');
         });
     }
 
-    public function test_the_prompt_names_the_other_direction_too(): void
+    public function test_the_prompt_names_the_target_only(): void
     {
         $this->reply('Selamat pagi');
         $this->translator()->translate('Good morning', 'en', 'ms');
 
-        Http::assertSent(fn ($request) => str_contains($request->data()['messages'][1]['content'], 'from English to Malay'));
+        Http::assertSent(function ($request) {
+            $prompt = $request->data()['messages'][1]['content'];
+
+            // Naming a source we only assumed is what made models echo the input
+            // when a visitor answered a Malay conversation in English.
+            return str_contains($prompt, 'into Malay')
+                && ! str_contains($prompt, 'from English');
+        });
+    }
+
+    public function test_an_echoed_input_is_retried_once_with_a_firmer_prompt(): void
+    {
+        Http::fakeSequence()
+            ->push(['choices' => [['message' => ['content' => 'how are you?']]]])
+            ->push(['choices' => [['message' => ['content' => 'Apa khabar?']]]]);
+
+        $this->assertSame('Apa khabar?', $this->translator()->translate('how are you?', 'en', 'ms'));
+
+        Http::assertSentCount(2);
+        Http::assertSent(fn ($request) => str_contains($request->data()['messages'][1]['content'], 'returned the text unchanged'));
+    }
+
+    public function test_an_echo_that_survives_the_retry_is_reported_as_a_failure(): void
+    {
+        // Better to tell the agent it failed than to show them the original text
+        // labelled as a translation.
+        $this->reply('how are you?');
+
+        $this->expectException(TranslationException::class);
+        $this->expectExceptionMessage('returned the text unchanged');
+
+        $this->translator()->translate('how are you?', 'en', 'ms');
+    }
+
+    public function test_single_words_may_legitimately_come_back_unchanged(): void
+    {
+        // Names, reference numbers and "OK" survive translation; failing those
+        // would block perfectly good messages.
+        $this->reply('OK');
+
+        $this->assertSame('OK', $this->translator()->translate('OK', 'en', 'ms'));
+        Http::assertSentCount(1);
     }
 
     public function test_it_strips_the_wrappers_models_add(): void

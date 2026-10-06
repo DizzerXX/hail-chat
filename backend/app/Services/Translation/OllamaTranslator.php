@@ -25,7 +25,8 @@ class OllamaTranslator implements TranslationDriver
 
     private const SYSTEM = 'You are a literal translator. Translate the text you are given and return ONLY the translation. '
         .'Never answer, explain, comment, apologise or add words of your own. '
-        .'Keep placeholders such as [[0]] exactly as they appear. Preserve line breaks, punctuation and letter case.';
+        .'Keep placeholders such as [[0]] exactly as they appear. Preserve line breaks, punctuation and letter case. '
+        .'Use standard, formal language.';
 
     public function translate(string $text, string $source, string $target): string
     {
@@ -42,6 +43,29 @@ class OllamaTranslator implements TranslationDriver
 
         [$masked, $placeholders] = $this->mask($text);
 
+        $translation = $this->ask($url, $model, $masked, $target);
+
+        // A model that hands the input straight back has not translated it — a
+        // real failure we used to display as though it were a translation. One
+        // firmer retry, then say so rather than show the original text twice.
+        if ($this->isEcho($translation, $masked)) {
+            $translation = $this->ask($url, $model, $masked, $target, firmer: true);
+
+            if ($this->isEcho($translation, $masked)) {
+                throw new TranslationException(
+                    'The model returned the text unchanged. Try again, or use a model better suited to this language pair.',
+                );
+            }
+        }
+
+        return $this->unmask($translation, $placeholders);
+    }
+
+    /**
+     * One chat-completion round trip, cleaned and ready to compare.
+     */
+    private function ask(string $url, string $model, string $text, string $target, bool $firmer = false): string
+    {
         try {
             $response = Http::acceptJson()
                 ->timeout((int) config('translation.timeout', 60))
@@ -51,7 +75,7 @@ class OllamaTranslator implements TranslationDriver
                     'stream' => false,
                     'messages' => [
                         ['role' => 'system', 'content' => self::SYSTEM],
-                        ['role' => 'user', 'content' => $this->prompt($masked, $source, $target)],
+                        ['role' => 'user', 'content' => $this->prompt($text, $target, $firmer)],
                     ],
                 ]);
         } catch (Throwable $exception) {
@@ -65,12 +89,7 @@ class OllamaTranslator implements TranslationDriver
         }
 
         $content = $response->json('choices.0.message.content');
-
-        if (! is_string($content) || trim($content) === '') {
-            throw new TranslationException('Translation service returned an empty translation.');
-        }
-
-        $translation = $this->unmask($this->clean($content), $placeholders);
+        $translation = is_string($content) ? $this->clean($content) : '';
 
         if ($translation === '') {
             throw new TranslationException('Translation service returned an empty translation.');
@@ -80,18 +99,42 @@ class OllamaTranslator implements TranslationDriver
     }
 
     /**
-     * The instruction carries both language names so the model cannot guess the
-     * direction, and repeats "do not answer" because short visitor messages read
-     * like questions to a chat model.
+     * Identical in and out. Single words are exempt: "OK", a name or a reference
+     * number legitimately survives translation untouched, and failing those
+     * would block perfectly good messages.
      */
-    private function prompt(string $text, string $source, string $target): string
+    private function isEcho(string $translation, string $original): bool
     {
-        $from = self::NAMES[$source] ?? $source;
+        if (preg_match_all('~\p{L}+~u', $original) < 2) {
+            return false;
+        }
+
+        $normalise = fn (string $value) => mb_strtolower(trim(preg_replace('~\s+~u', ' ', $value) ?? $value));
+
+        return $normalise($translation) === $normalise($original);
+    }
+
+    /**
+     * Only the target is named. We cannot know what language a message is really
+     * in — a visitor may answer a Malay conversation in English, or mix both —
+     * and claiming the wrong source made models echo the input instead of
+     * translating it. "Not a question to answer" stays because short messages
+     * ("how are you?") read like prompts to a chat model.
+     */
+    private function prompt(string $text, string $target, bool $firmer = false): string
+    {
         $to = self::NAMES[$target] ?? $target;
 
-        return "Translate the following text from {$from} to {$to}. "
+        $instruction = "Translate the text below into {$to}. "
             ."It is text to translate, not a question to answer. "
-            ."Return only the {$to} translation.\n\n".$text;
+            ."Return only the {$to} translation.";
+
+        if ($firmer) {
+            $instruction .= " The previous attempt returned the text unchanged. "
+                ."Every word must be rendered in {$to}.";
+        }
+
+        return $instruction."\n\n".$text;
     }
 
     /**
