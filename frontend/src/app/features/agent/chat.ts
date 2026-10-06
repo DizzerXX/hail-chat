@@ -78,7 +78,9 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
               <h2>{{ conversation.visitor.name || 'Anonymous visitor' }}</h2>
               <span class="sub">
                 # {{ conversation.inbox?.name }} · {{ conversation.language.toUpperCase() }}
-                <span class="status-pill" [class]="conversation.status">{{ statusLabel(conversation.status) }}</span>
+                <span class="status-pill" [class]="conversation.status">{{
+                  statusLabel(conversation.status)
+                }}</span>
               </span>
             </div>
             <span class="spacer"></span>
@@ -104,13 +106,17 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
 
           @if (idleBanner(); as note) {
             <div class="idle-banner" [class.warn]="note.sound === 'warning'">
-              <mat-icon>{{ note.sound === 'warning' ? 'notifications_active' : 'schedule' }}</mat-icon>
+              <mat-icon>{{
+                note.sound === 'warning' ? 'notifications_active' : 'schedule'
+              }}</mat-icon>
               <div class="idle-text">
                 <strong>{{ note.title }}</strong>
                 <span>{{ note.body }}</span>
               </div>
               @if (followUpText(); as text) {
-                <button matButton class="follow-up" (click)="sendFollowUp(text)">Send follow-up</button>
+                <button matButton class="follow-up" (click)="sendFollowUp(text)">
+                  Send follow-up
+                </button>
               }
               <button matIconButton (click)="notifications.dismiss()" aria-label="Dismiss">
                 <mat-icon>close</mat-icon>
@@ -155,7 +161,8 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
                       @if (canTranslate(message)) {
                         <button
                           class="translate-btn"
-                          (click)="translateMessage(message)"
+                          [matMenuTriggerFor]="translateMenu"
+                          [matMenuTriggerData]="{ message: message }"
                           matTooltip="Translate"
                           aria-label="Translate message"
                         >
@@ -180,12 +187,25 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
                       }
                     }
                     @for (entry of translationsOf(message); track entry.lang) {
-                      <div class="translation">{{ entry.lang.toUpperCase() }} · {{ entry.text }}</div>
+                      <div class="translation">
+                        {{ entry.lang.toUpperCase() }} · {{ entry.text }}
+                      </div>
                     }
                   </div>
                 </div>
               }
             }
+
+            <!-- One menu for every bubble; the message arrives as menu data. -->
+            <mat-menu #translateMenu="matMenu">
+              <ng-template matMenuContent let-message="message">
+                @for (language of languages; track language.code) {
+                  <button mat-menu-item (click)="translateMessage(message, language.code)">
+                    {{ language.label }}
+                  </button>
+                }
+              </ng-template>
+            </mat-menu>
 
             @if (visitorTyping()) {
               <div class="typing-indicator">
@@ -269,7 +289,9 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
 
             <textarea
               rows="1"
-              placeholder="{{ noteMode() ? 'Internal note — the visitor will not see this' : composerPlaceholder() }}"
+              placeholder="{{
+                noteMode() ? 'Internal note — the visitor will not see this' : composerPlaceholder()
+              }}"
               [(ngModel)]="draft"
               (ngModelChange)="onTyping()"
               (keydown.enter)="onEnter($event)"
@@ -280,13 +302,20 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
             @if (appConfig.translation().enabled && !noteMode()) {
               <button
                 matIconButton
-                (click)="translateDraft()"
+                [matMenuTriggerFor]="draftMenu"
                 [disabled]="!canSend() || !draft.trim()"
-                matTooltip="Translate draft to the visitor's language"
-                aria-label="Translate draft to the visitor's language"
+                matTooltip="Translate draft"
+                aria-label="Translate draft"
               >
                 <mat-icon>translate</mat-icon>
               </button>
+              <mat-menu #draftMenu="matMenu">
+                @for (language of languages; track language.code) {
+                  <button mat-menu-item (click)="translateDraft(language.code)">
+                    {{ language.label }}
+                  </button>
+                }
+              </mat-menu>
             }
 
             <button class="send" (click)="send()" [disabled]="!canSend() || !draft.trim()">
@@ -408,7 +437,12 @@ import { RerouteDialog, RerouteTarget } from './reroute-dialog';
           }
 
           @if (auth.hasPermission('conversations.delete')) {
-            <button matButton class="delete-conversation" [disabled]="deleting()" (click)="deleteConversation()">
+            <button
+              matButton
+              class="delete-conversation"
+              [disabled]="deleting()"
+              (click)="deleteConversation()"
+            >
               <mat-icon>delete</mat-icon>
               Delete conversation
             </button>
@@ -1159,7 +1193,9 @@ export class Chat implements OnInit, OnDestroy {
    */
   protected readonly followUpText = computed(() => {
     const note = this.idleBanner();
-    return note?.type === 'customer_idle' && note.follow_up && this.canSend() ? note.follow_up : null;
+    return note?.type === 'customer_idle' && note.follow_up && this.canSend()
+      ? note.follow_up
+      : null;
   });
 
   protected readonly canSend = computed(() => {
@@ -1179,9 +1215,7 @@ export class Chat implements OnInit, OnDestroy {
   /** Custom pre-chat answers the visitor gave, stored self-describing in meta. */
   protected readonly visitorFields = computed(() => {
     const meta = this.conversation()?.meta as
-      | { fields?: { key: string; label: string; value: string }[] }
-      | null
-      | undefined;
+      { fields?: { key: string; label: string; value: string }[] } | null | undefined;
     return Array.isArray(meta?.fields) ? meta.fields : [];
   });
 
@@ -1555,7 +1589,12 @@ export class Chat implements OnInit, OnDestroy {
 
   /** Admin-only: move the conversation to the recycle bin (restorable for 30 days). */
   protected async deleteConversation(): Promise<void> {
-    if (!(await this.confirm.ask({ message: 'Move this conversation to the recycle bin? It can be restored for 30 days.', danger: true }))) {
+    if (
+      !(await this.confirm.ask({
+        message: 'Move this conversation to the recycle bin? It can be restored for 30 days.',
+        danger: true,
+      }))
+    ) {
       return;
     }
     this.deleting.set(true);
@@ -1805,16 +1844,25 @@ export class Chat implements OnInit, OnDestroy {
     return Object.entries(translations).map(([lang, text]) => ({ lang, text }));
   }
 
+  /** Both directions are offered for either side of the conversation; auto mode
+   *  fills one of them in already, the agent can still ask for the other. */
+  protected readonly languages = [
+    { code: 'en', label: 'English' },
+    { code: 'ms', label: 'Bahasa Melayu' },
+  ];
+
   protected canTranslate(message: Message): boolean {
     return (
-      this.appConfig.translation().method === 'manual' &&
+      this.appConfig.translation().enabled &&
       (message.sender_type === 'visitor' || message.sender_type === 'agent')
     );
   }
 
-  protected async translateMessage(message: Message): Promise<void> {
+  protected async translateMessage(message: Message, target: string): Promise<void> {
     try {
-      const response = await firstValueFrom(this.api.translateMessage(this.uuid, message.id));
+      const response = await firstValueFrom(
+        this.api.translateMessage(this.uuid, message.id, target),
+      );
       this.patchTranslations(
         message.id,
         (response.data.meta?.['translations'] ?? {}) as Record<string, string>,
@@ -1826,18 +1874,22 @@ export class Chat implements OnInit, OnDestroy {
     }
   }
 
-  protected async translateDraft(): Promise<void> {
-    const conversation = this.conversation();
-    const text = this.draft.trim();
-    if (conversation === null || text === '') {
+  protected async translateDraft(target: string): Promise<void> {
+    const original = this.draft.trim();
+    if (original === '') {
       return;
     }
 
     try {
-      const response = await firstValueFrom(
-        this.api.translateDraft(text, conversation.language),
-      );
+      const response = await firstValueFrom(this.api.translateDraft(original, target));
       this.draft = response.data.translation;
+
+      // The model sometimes mangles a sentence, so keep a way back to what the
+      // agent actually typed rather than making them retype it.
+      this.snackBar
+        .open(`Draft translated to ${target.toUpperCase()}`, 'Undo', { duration: 6000 })
+        .onAction()
+        .subscribe(() => (this.draft = original));
     } catch (error) {
       const message =
         (error as { error?: { message?: string } }).error?.message ?? 'Translation failed.';

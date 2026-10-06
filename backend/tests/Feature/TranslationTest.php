@@ -102,6 +102,74 @@ class TranslationTest extends TestCase
         Http::assertSentCount(1);
     }
 
+    /**
+     * The agent picks the direction in the chat bubble, so either message can be
+     * asked for either language — not just the pair rule's default.
+     */
+    public function test_an_explicit_target_overrides_the_default_direction(): void
+    {
+        $this->enable('manual');
+        Http::fake(['ai.test/*' => Http::response(['success' => true, 'translated_text' => 'Saya perlukan bantuan'])]);
+
+        // A Malay visitor message asked for in Malay again is a no-op direction,
+        // but the agent may still ask for the opposite of the default.
+        $conversation = $this->conversationWithVisitorMessage();
+        $message = $conversation->messages()->first();
+
+        $this->postJson(
+            "/api/v1/agent/conversations/{$conversation->uuid}/messages/{$message->id}/translate",
+            ['target' => 'ms'],
+        )
+            ->assertOk()
+            ->assertJsonPath('data.meta.translations.ms', 'Saya perlukan bantuan');
+
+        Http::assertSent(fn ($request) => $request['source_language'] === 'en'
+            && $request['target_language'] === 'ms');
+    }
+
+    public function test_an_agent_message_can_be_translated_to_english(): void
+    {
+        $this->enable('manual');
+        Http::fake(['ai.test/*' => Http::response(['success' => true, 'translated_text' => 'Good morning'])]);
+
+        $conversation = Conversation::factory()->active()->create([
+            'assigned_agent_id' => $this->agent->id,
+            'language' => 'ms',
+        ]);
+        $message = $conversation->messages()->create([
+            'sender_type' => 'agent',
+            'agent_id' => $this->agent->id,
+            'body' => 'Selamat pagi',
+        ]);
+
+        // Without a target the pair rule would translate an agent message to the
+        // conversation language (ms); the agent asks for en instead.
+        $this->postJson(
+            "/api/v1/agent/conversations/{$conversation->uuid}/messages/{$message->id}/translate",
+            ['target' => 'en'],
+        )
+            ->assertOk()
+            ->assertJsonPath('data.meta.translations.en', 'Good morning');
+
+        Http::assertSent(fn ($request) => $request['target_language'] === 'en');
+    }
+
+    public function test_an_unsupported_target_is_rejected(): void
+    {
+        $this->enable('manual');
+        Http::fake();
+
+        $conversation = $this->conversationWithVisitorMessage();
+        $message = $conversation->messages()->first();
+
+        $this->postJson(
+            "/api/v1/agent/conversations/{$conversation->uuid}/messages/{$message->id}/translate",
+            ['target' => 'fr'],
+        )->assertUnprocessable();
+
+        Http::assertNothingSent();
+    }
+
     public function test_draft_translation_returns_without_storing(): void
     {
         $this->enable('manual');
