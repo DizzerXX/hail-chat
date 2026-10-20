@@ -80,9 +80,14 @@ class Conversation extends Model
         return $this->belongsTo(Team::class);
     }
 
+    /**
+     * Ordered by id, which is insertion order. Without it Postgres returns heap
+     * order, so updating a message (a translation writing to meta rewrites the
+     * tuple) moved it to the bottom of the transcript on the next load.
+     */
     public function messages(): HasMany
     {
-        return $this->hasMany(Message::class);
+        return $this->hasMany(Message::class)->orderBy('id');
     }
 
     public function faqQueries(): HasMany
