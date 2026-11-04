@@ -365,6 +365,8 @@ export interface CascadeNode {
   key: string;
   label: string;
   children?: CascadeNode[];
+  /** Optional MiCC queue for this branch; the deepest one on the path wins. */
+  queue?: string;
 }
 
 export interface CustomField {

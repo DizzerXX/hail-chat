@@ -633,6 +633,8 @@ class ConversationService
         $answers = $visitor['fields'] ?? [];
 
         $fields = [];
+        $queue = null;
+
         // The inbox's own pre-chat form, so a per-inbox question is stored
         // with its label instead of being dropped as unknown.
         foreach ($this->preChat->customFieldsFor($inbox) as $field) {
@@ -653,6 +655,11 @@ class ConversationService
                         'value' => implode(' / ', array_column($path, 'label')),
                         'path' => $path,
                     ];
+
+                    // Deepest wins: a leaf's queue overrides the branch it sits
+                    // in, so a tree can route broadly and refine where needed.
+                    // First cascade field that names one decides.
+                    $queue ??= collect($path)->pluck('queue')->filter()->last();
                 }
 
                 continue;
@@ -665,6 +672,11 @@ class ConversationService
 
         if ($fields !== []) {
             $meta['fields'] = $fields;
+        }
+
+        // Read by MitelOpenMediaProvider when it creates the work item.
+        if ($queue !== null) {
+            $meta['routed_queue'] = $queue;
         }
 
         return $meta === [] ? null : $meta;
@@ -688,7 +700,12 @@ class ConversationService
             if ($node === null) {
                 break;
             }
-            $resolved[] = ['key' => $node['key'], 'label' => $node['label']];
+            $resolved[] = array_filter([
+                'key' => $node['key'],
+                'label' => $node['label'],
+                // A node may name the MiCC queue its branch belongs to.
+                'queue' => $node['queue'] ?? null,
+            ], fn (mixed $value) => $value !== null);
             $current = $node['children'] ?? [];
         }
 

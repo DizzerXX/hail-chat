@@ -227,7 +227,9 @@ class MitelOpenMediaProvider implements PollableProviderInterface, QueueDirector
         return array_filter([
             'TargetUri' => $this->targetUri($conversation),
             'TargetUriEmbedded' => true,
-            'Queue' => $mitelConfig['queue'] ?? null,
+            // A cascade answer may name the queue for its branch; the inbox's
+            // queue is the default when the visitor's path named none.
+            'Queue' => $conversation->meta['routed_queue'] ?? $mitelConfig['queue'] ?? null,
             'From' => $conversation->visitor_email ?? $conversation->visitor_name,
             'Subject' => $firstMessage !== null ? Str::limit($firstMessage->body, 80) : null,
             'Tenant' => config('mitel.tenant') ?: null,

@@ -117,6 +117,10 @@ class ChatSettingsRequest extends FormRequest
                 || ! is_string($node['label']) || $node['label'] === '') {
                 return false;
             }
+            // Optional: the MiCC queue this branch routes to.
+            if (isset($node['queue']) && (! is_string($node['queue']) || $node['queue'] === '')) {
+                return false;
+            }
             if (isset($node['children']) && $node['children'] !== []
                 && ! $this->isValidTree($node['children'])) {
                 return false;

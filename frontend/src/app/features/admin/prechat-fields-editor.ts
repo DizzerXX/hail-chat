@@ -55,13 +55,17 @@ import { CustomField } from '../../core/api-types';
         }
         @if (f.type === 'cascade') {
           <mat-form-field appearance="outline" subscriptSizing="dynamic" class="tree">
-            <mat-label>Tree JSON — [{{ '{' }}key,label,children?{{ '}' }}]</mat-label>
+            <mat-label> Tree JSON — [{{ '{' }}key,label,children?,queue?{{ '}' }}] </mat-label>
             <textarea
               matInput
               rows="4"
               [ngModel]="treeText(f)"
               (ngModelChange)="onTreeInput(f, $event)"
             ></textarea>
+            <mat-hint>
+              A node's optional "queue" names the MiCC queue its branch routes to; the deepest one
+              on the chosen path wins, falling back to the inbox's queue.
+            </mat-hint>
           </mat-form-field>
         }
         <mat-slide-toggle [(ngModel)]="f.required">Required</mat-slide-toggle>
