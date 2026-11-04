@@ -35,6 +35,11 @@ class Team extends Model
         return $this->hasMany(Conversation::class);
     }
 
+    public function inboxes(): BelongsToMany
+    {
+        return $this->belongsToMany(Inbox::class)->withTimestamps();
+    }
+
     public function routingRules(): HasMany
     {
         return $this->hasMany(RoutingRule::class);

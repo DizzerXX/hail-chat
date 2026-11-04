@@ -34,6 +34,9 @@ class InboxRequest extends FormRequest
             // A CMS/CRM URL template — allows {placeholders} (which aren't valid
             // in a strict URL), so require the http(s) scheme rather than url:.
             'channel_config.cms_url' => ['nullable', 'string', 'max:4096', 'regex:/^https?:\/\//i'],
+            // Required: an inbox nobody can work is a silent dead letter box.
+            'team_ids' => ['required', 'array', 'min:1'],
+            'team_ids.*' => ['integer', 'exists:teams,id'],
             'bot_enabled' => ['sometimes', 'boolean'],
             'is_active' => ['sometimes', 'boolean'],
         ];

@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\ChannelType;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Inbox extends Model
@@ -36,6 +37,15 @@ class Inbox extends Model
     public function conversations(): HasMany
     {
         return $this->hasMany(Conversation::class);
+    }
+
+    /**
+     * The teams whose agents may work this inbox. Required: an inbox with no
+     * team is worked by nobody (holders of conversations.view_all aside).
+     */
+    public function teams(): BelongsToMany
+    {
+        return $this->belongsToMany(Team::class)->withTimestamps();
     }
 
     public function routingRules(): HasMany

@@ -10,7 +10,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { firstValueFrom } from 'rxjs';
-import { AdminInbox, CascadeNode, CustomField, MitelQueue } from '../../core/api-types';
+import { AdminInbox, CascadeNode, CustomField, MitelQueue, Team } from '../../core/api-types';
 import { AdminApiService } from './admin-api.service';
 
 interface CmsParam {
@@ -46,6 +46,16 @@ interface CmsParam {
       </mat-form-field>
 
       <mat-form-field appearance="outline">
+        <mat-label>Teams</mat-label>
+        <mat-select [(ngModel)]="teamIds" multiple required>
+          @for (team of teams(); track team.id) {
+            <mat-option [value]="team.id">{{ team.name }}</mat-option>
+          }
+        </mat-select>
+        <mat-hint>Only agents in these teams see this inbox's conversations.</mat-hint>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
         <mat-label>Channel</mat-label>
         <mat-select [(ngModel)]="channelType" (selectionChange)="onChannelChange()">
           <mat-option value="standalone">Standalone</mat-option>
@@ -73,8 +83,16 @@ interface CmsParam {
 
       <mat-form-field appearance="outline">
         <mat-label>CMS/CRM base URL (optional)</mat-label>
-        <input matInput type="url" [(ngModel)]="cmsBase" placeholder="https://crm.example.com/tickets/create" />
-        <mat-hint>Opened when an agent closes a conversation. Add parameters below to pass the details.</mat-hint>
+        <input
+          matInput
+          type="url"
+          [(ngModel)]="cmsBase"
+          placeholder="https://crm.example.com/tickets/create"
+        />
+        <mat-hint
+          >Opened when an agent closes a conversation. Add parameters below to pass the
+          details.</mat-hint
+        >
       </mat-form-field>
 
       @if (cmsBase.trim()) {
@@ -82,7 +100,10 @@ interface CmsParam {
           <div class="cms-head">Parameters</div>
           @for (p of cmsParams; track $index) {
             <div class="cms-param">
-              <mat-checkbox [(ngModel)]="p.enabled" matTooltip="Include this parameter"></mat-checkbox>
+              <mat-checkbox
+                [(ngModel)]="p.enabled"
+                matTooltip="Include this parameter"
+              ></mat-checkbox>
               <mat-form-field appearance="outline" subscriptSizing="dynamic" class="pname">
                 <mat-label>Param name</mat-label>
                 <input matInput [(ngModel)]="p.name" placeholder="case_id" />
@@ -95,7 +116,12 @@ interface CmsParam {
                   }
                 </mat-select>
               </mat-form-field>
-              <button matIconButton type="button" (click)="removeParam($index)" aria-label="Remove parameter">
+              <button
+                matIconButton
+                type="button"
+                (click)="removeParam($index)"
+                aria-label="Remove parameter"
+              >
                 <mat-icon>close</mat-icon>
               </button>
             </div>
@@ -115,13 +141,21 @@ interface CmsParam {
 
       <mat-slide-toggle [(ngModel)]="botEnabled">FAQ bot answers first</mat-slide-toggle>
       @if (botEnabled) {
-        <mat-slide-toggle [(ngModel)]="escalateOnMiss">Escalate to agents on bot miss</mat-slide-toggle>
+        <mat-slide-toggle [(ngModel)]="escalateOnMiss"
+          >Escalate to agents on bot miss</mat-slide-toggle
+        >
       }
       <mat-slide-toggle [(ngModel)]="isActive">Active</mat-slide-toggle>
     </mat-dialog-content>
     <mat-dialog-actions align="end">
       <button matButton mat-dialog-close>Cancel</button>
-      <button matButton="filled" [disabled]="!name || !slug || busy()" (click)="save()">Save</button>
+      <button
+        matButton="filled"
+        [disabled]="!name || !slug || teamIds.length === 0 || busy()"
+        (click)="save()"
+      >
+        Save
+      </button>
     </mat-dialog-actions>
   `,
   styles: `
@@ -185,6 +219,9 @@ export class InboxDialog implements OnInit {
   protected cmsParams: CmsParam[] = [];
   protected readonly valueOptions = signal<{ label: string; value: string }[]>([]);
 
+  protected teamIds: number[] = (this.inbox?.teams ?? []).map((team) => team.id);
+  protected readonly teams = signal<Team[]>([]);
+
   protected readonly queues = signal<MitelQueue[]>([]);
   protected readonly queueError = signal<string | null>(null);
   protected readonly busy = signal(false);
@@ -197,6 +234,7 @@ export class InboxDialog implements OnInit {
 
   async ngOnInit(): Promise<void> {
     this.parseCms(this.inbox?.channel_config.cms_url ?? '');
+    this.teams.set((await firstValueFrom(this.api.teams())).data);
     try {
       const settings = (await firstValueFrom(this.api.chatSettings())).data;
       this.valueOptions.set(this.buildValueOptions(settings.custom_fields ?? []));
@@ -263,7 +301,10 @@ export class InboxDialog implements OnInit {
       if (field.type === 'cascade') {
         const depth = this.treeDepth(field.tree);
         for (let level = 1; level <= depth; level++) {
-          options.push({ label: `${field.label} · Level ${level}`, value: `{field:${field.key}:${level}}` });
+          options.push({
+            label: `${field.label} · Level ${level}`,
+            value: `{field:${field.key}:${level}}`,
+          });
         }
       } else {
         options.push({ label: field.label, value: `{field:${field.key}}` });
@@ -303,6 +344,7 @@ export class InboxDialog implements OnInit {
       name: this.name,
       slug: this.slug,
       channel_type: this.channelType,
+      team_ids: this.teamIds,
       bot_enabled: this.botEnabled,
       is_active: this.isActive,
       channel_config: {
@@ -318,8 +360,7 @@ export class InboxDialog implements OnInit {
       await firstValueFrom(this.api.saveInbox(payload, this.inbox?.id));
       this.ref.close(true);
     } catch (error) {
-      const message =
-        (error as { error?: { message?: string } }).error?.message ?? 'Save failed.';
+      const message = (error as { error?: { message?: string } }).error?.message ?? 'Save failed.';
       this.snackBar.open(message, 'Dismiss', { duration: 5000 });
     } finally {
       this.busy.set(false);

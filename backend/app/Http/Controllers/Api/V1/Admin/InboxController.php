@@ -15,29 +15,31 @@ class InboxController extends Controller
     public function index(): AnonymousResourceCollection
     {
         return AdminInboxResource::collection(
-            Inbox::withCount('conversations')->orderBy('name')->get()
+            Inbox::with('teams:id,name')->withCount('conversations')->orderBy('name')->get()
         );
     }
 
     public function store(InboxRequest $request): JsonResponse
     {
-        $inbox = Inbox::create($request->validated());
+        $inbox = Inbox::create($request->safe()->except('team_ids'));
+        $inbox->teams()->sync($request->validated('team_ids'));
 
-        return AdminInboxResource::make($inbox->loadCount('conversations'))
+        return AdminInboxResource::make($inbox->load('teams:id,name')->loadCount('conversations'))
             ->response()
             ->setStatusCode(201);
     }
 
     public function show(Inbox $inbox): AdminInboxResource
     {
-        return AdminInboxResource::make($inbox->loadCount('conversations'));
+        return AdminInboxResource::make($inbox->load('teams:id,name')->loadCount('conversations'));
     }
 
     public function update(InboxRequest $request, Inbox $inbox): AdminInboxResource
     {
-        $inbox->update($request->validated());
+        $inbox->update($request->safe()->except('team_ids'));
+        $inbox->teams()->sync($request->validated('team_ids'));
 
-        return AdminInboxResource::make($inbox->loadCount('conversations'));
+        return AdminInboxResource::make($inbox->load('teams:id,name')->loadCount('conversations'));
     }
 
     public function destroy(Inbox $inbox): Response

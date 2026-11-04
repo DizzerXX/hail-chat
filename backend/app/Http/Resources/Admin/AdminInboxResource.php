@@ -20,6 +20,10 @@ class AdminInboxResource extends JsonResource
             'channel_config' => $this->channel_config ?? [],
             'bot_enabled' => $this->bot_enabled,
             'is_active' => $this->is_active,
+            'teams' => $this->whenLoaded(
+                'teams',
+                fn () => $this->teams->map(fn ($team) => ['id' => $team->id, 'name' => $team->name])->all(),
+            ),
             'conversations_count' => $this->whenCounted('conversations'),
             'created_at' => $this->created_at,
         ];

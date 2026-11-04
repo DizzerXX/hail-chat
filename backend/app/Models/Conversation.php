@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\ConversationStatus;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -85,6 +86,15 @@ class Conversation extends Model
      * order, so updating a message (a translation writing to meta rewrites the
      * tuple) moved it to the bottom of the transcript on the next load.
      */
+    /**
+     * Limit to conversations in inboxes the agent's teams hold. Inbox access is
+     * separate from team_id, which routes and assigns the conversation.
+     */
+    public function scopeInAgentInboxes(Builder $query, Agent $agent): Builder
+    {
+        return $query->whereIn('inbox_id', $agent->workableInboxIds());
+    }
+
     public function messages(): HasMany
     {
         return $this->hasMany(Message::class)->orderBy('id');

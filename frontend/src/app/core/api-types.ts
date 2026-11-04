@@ -20,12 +20,7 @@ export interface AgentProfile {
 export type AgentStatus = 'available' | 'busy' | 'away' | 'offline';
 
 export type ConversationStatus =
-  | 'pending'
-  | 'bot'
-  | 'awaiting_acceptance'
-  | 'active'
-  | 'closed'
-  | 'abandoned';
+  'pending' | 'bot' | 'awaiting_acceptance' | 'active' | 'closed' | 'abandoned';
 
 export interface Conversation {
   uuid: string;
@@ -132,6 +127,9 @@ export interface AdminInbox extends InboxSummary {
   };
   bot_enabled: boolean;
   is_active: boolean;
+  /** The teams whose agents work this inbox; at least one is required. */
+  teams?: { id: number; name: string }[];
+  team_ids?: number[];
   conversations_count?: number;
 }
 

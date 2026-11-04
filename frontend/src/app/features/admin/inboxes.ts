@@ -46,6 +46,13 @@ import { InboxDialog } from './inbox-dialog';
           </td>
         </ng-container>
 
+        <ng-container matColumnDef="teams">
+          <th mat-header-cell *matHeaderCellDef>Teams</th>
+          <td mat-cell *matCellDef="let inbox">
+            {{ (inbox.teams ?? []).length ? teamNames(inbox) : 'Everyone' }}
+          </td>
+        </ng-container>
+
         <ng-container matColumnDef="bot">
           <th mat-header-cell *matHeaderCellDef>Bot</th>
           <td mat-cell *matCellDef="let inbox">{{ inbox.bot_enabled ? 'On' : 'Off' }}</td>
@@ -90,7 +97,19 @@ export class Inboxes implements OnInit {
   private readonly dialog = inject(MatDialog);
   private readonly snackBar = inject(MatSnackBar);
 
-  protected readonly columns = ['name', 'channel', 'bot', 'conversations', 'active', 'actions'];
+  protected readonly columns = [
+    'name',
+    'channel',
+    'teams',
+    'bot',
+    'conversations',
+    'active',
+    'actions',
+  ];
+
+  protected teamNames(inbox: AdminInbox): string {
+    return (inbox.teams ?? []).map((team) => team.name).join(', ');
+  }
   protected readonly inboxes = signal<AdminInbox[]>([]);
 
   async ngOnInit(): Promise<void> {

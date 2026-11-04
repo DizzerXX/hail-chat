@@ -85,6 +85,12 @@ class TranslationController extends Controller
         $agent = $user->agent;
         abort_unless($agent !== null, 403, 'This account has no agent profile.');
 
+        abort_unless(
+            $agent->workableInboxIds()->contains($conversation->inbox_id),
+            403,
+            'Your team does not work this inbox.',
+        );
+
         $isMine = $conversation->assigned_agent_id === $agent->id;
         $isQueueVisible = $conversation->status === ConversationStatus::AwaitingAcceptance
             && $conversation->assigned_agent_id === null

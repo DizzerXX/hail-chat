@@ -5,6 +5,7 @@ namespace Tests\Feature\Admin;
 use App\Models\Conversation;
 use App\Models\Inbox;
 use App\Models\Role;
+use App\Models\Team;
 use App\Models\User;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -25,10 +26,12 @@ class AdminInboxTest extends TestCase
 
     public function test_crud_lifecycle(): void
     {
+        $team = Team::factory()->create();
         $created = $this->postJson('/api/v1/admin/inboxes', [
             'name' => 'Website',
             'slug' => 'website',
             'channel_type' => 'standalone',
+            'team_ids' => [$team->id],
             'bot_enabled' => true,
             'channel_config' => ['bot' => ['escalate_on_miss' => false]],
         ])->assertCreated()->json('data');
@@ -44,6 +47,7 @@ class AdminInboxTest extends TestCase
             'name' => 'Website MY',
             'slug' => 'website',
             'channel_type' => 'mitel_openmedia',
+            'team_ids' => [$team->id],
             'channel_config' => ['mitel' => ['queue' => 'OpenMediaQ']],
         ])->assertOk()
             ->assertJsonPath('data.name', 'Website MY')
@@ -56,10 +60,12 @@ class AdminInboxTest extends TestCase
 
     public function test_cms_url_is_stored_and_must_be_a_valid_url(): void
     {
+        $team = Team::factory()->create();
         $this->postJson('/api/v1/admin/inboxes', [
             'name' => 'Website',
             'slug' => 'website',
             'channel_type' => 'standalone',
+            'team_ids' => [$team->id],
             'channel_config' => ['cms_url' => 'not-a-url'],
         ])->assertUnprocessable()->assertJsonValidationErrors('channel_config.cms_url');
 
@@ -67,6 +73,7 @@ class AdminInboxTest extends TestCase
             'name' => 'Website',
             'slug' => 'website',
             'channel_type' => 'standalone',
+            'team_ids' => [$team->id],
             'channel_config' => ['cms_url' => 'https://cms.telediant.com.my/tickets/new'],
         ])->assertCreated()
             ->assertJsonPath('data.channel_config.cms_url', 'https://cms.telediant.com.my/tickets/new');
@@ -74,12 +81,14 @@ class AdminInboxTest extends TestCase
 
     public function test_duplicate_slug_is_rejected(): void
     {
+        $team = Team::factory()->create();
         Inbox::factory()->create(['slug' => 'website']);
 
         $this->postJson('/api/v1/admin/inboxes', [
             'name' => 'Duplicate slug inbox',
             'slug' => 'website',
             'channel_type' => 'standalone',
+            'team_ids' => [$team->id],
         ])->assertUnprocessable()->assertJsonValidationErrors('slug');
     }
 

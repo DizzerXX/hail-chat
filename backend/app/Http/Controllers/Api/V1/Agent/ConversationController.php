@@ -49,6 +49,13 @@ class ConversationController extends Controller
             'all' => abort_unless($request->user()->hasPermission('conversations.view_all'), 403),
         };
 
+        // Inbox access, on top of whichever scope was asked for. Holders of
+        // conversations.view_all see every inbox; everyone else only the
+        // inboxes their teams hold.
+        if (! $request->user()->hasPermission('conversations.view_all')) {
+            $query->inAgentInboxes($this->requireAgent($request));
+        }
+
         if (isset($validated['status'])) {
             $query->where('status', $validated['status']);
         }
@@ -231,6 +238,12 @@ class ConversationController extends Controller
         }
 
         $agent = $this->requireAgent($request);
+
+        abort_unless(
+            $agent->workableInboxIds()->contains($conversation->inbox_id),
+            403,
+            'Your team does not work this inbox.',
+        );
 
         $isMine = $conversation->assigned_agent_id === $agent->id;
 
