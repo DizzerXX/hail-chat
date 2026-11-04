@@ -12,7 +12,6 @@ use App\Events\ConversationUpdated;
 use App\Events\MessageSent;
 use App\Http\Resources\ConversationResource;
 use App\Models\Agent;
-use App\Models\ChatSettings;
 use App\Models\Contact;
 use App\Models\Attachment;
 use App\Models\Conversation;
@@ -34,6 +33,7 @@ class ConversationService
         private WorkItemProviderResolver $providers,
         private FaqMatcher $faqMatcher,
         private WebhookDispatcher $webhooks,
+        private PreChatForm $preChat,
     ) {
     }
 
@@ -59,7 +59,7 @@ class ConversationService
                 'visitor_name' => $visitor['visitor_name'] ?? null,
                 'visitor_email' => $visitor['visitor_email'] ?? null,
                 'visitor_phone' => $visitor['visitor_phone'] ?? null,
-                'meta' => $this->buildMeta($visitor),
+                'meta' => $this->buildMeta($inbox, $visitor),
                 'last_activity_at' => now(),
             ]);
 
@@ -627,13 +627,15 @@ class ConversationService
      * @param  array<string, mixed>  $visitor
      * @return array<string, mixed>|null
      */
-    private function buildMeta(array $visitor): ?array
+    private function buildMeta(Inbox $inbox, array $visitor): ?array
     {
         $meta = $visitor['meta'] ?? [];
         $answers = $visitor['fields'] ?? [];
 
         $fields = [];
-        foreach (ChatSettings::current()->custom_fields ?? [] as $field) {
+        // The inbox's own pre-chat form, so a per-inbox question is stored
+        // with its label instead of being dropped as unknown.
+        foreach ($this->preChat->customFieldsFor($inbox) as $field) {
             $key = $field['key'] ?? null;
             if ($key === null) {
                 continue;

@@ -305,7 +305,11 @@
     // ---------- flows ----------
     async function loadTheme() {
         try {
-            const response = await fetch(config.api + '/api/v1/public/app-config', {
+            // Naming the inbox lets the server return that inbox's pre-chat
+            // form; without it the global form comes back.
+            const url = config.api + '/api/v1/public/app-config?inbox='
+                + encodeURIComponent(config.inbox);
+            const response = await fetch(url, {
                 headers: { Accept: 'application/json' },
             });
             if (!response.ok) return;

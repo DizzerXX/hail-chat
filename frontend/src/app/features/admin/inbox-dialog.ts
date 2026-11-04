@@ -10,8 +10,16 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { firstValueFrom } from 'rxjs';
-import { AdminInbox, CascadeNode, CustomField, MitelQueue, Team } from '../../core/api-types';
+import {
+  AdminInbox,
+  CascadeNode,
+  CustomField,
+  MitelQueue,
+  PreChatOverride,
+  Team,
+} from '../../core/api-types';
 import { AdminApiService } from './admin-api.service';
+import { PrechatFieldsEditor } from './prechat-fields-editor';
 
 interface CmsParam {
   enabled: boolean;
@@ -31,6 +39,7 @@ interface CmsParam {
     MatInputModule,
     MatSelectModule,
     MatSlideToggleModule,
+    PrechatFieldsEditor,
   ],
   template: `
     <h2 mat-dialog-title>{{ inbox ? 'Edit inbox' : 'New inbox' }}</h2>
@@ -54,6 +63,35 @@ interface CmsParam {
         </mat-select>
         <mat-hint>Only agents in these teams see this inbox's conversations.</mat-hint>
       </mat-form-field>
+
+      <mat-slide-toggle [(ngModel)]="overridePrechat"
+        >Custom pre-chat form for this inbox</mat-slide-toggle
+      >
+      @if (overridePrechat) {
+        <div class="prechat">
+          <div class="prechat-head">Visitor details</div>
+          @for (row of prechatRows; track row.enabled) {
+            <div class="prechat-row">
+              <mat-form-field appearance="outline" subscriptSizing="dynamic">
+                <mat-label>{{ row.name }} label</mat-label>
+                <input matInput [(ngModel)]="prechat[row.label]" />
+              </mat-form-field>
+              <mat-slide-toggle [(ngModel)]="prechat[row.enabled]">Show</mat-slide-toggle>
+              <mat-slide-toggle
+                [(ngModel)]="prechat[row.required]"
+                [disabled]="!prechat[row.enabled]"
+              >
+                Required
+              </mat-slide-toggle>
+            </div>
+          }
+
+          <div class="prechat-head">Custom questions</div>
+          <app-prechat-fields-editor [fields]="prechatFields" />
+        </div>
+      } @else {
+        <p class="muted">Uses the global pre-chat form from Chat settings.</p>
+      }
 
       <mat-form-field appearance="outline">
         <mat-label>Channel</mat-label>
@@ -159,6 +197,24 @@ interface CmsParam {
     </mat-dialog-actions>
   `,
   styles: `
+    .prechat {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 10px 12px;
+      border: 1px solid var(--tde-border);
+      border-radius: 10px;
+    }
+    .prechat-head {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--tde-muted);
+    }
+    .prechat-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
     .cms-params {
       display: flex;
       flex-direction: column;
@@ -220,6 +276,44 @@ export class InboxDialog implements OnInit {
   protected readonly valueOptions = signal<{ label: string; value: string }[]>([]);
 
   protected teamIds: number[] = (this.inbox?.teams ?? []).map((team) => team.id);
+
+  // Pre-chat override: only the keys set here replace the global form, so a
+  // global edit still reaches whatever this inbox leaves alone.
+  protected readonly prechatRows = [
+    {
+      name: 'Name',
+      label: 'widget_name_label',
+      enabled: 'field_name_enabled',
+      required: 'field_name_required',
+    },
+    {
+      name: 'Email',
+      label: 'widget_email_label',
+      enabled: 'field_email_enabled',
+      required: 'field_email_required',
+    },
+    {
+      name: 'Phone',
+      label: 'widget_phone_label',
+      enabled: 'field_phone_enabled',
+      required: 'field_phone_required',
+    },
+  ] as const;
+
+  protected overridePrechat = this.inbox?.channel_config.prechat !== undefined;
+  protected prechat: Record<string, string | boolean> = this.toggleValues(
+    this.inbox?.channel_config.prechat,
+  );
+  protected prechatFields: CustomField[] = [
+    ...(this.inbox?.channel_config.prechat?.custom_fields ?? []),
+  ];
+
+  /** The override minus its custom fields, which the editor owns separately. */
+  private toggleValues(override?: PreChatOverride): Record<string, string | boolean> {
+    const { custom_fields: _fields, ...toggles } = override ?? {};
+
+    return toggles as Record<string, string | boolean>;
+  }
   protected readonly teams = signal<Team[]>([]);
 
   protected readonly queues = signal<MitelQueue[]>([]);
@@ -349,6 +443,9 @@ export class InboxDialog implements OnInit {
       is_active: this.isActive,
       channel_config: {
         bot: { escalate_on_miss: this.escalateOnMiss },
+        ...(this.overridePrechat
+          ? { prechat: { ...this.prechat, custom_fields: this.prechatFields } as PreChatOverride }
+          : {}),
         ...(cmsUrl ? { cms_url: cmsUrl } : {}),
         ...(this.channelType === 'mitel_openmedia' && this.mitelQueue
           ? { mitel: { queue: this.mitelQueue } }

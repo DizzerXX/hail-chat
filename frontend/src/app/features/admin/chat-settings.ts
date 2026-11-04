@@ -12,12 +12,14 @@ import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { firstValueFrom } from 'rxjs';
-import { ChatSettings, CustomField } from '../../core/api-types';
+import { ChatSettings } from '../../core/api-types';
 import { AdminApiService } from './admin-api.service';
+import { PrechatFieldsEditor } from './prechat-fields-editor';
 
 @Component({
   selector: 'app-chat-settings',
   imports: [
+    PrechatFieldsEditor,
     FormsModule,
     MatButtonModule,
     MatCardModule,
@@ -62,15 +64,26 @@ import { AdminApiService } from './admin-api.service';
                   <mat-option [value]="sound">{{ sound }}</mat-option>
                 }
               </mat-select>
-              <button matSuffix matIconButton type="button" (click)="preview(s.notification_sound)" aria-label="Preview sound">
+              <button
+                matSuffix
+                matIconButton
+                type="button"
+                (click)="preview(s.notification_sound)"
+                aria-label="Preview sound"
+              >
                 <mat-icon>play_circle</mat-icon>
               </button>
             </mat-form-field>
           </mat-card-content>
           <mat-card-content>
             <p class="muted">
-              The customer-idle alert uses a fixed sound (<span class="mono">{{ s.warning_sound }}</span>).
-              <button matButton type="button" (click)="preview(s.warning_sound)">Preview warning</button>
+              The customer-idle alert uses a fixed sound (<span class="mono">{{
+                s.warning_sound
+              }}</span
+              >).
+              <button matButton type="button" (click)="preview(s.warning_sound)">
+                Preview warning
+              </button>
             </p>
           </mat-card-content>
         </mat-card>
@@ -78,7 +91,10 @@ import { AdminApiService } from './admin-api.service';
         <mat-card appearance="outlined" class="section">
           <mat-card-header>
             <mat-card-title>Widget branding</mat-card-title>
-            <mat-card-subtitle>Shown in the embeddable chat widget (icons accept an emoji or an image URL)</mat-card-subtitle>
+            <mat-card-subtitle
+              >Shown in the embeddable chat widget (icons accept an emoji or an image
+              URL)</mat-card-subtitle
+            >
           </mat-card-header>
           <mat-card-content class="grid">
             <mat-form-field appearance="outline">
@@ -109,16 +125,28 @@ import { AdminApiService } from './admin-api.service';
                   accept="image/png,image/jpeg,image/webp,image/gif"
                   (change)="onIconFile(ic.key, $event)"
                 />
-                <button matIconButton type="button" (click)="iconFile.click()" matTooltip="Upload an image">
+                <button
+                  matIconButton
+                  type="button"
+                  (click)="iconFile.click()"
+                  matTooltip="Upload an image"
+                >
                   <mat-icon>upload</mat-icon>
                 </button>
-                <button matIconButton type="button" [matMenuTriggerFor]="emojiMenu" matTooltip="Pick an emoji">
+                <button
+                  matIconButton
+                  type="button"
+                  [matMenuTriggerFor]="emojiMenu"
+                  matTooltip="Pick an emoji"
+                >
                   <mat-icon>mood</mat-icon>
                 </button>
                 <mat-menu #emojiMenu="matMenu" class="emoji-menu">
                   <div class="emoji-grid">
                     @for (e of emojis; track e) {
-                      <button type="button" mat-menu-item class="emoji-btn" (click)="s[ic.key] = e">{{ e }}</button>
+                      <button type="button" mat-menu-item class="emoji-btn" (click)="s[ic.key] = e">
+                        {{ e }}
+                      </button>
                     }
                   </div>
                 </mat-menu>
@@ -160,12 +188,14 @@ import { AdminApiService } from './admin-api.service';
           <mat-card-header>
             <mat-card-title>FAQ deflection</mat-card-title>
             <mat-card-subtitle>
-              After the pre-chat form, show a "Quick answers" screen with this inbox's FAQs before the
-              visitor proceeds to a live chat. Skipped automatically when there are no FAQs.
+              After the pre-chat form, show a "Quick answers" screen with this inbox's FAQs before
+              the visitor proceeds to a live chat. Skipped automatically when there are no FAQs.
             </mat-card-subtitle>
           </mat-card-header>
           <mat-card-content>
-            <mat-slide-toggle [(ngModel)]="s.faq_deflection_enabled">Show the FAQ screen</mat-slide-toggle>
+            <mat-slide-toggle [(ngModel)]="s.faq_deflection_enabled"
+              >Show the FAQ screen</mat-slide-toggle
+            >
             <mat-slide-toggle
               class="skip-bot"
               [(ngModel)]="s.faq_skip_bot"
@@ -206,61 +236,26 @@ import { AdminApiService } from './admin-api.service';
                   <input matInput [(ngModel)]="s[row.label]" />
                 </mat-form-field>
                 <mat-slide-toggle [(ngModel)]="s[row.enabled]">Show</mat-slide-toggle>
-                <mat-slide-toggle [(ngModel)]="s[row.required]" [disabled]="!s[row.enabled]">Required</mat-slide-toggle>
+                <mat-slide-toggle [(ngModel)]="s[row.required]" [disabled]="!s[row.enabled]"
+                  >Required</mat-slide-toggle
+                >
               </div>
             }
-            <p class="muted hint">Collecting email or phone powers "previous conversations" in the chat details.</p>
+            <p class="muted hint">
+              Collecting email or phone powers "previous conversations" in the chat details.
+            </p>
 
             <h3 class="custom-title">Custom fields</h3>
-            @for (f of s.custom_fields; track $index) {
-              <div class="custom-row">
-                <mat-form-field appearance="outline" subscriptSizing="dynamic">
-                  <mat-label>Key</mat-label>
-                  <input matInput [(ngModel)]="f.key" placeholder="order_no" />
-                </mat-form-field>
-                <mat-form-field appearance="outline" subscriptSizing="dynamic">
-                  <mat-label>Label</mat-label>
-                  <input matInput [(ngModel)]="f.label" />
-                </mat-form-field>
-                <mat-form-field appearance="outline" subscriptSizing="dynamic" class="type">
-                  <mat-label>Type</mat-label>
-                  <mat-select [(ngModel)]="f.type">
-                    @for (t of fieldTypes; track t) {
-                      <mat-option [value]="t">{{ t }}</mat-option>
-                    }
-                  </mat-select>
-                </mat-form-field>
-                @if (f.type === 'select') {
-                  <mat-form-field appearance="outline" subscriptSizing="dynamic">
-                    <mat-label>Options (comma-separated)</mat-label>
-                    <input matInput [ngModel]="(f.options || []).join(', ')" (ngModelChange)="setOptions(f, $event)" />
-                  </mat-form-field>
-                }
-                @if (f.type === 'cascade') {
-                  <mat-form-field appearance="outline" subscriptSizing="dynamic" class="tree">
-                    <mat-label>Tree JSON — [{{ '{' }}key,label,children?{{ '}' }}]</mat-label>
-                    <textarea
-                      matInput
-                      rows="4"
-                      [ngModel]="treeText(f)"
-                      (ngModelChange)="onTreeInput(f, $event)"
-                    ></textarea>
-                  </mat-form-field>
-                }
-                <mat-slide-toggle [(ngModel)]="f.required">Required</mat-slide-toggle>
-                <button matIconButton (click)="removeField($index)" aria-label="Remove field">
-                  <mat-icon>delete</mat-icon>
-                </button>
-              </div>
-            }
-            <button matButton (click)="addField()"><mat-icon>add</mat-icon> Add custom field</button>
+            <app-prechat-fields-editor [fields]="s.custom_fields" />
           </mat-card-content>
         </mat-card>
 
         <mat-card appearance="outlined" class="section">
           <mat-card-header>
             <mat-card-title>Queue &amp; availability</mat-card-title>
-            <mat-card-subtitle>Standalone inboxes only — Mitel/Ignite reports its own queue</mat-card-subtitle>
+            <mat-card-subtitle
+              >Standalone inboxes only — Mitel/Ignite reports its own queue</mat-card-subtitle
+            >
           </mat-card-header>
           <mat-card-content>
             <mat-slide-toggle [(ngModel)]="s.wait_time_enabled">
@@ -287,7 +282,9 @@ import { AdminApiService } from './admin-api.service';
         <mat-card appearance="outlined" class="section">
           <mat-card-header>
             <mat-card-title>Idle handling</mat-card-title>
-            <mat-card-subtitle>Standalone inboxes only — Mitel/Ignite manages its own timers</mat-card-subtitle>
+            <mat-card-subtitle
+              >Standalone inboxes only — Mitel/Ignite manages its own timers</mat-card-subtitle
+            >
           </mat-card-header>
           <mat-card-content>
             <mat-slide-toggle [(ngModel)]="s.idle_enabled">Enable idle handling</mat-slide-toggle>
@@ -477,12 +474,28 @@ export class ChatSettingsPage implements OnInit {
   ] as const;
 
   protected readonly tier1Rows = [
-    { key: 'name', name: 'Name', label: 'widget_name_label', enabled: 'field_name_enabled', required: 'field_name_required' },
-    { key: 'email', name: 'Email', label: 'widget_email_label', enabled: 'field_email_enabled', required: 'field_email_required' },
-    { key: 'phone', name: 'Phone', label: 'widget_phone_label', enabled: 'field_phone_enabled', required: 'field_phone_required' },
+    {
+      key: 'name',
+      name: 'Name',
+      label: 'widget_name_label',
+      enabled: 'field_name_enabled',
+      required: 'field_name_required',
+    },
+    {
+      key: 'email',
+      name: 'Email',
+      label: 'widget_email_label',
+      enabled: 'field_email_enabled',
+      required: 'field_email_required',
+    },
+    {
+      key: 'phone',
+      name: 'Phone',
+      label: 'widget_phone_label',
+      enabled: 'field_phone_enabled',
+      required: 'field_phone_required',
+    },
   ] as const;
-
-  protected readonly fieldTypes = ['text', 'email', 'phone', 'number', 'select', 'cascade'] as const;
 
   protected readonly iconFields = [
     { key: 'widget_header_icon', label: 'Header icon' },
@@ -490,8 +503,26 @@ export class ChatSettingsPage implements OnInit {
   ] as const;
 
   protected readonly emojis = [
-    '💬', '🗨️', '💭', '📩', '✉️', '📞', '☎️', '🎧', '🛎️', '❓',
-    'ℹ️', '🏢', '🏛️', '🛂', '🌐', '🤝', '👋', '⭐', '🔔', '😊',
+    '💬',
+    '🗨️',
+    '💭',
+    '📩',
+    '✉️',
+    '📞',
+    '☎️',
+    '🎧',
+    '🛎️',
+    '❓',
+    'ℹ️',
+    '🏢',
+    '🏛️',
+    '🛂',
+    '🌐',
+    '🤝',
+    '👋',
+    '⭐',
+    '🔔',
+    '😊',
   ];
 
   protected isImageIcon(value: string | null | undefined): boolean {
@@ -551,50 +582,6 @@ export class ChatSettingsPage implements OnInit {
     });
   }
 
-  /** Raw JSON text per cascade field while editing (kept out of the payload). */
-  private readonly treeDrafts = new Map<CustomField, string>();
-
-  protected treeText(field: CustomField): string {
-    return this.treeDrafts.get(field) ?? JSON.stringify(field.tree ?? [], null, 2);
-  }
-
-  protected onTreeInput(field: CustomField, text: string): void {
-    this.treeDrafts.set(field, text);
-    try {
-      const parsed = JSON.parse(text);
-      if (Array.isArray(parsed)) {
-        field.tree = parsed;
-      }
-    } catch {
-      // Keep the last valid tree; the server validates the structure on save.
-    }
-  }
-
-  protected addField(): void {
-    const s = this.form();
-    if (s === null) {
-      return;
-    }
-    s.custom_fields = [...s.custom_fields, { key: '', label: '', type: 'text', required: false }];
-    this.form.set({ ...s });
-  }
-
-  protected removeField(index: number): void {
-    const s = this.form();
-    if (s === null) {
-      return;
-    }
-    s.custom_fields = s.custom_fields.filter((_, i) => i !== index);
-    this.form.set({ ...s });
-  }
-
-  protected setOptions(field: CustomField, value: string): void {
-    field.options = value
-      .split(',')
-      .map((option) => option.trim())
-      .filter((option) => option !== '');
-  }
-
   async ngOnInit(): Promise<void> {
     this.form.set((await firstValueFrom(this.api.chatSettings())).data);
   }
@@ -620,7 +607,8 @@ export class ChatSettingsPage implements OnInit {
       this.snackBar.open('Chat settings saved.', undefined, { duration: 2500 });
     } catch (error) {
       const message =
-        (error as { error?: { message?: string } }).error?.message ?? 'Save failed — check the values.';
+        (error as { error?: { message?: string } }).error?.message ??
+        'Save failed — check the values.';
       this.snackBar.open(message, 'Dismiss', { duration: 5000 });
     } finally {
       this.busy.set(false);

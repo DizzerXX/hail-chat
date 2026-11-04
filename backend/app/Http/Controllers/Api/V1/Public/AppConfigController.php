@@ -4,8 +4,11 @@ namespace App\Http\Controllers\Api\V1\Public;
 
 use App\Http\Controllers\Controller;
 use App\Models\ChatSettings;
+use App\Models\Inbox;
 use App\Models\SystemSettings;
+use App\Services\PreChatForm;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class AppConfigController extends Controller
 {
@@ -13,9 +16,15 @@ class AppConfigController extends Controller
      * Theme values the embeddable widget reads on load. Unauthenticated and
      * intentionally minimal — only what a public page may safely see.
      */
-    public function show(): JsonResponse
+    public function show(Request $request, PreChatForm $preChat): JsonResponse
     {
         $settings = ChatSettings::current();
+
+        // The widget names its inbox so a per-inbox pre-chat form can be
+        // returned; an older embed omits it and gets the global form.
+        $slug = $request->query('inbox');
+        $inbox = is_string($slug) ? Inbox::where('slug', $slug)->first() : null;
+        $fields = $preChat->for($inbox);
 
         return response()->json(['data' => [
             // System branding for the login page / browser tab / dashboard.
@@ -35,21 +44,21 @@ class AppConfigController extends Controller
             ],
             'fields' => [
                 'name' => [
-                    'enabled' => $settings->field_name_enabled,
-                    'required' => $settings->field_name_required,
-                    'label' => $settings->widget_name_label,
+                    'enabled' => $fields['field_name_enabled'],
+                    'required' => $fields['field_name_required'],
+                    'label' => $fields['widget_name_label'],
                 ],
                 'email' => [
-                    'enabled' => $settings->field_email_enabled,
-                    'required' => $settings->field_email_required,
-                    'label' => $settings->widget_email_label,
+                    'enabled' => $fields['field_email_enabled'],
+                    'required' => $fields['field_email_required'],
+                    'label' => $fields['widget_email_label'],
                 ],
                 'phone' => [
-                    'enabled' => $settings->field_phone_enabled,
-                    'required' => $settings->field_phone_required,
-                    'label' => $settings->widget_phone_label,
+                    'enabled' => $fields['field_phone_enabled'],
+                    'required' => $fields['field_phone_required'],
+                    'label' => $fields['widget_phone_label'],
                 ],
-                'custom' => $settings->custom_fields ?? [],
+                'custom' => $fields['custom_fields'] ?? [],
             ],
         ]]);
     }

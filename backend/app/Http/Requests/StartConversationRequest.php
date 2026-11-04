@@ -2,7 +2,8 @@
 
 namespace App\Http\Requests;
 
-use App\Models\ChatSettings;
+use App\Models\Inbox;
+use App\Services\PreChatForm;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -18,15 +19,15 @@ class StartConversationRequest extends FormRequest
      */
     public function rules(): array
     {
-        $settings = ChatSettings::current();
+        $fields = $this->form();
 
         $requiredIf = fn (bool $enabled, bool $required) => $enabled && $required ? 'required' : 'nullable';
 
         $rules = [
             'message' => ['required', 'string', 'max:4000'],
-            'visitor_name' => [$requiredIf($settings->field_name_enabled, $settings->field_name_required), 'string', 'max:255'],
-            'visitor_email' => [$requiredIf($settings->field_email_enabled, $settings->field_email_required), 'string', 'email:filter', 'max:255'],
-            'visitor_phone' => [$requiredIf($settings->field_phone_enabled, $settings->field_phone_required), 'string', 'max:50'],
+            'visitor_name' => [$requiredIf($fields['field_name_enabled'], $fields['field_name_required']), 'string', 'max:255'],
+            'visitor_email' => [$requiredIf($fields['field_email_enabled'], $fields['field_email_required']), 'string', 'email:filter', 'max:255'],
+            'visitor_phone' => [$requiredIf($fields['field_phone_enabled'], $fields['field_phone_required']), 'string', 'max:50'],
             'language' => ['nullable', 'string', Rule::in(config('tdechat.languages'))],
             'meta' => ['nullable', 'array'],
             // Custom field answers, keyed by field key.
@@ -34,7 +35,7 @@ class StartConversationRequest extends FormRequest
         ];
 
         // Validate each configured custom field against its definition.
-        foreach ($settings->custom_fields ?? [] as $field) {
+        foreach ($fields['custom_fields'] ?? [] as $field) {
             $key = $field['key'] ?? null;
             if ($key === null) {
                 continue;
@@ -66,10 +67,24 @@ class StartConversationRequest extends FormRequest
         return $rules;
     }
 
+    /**
+     * The pre-chat form of the inbox being posted to: global settings with the
+     * inbox's own overrides applied. Validation must follow the same form the
+     * widget rendered, or a per-inbox question is rejected as unknown.
+     *
+     * @return array<string, mixed>
+     */
+    private function form(): array
+    {
+        $inbox = $this->route('inbox');
+
+        return app(PreChatForm::class)->for($inbox instanceof Inbox ? $inbox : null);
+    }
+
     public function withValidator(\Illuminate\Validation\Validator $validator): void
     {
         $validator->after(function ($validator) {
-            foreach (ChatSettings::current()->custom_fields ?? [] as $field) {
+            foreach ($this->form()['custom_fields'] ?? [] as $field) {
                 if (($field['type'] ?? null) !== 'cascade') {
                     continue;
                 }

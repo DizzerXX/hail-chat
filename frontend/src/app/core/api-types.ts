@@ -119,11 +119,27 @@ export interface Paginated<T> {
 
 // ---- Admin types ----
 
+/** The pre-chat keys an inbox may override; anything omitted follows ChatSettings. */
+export interface PreChatOverride {
+  field_name_enabled?: boolean;
+  field_name_required?: boolean;
+  field_email_enabled?: boolean;
+  field_email_required?: boolean;
+  field_phone_enabled?: boolean;
+  field_phone_required?: boolean;
+  widget_name_label?: string;
+  widget_email_label?: string;
+  widget_phone_label?: string;
+  custom_fields?: CustomField[];
+}
+
 export interface AdminInbox extends InboxSummary {
   channel_config: {
     mitel?: { queue?: string };
     bot?: { escalate_on_miss?: boolean };
     cms_url?: string | null;
+    /** Per-inbox pre-chat override; only the keys present replace the global form. */
+    prechat?: PreChatOverride;
   };
   bot_enabled: boolean;
   is_active: boolean;
