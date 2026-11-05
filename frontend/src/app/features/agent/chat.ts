@@ -1941,13 +1941,14 @@ export class Chat implements OnInit, OnDestroy {
       this.loadError.set(null);
     } catch (error) {
       const status = (error as { status?: number }).status;
+      const reason = (error as { error?: { message?: string } }).error?.message;
 
-      // 403 here means the conversation belongs to someone else and this account
-      // cannot view others' conversations — the usual case being an agent opening
-      // an embed link for an item that has since been rerouted.
+      // 403 has several causes (another agent owns it, the account has no agent
+      // profile, the agent's team does not work this inbox), so prefer the
+      // server's reason; the generic line only when it gave none.
       this.loadError.set(
         status === 403
-          ? 'This conversation is being handled by another agent.'
+          ? (reason ?? 'This conversation is being handled by another agent.')
           : status === 404
             ? 'This conversation no longer exists.'
             : 'This conversation could not be loaded.',

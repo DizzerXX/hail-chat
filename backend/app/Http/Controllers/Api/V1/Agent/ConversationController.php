@@ -49,10 +49,10 @@ class ConversationController extends Controller
             'all' => abort_unless($request->user()->hasPermission('conversations.view_all'), 403),
         };
 
-        // Inbox access, on top of whichever scope was asked for. Holders of
-        // conversations.view_all see every inbox; everyone else only the
-        // inboxes their teams hold.
-        if (! $request->user()->hasPermission('conversations.view_all')) {
+        // Inbox access limits what an agent may pick up, so it applies to the
+        // queue. "Mine" is already yours - on a MiCC inbox Ignite chose you -
+        // and "all" requires conversations.view_all, which is never scoped.
+        if ($scope === 'queue' && ! $request->user()->hasPermission('conversations.view_all')) {
             $query->inAgentInboxes($this->requireAgent($request));
         }
 
@@ -239,13 +239,19 @@ class ConversationController extends Controller
 
         $agent = $this->requireAgent($request);
 
+        // Assigned to you is always yours to open. On a MiCC inbox, Ignite picks
+        // the agent and the embed claims on arrival, so inbox access must not
+        // lock out the agent who just accepted.
+        if ($conversation->assigned_agent_id === $agent->id) {
+            return;
+        }
+
+        // Inbox access gates everything you do not already own.
         abort_unless(
             $agent->workableInboxIds()->contains($conversation->inbox_id),
             403,
             'Your team does not work this inbox.',
         );
-
-        $isMine = $conversation->assigned_agent_id === $agent->id;
 
         // Any open conversation nobody owns yet: either still queued, or active
         // but unassigned because MiCC ACD'd it to one of its own agents (the
@@ -255,7 +261,7 @@ class ConversationController extends Controller
             && $conversation->status->isOpen()
             && ($conversation->team_id === null || $agent->teams()->whereKey($conversation->team_id)->exists());
 
-        abort_unless($isMine || $isUnowned, 403, 'You cannot view this conversation.');
+        abort_unless($isUnowned, 403, 'You cannot view this conversation.');
     }
 
     private function authorizeHandle(Request $request, Conversation $conversation): void

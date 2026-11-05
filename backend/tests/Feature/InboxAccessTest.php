@@ -102,6 +102,43 @@ class InboxAccessTest extends TestCase
         $this->getJson("/api/v1/agent/conversations/{$conversation->uuid}")->assertOk();
     }
 
+    /**
+     * MiCC decides who gets an Open Media item. An agent who claimed one must be
+     * able to open it, even when their team is not linked to that inbox -
+     * otherwise the agent who just accepted in Ignite is locked out of their
+     * own chat.
+     */
+    public function test_an_agent_can_always_open_a_conversation_assigned_to_them(): void
+    {
+        $agent = $this->agentOf($this->eAduan);
+        $conversation = Conversation::factory()->create([
+            'inbox_id' => $this->pertanyaanInbox->id,
+            'status' => 'active',
+            'assigned_agent_id' => $agent->id,
+        ]);
+
+        Sanctum::actingAs($agent->user);
+
+        $this->getJson("/api/v1/agent/conversations/{$conversation->uuid}")->assertOk();
+    }
+
+    public function test_mine_lists_my_conversations_whatever_the_inbox(): void
+    {
+        $agent = $this->agentOf($this->eAduan);
+        $mine = Conversation::factory()->create([
+            'inbox_id' => $this->pertanyaanInbox->id,
+            'status' => 'active',
+            'assigned_agent_id' => $agent->id,
+        ]);
+
+        Sanctum::actingAs($agent->user);
+
+        $this->getJson('/api/v1/agent/conversations?scope=mine')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.uuid', $mine->uuid);
+    }
+
     public function test_view_all_holders_are_not_scoped_by_inbox(): void
     {
         $this->queuedIn($this->eAduanInbox);

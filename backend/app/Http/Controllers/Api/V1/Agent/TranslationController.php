@@ -85,17 +85,21 @@ class TranslationController extends Controller
         $agent = $user->agent;
         abort_unless($agent !== null, 403, 'This account has no agent profile.');
 
+        // Assigned to you is always yours, as in ConversationController.
+        if ($conversation->assigned_agent_id === $agent->id) {
+            return;
+        }
+
         abort_unless(
             $agent->workableInboxIds()->contains($conversation->inbox_id),
             403,
             'Your team does not work this inbox.',
         );
 
-        $isMine = $conversation->assigned_agent_id === $agent->id;
         $isQueueVisible = $conversation->status === ConversationStatus::AwaitingAcceptance
             && $conversation->assigned_agent_id === null
             && ($conversation->team_id === null || $agent->teams()->whereKey($conversation->team_id)->exists());
 
-        abort_unless($isMine || $isQueueVisible, 403, 'You cannot view this conversation.');
+        abort_unless($isQueueVisible, 403, 'You cannot view this conversation.');
     }
 }
