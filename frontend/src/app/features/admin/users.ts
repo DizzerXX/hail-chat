@@ -7,6 +7,7 @@ import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
+import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatTableModule } from '@angular/material/table';
 import { firstValueFrom } from 'rxjs';
 import { AdminUser, SeatInfo } from '../../core/api-types';
@@ -25,6 +26,7 @@ import { UserViewDialog } from './user-view-dialog';
     MatFormFieldModule,
     MatIconModule,
     MatInputModule,
+    MatPaginatorModule,
     MatTableModule,
   ],
   template: `
@@ -41,7 +43,7 @@ import { UserViewDialog } from './user-view-dialog';
         <span class="spacer"></span>
         <mat-form-field appearance="outline" class="search" subscriptSizing="dynamic">
           <mat-label>Search</mat-label>
-          <input matInput [(ngModel)]="search" (keydown.enter)="reload()" />
+          <input matInput [(ngModel)]="search" (keydown.enter)="searchUsers()" />
         </mat-form-field>
         <button matButton="filled" (click)="edit()">
           <mat-icon>person_add</mat-icon>
@@ -104,6 +106,15 @@ import { UserViewDialog } from './user-view-dialog';
         <tr mat-header-row *matHeaderRowDef="columns"></tr>
         <tr mat-row *matRowDef="let row; columns: columns"></tr>
       </table>
+      <mat-paginator
+        [length]="total()"
+        [pageIndex]="pageIndex()"
+        [pageSize]="pageSize()"
+        [pageSizeOptions]="[10, 25, 50, 100]"
+        (page)="onPage($event)"
+        showFirstLastButtons
+        aria-label="Users pages"
+      />
     </div>
   `,
   styles: `
@@ -126,6 +137,9 @@ export class Users implements OnInit {
   protected readonly seats = signal<SeatInfo | null>(null);
   protected readonly licenseProblem = signal<string | null>(null);
   protected search = '';
+  protected readonly total = signal(0);
+  protected readonly pageIndex = signal(0);
+  protected readonly pageSize = signal(25);
 
   async ngOnInit(): Promise<void> {
     await this.reload();
@@ -152,10 +166,25 @@ export class Users implements OnInit {
     this.dialog.open(UserViewDialog, { data: user.id, width: '520px' });
   }
 
+  /** A new search starts again from the first page. */
+  protected searchUsers(): void {
+    this.pageIndex.set(0);
+    void this.reload();
+  }
+
+  protected onPage(event: PageEvent): void {
+    this.pageIndex.set(event.pageIndex);
+    this.pageSize.set(event.pageSize);
+    void this.reload();
+  }
+
   protected async reload(): Promise<void> {
     try {
-      const response = await firstValueFrom(this.api.users(this.search || undefined));
+      const response = await firstValueFrom(
+        this.api.users(this.search || undefined, this.pageIndex() + 1, this.pageSize()),
+      );
       this.users.set(response.data);
+      this.total.set(response.meta.total);
       this.licenseProblem.set(null);
     } catch (error) {
       const body = (error as { error?: { code?: string; message?: string } }).error;

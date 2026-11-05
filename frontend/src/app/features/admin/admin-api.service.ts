@@ -27,7 +27,10 @@ import {
   WebhookDelivery,
 } from '../../core/api-types';
 
-export type CannedResponsePayload = Pick<CannedResponse, 'title' | 'body' | 'language' | 'is_active'>;
+export type CannedResponsePayload = Pick<
+  CannedResponse,
+  'title' | 'body' | 'language' | 'is_active'
+>;
 
 const api = `${environment.apiUrl}/api/v1/admin`;
 
@@ -93,9 +96,9 @@ export class AdminApiService {
   }
 
   // Users / roles / agents
-  users(search?: string): Observable<Paginated<AdminUser>> {
+  users(search?: string, page = 1, perPage = 25): Observable<Paginated<AdminUser>> {
     return this.http.get<Paginated<AdminUser>>(`${api}/users`, {
-      params: search ? { search } : {},
+      params: { ...(search ? { search } : {}), page, per_page: perPage },
     });
   }
 
@@ -118,7 +121,10 @@ export class AdminApiService {
     return this.http.get<{ data: CannedResponse[] }>(`${api}/canned-responses`);
   }
 
-  saveCannedResponse(payload: CannedResponsePayload, id?: number): Observable<{ data: CannedResponse }> {
+  saveCannedResponse(
+    payload: CannedResponsePayload,
+    id?: number,
+  ): Observable<{ data: CannedResponse }> {
     return id === undefined
       ? this.http.post<{ data: CannedResponse }>(`${api}/canned-responses`, payload)
       : this.http.put<{ data: CannedResponse }>(`${api}/canned-responses/${id}`, payload);
@@ -134,7 +140,10 @@ export class AdminApiService {
     });
   }
 
-  saveFaqGroup(payload: FaqGroupPayload, translationGroup?: string): Observable<{ data: FaqGroup }> {
+  saveFaqGroup(
+    payload: FaqGroupPayload,
+    translationGroup?: string,
+  ): Observable<{ data: FaqGroup }> {
     return translationGroup === undefined
       ? this.http.post<{ data: FaqGroup }>(`${api}/faqs`, payload)
       : this.http.put<{ data: FaqGroup }>(`${api}/faqs/${translationGroup}`, payload);

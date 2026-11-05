@@ -23,6 +23,7 @@ class UserController extends Controller
         $validated = $request->validate([
             'search' => ['sometimes', 'string', 'max:255'],
             'role' => ['sometimes', 'string', 'exists:roles,name'],
+            'per_page' => ['sometimes', 'integer', 'min:10', 'max:100'],
         ]);
 
         $users = User::query()
@@ -35,7 +36,7 @@ class UserController extends Controller
             ->when($validated['role'] ?? null, fn (Builder $query, string $role) => $query
                 ->whereHas('role', fn (Builder $query) => $query->where('name', $role)))
             ->orderBy('name')
-            ->paginate(25);
+            ->paginate($validated['per_page'] ?? 25);
 
         return AdminUserResource::collection($users);
     }
